@@ -1,5 +1,6 @@
 {
   "private": true,
+  "repository": "github:finnair/v-validation",
   "scripts": {
     "build": "lerna run build",
     "test": "jest",

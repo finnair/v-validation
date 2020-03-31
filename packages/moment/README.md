@@ -1,8 +1,10 @@
 # v-validation-moment
 
-V stands for Validation.
+`@finnair/v-validation-moment` is an extension to `@finnair/v-validation-core`.
 
 `Vmoment` extension uses custom Moment extensions to support full JSON roundtrip with strict validation.
+
+[Documentation for `v-validation`](https://github.com/finnair/v-validation).
 
 ## Getting Started
 

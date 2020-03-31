@@ -5,6 +5,8 @@ V stands for Validation.
 `V` rules define how input is to be converted, normalized and validated to
 conform to the expected model.
 
+[Documentation for `v-validation`](https://github.com/finnair/v-validation).
+
 ## Getting Started
 
 Install v-validation using [`yarn`](https://yarnpkg.com/en/package/jest):
