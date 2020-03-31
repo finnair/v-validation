@@ -4,6 +4,13 @@
   "description": "V-validation core package",
   "main": "src/index.ts",
   "license": "MIT",
+  "homepage": "https://github.com/finnair/v-validation/tree/master/packages/core#readme",
+  "bugs": "https://github.com/finnair/v-validation/issues",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/finnair/v-validation.git",
+    "directory": "packages/core"
+  },
   "scripts": {
     "build": "tsc -b ."
   },
