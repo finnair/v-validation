@@ -48,6 +48,7 @@ export class ValidationContext {
       return this.failure(defaultViolations.cycle(path), value);
     }
     this.objects.set(value, convertedValue);
+    return undefined;
   }
   private ignoreViolation(violation: Violation) {
     return (
