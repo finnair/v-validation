@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "target": "esnext",
+    "composite": true,
+    "strict": true,
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "resolveJsonModule": true,
+    "noImplicitAny": true,
+    "allowSyntheticDefaultImports": true,
+    "downlevelIteration": true,
+    "noUnusedLocals": true,
+    "noFallthroughCasesInSwitch": true,
+    "esModuleInterop": true,
+    "typeRoots": ["./node_modules/@types"],
+    "lib": ["es2020"],
+    "rootDir": ".",
+    "baseUrl": ".",
+    "paths": {
+      "@v-validation/core": ["packages/core/*"],
+      "@v-validation/vmoment": ["packages/vmoment/*"]
+    }
+  }
+}
