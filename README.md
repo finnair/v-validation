@@ -42,8 +42,8 @@ npm install @finnair/v-validation-core
 Validators can be chained and combined.
 
 ```typescript
-const precentageValidator = V.integer().then(V.min(0), V.max(100));
-(await precentageValidator.validate(123)).getValue();
+const percentageValidator = V.integer().then(V.min(0), V.max(100));
+(await percentageValidator.validate(123)).getValue();
 // ValidationError: [
 //   {
 //     "path": "$",
