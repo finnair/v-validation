@@ -1,5 +1,5 @@
 {
-  "name": "@finnair/v-validation-vmoment",
+  "name": "@finnair/v-validation-moment",
   "version": "0.1.0",
   "description": "Moment validators",
   "main": "src/index.ts",

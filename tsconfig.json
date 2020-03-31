@@ -18,7 +18,7 @@
     "baseUrl": ".",
     "paths": {
       "@finnair/v-validation-core": ["packages/core/*"],
-      "@finnair/v-validation-vmoment": ["packages/vmoment/*"]
+      "@finnair/v-validation-moment": ["packages/moment/*"]
     }
   }
 }

@@ -41,7 +41,7 @@ const precentageValidator = V.integer().then(V.min(0), V.max(100));
 // ]
 ```
 
-Optional `Vmoment` library uses custom Moment extensions to support full JSON roundtrip with strict validation.
+Optional `Vmoment` (`@finnair/v-validation-moment`) extension uses custom Moment extensions to support full JSON roundtrip with strict validation.
 
 ```typescript
 const dateMoment = (await Vmoment.date().validate('2020-03-05')).getValue();
