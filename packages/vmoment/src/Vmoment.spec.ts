@@ -1,6 +1,6 @@
 import moment, { Moment } from 'moment';
 import momentTimezone from 'moment-timezone';
-import { V, defaultViolations, Validator, ValidatorOptions, ValidationResult, Violation, ROOT, TypeMismatch } from '@v-validation/core';
+import { V, defaultViolations, Validator, ValidatorOptions, ValidationResult, Violation, ROOT, TypeMismatch } from '@finnair/v-validation-core';
 import { Vmoment, dateUtcMoment, dateTimeUtcMoment, dateTimeMoment, timeMoment, dateMoment, dateTimeMillisUtcMoment, dateTimeMillisMoment } from './Vmoment';
 
 async function expectViolations(value: any, validator: Validator, ...violations: Violation[]) {

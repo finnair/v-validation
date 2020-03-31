@@ -1,6 +1,6 @@
 {
-  "name": "@v-validation/vmoment",
-  "version": "0.0.1",
+  "name": "@finnair/v-validation-vmoment",
+  "version": "0.1.0",
   "description": "Moment validators",
   "main": "src/index.ts",
   "license": "MIT",
@@ -8,7 +8,7 @@
     "build": "tsc -b ."
   },
   "dependencies": {
-    "@v-validation/core": "0.0.1",
+    "@finnair/v-validation-core": "0.1.0",
     "@types/moment": "2.13.0",
     "@types/moment-timezone": "0.5.12",
     "moment": "2.24.0",

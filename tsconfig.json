@@ -17,8 +17,8 @@
     "rootDir": ".",
     "baseUrl": ".",
     "paths": {
-      "@v-validation/core": ["packages/core/*"],
-      "@v-validation/vmoment": ["packages/vmoment/*"]
+      "@finnair/v-validation-core": ["packages/core/*"],
+      "@finnair/v-validation-vmoment": ["packages/vmoment/*"]
     }
   }
 }

@@ -1,4 +1,4 @@
-import { Validator, Path, ValidationContext, ValidationResult, isNullOrUndefined, defaultViolations, isString, TypeMismatch } from '@v-validation/core';
+import { Validator, Path, ValidationContext, ValidationResult, isNullOrUndefined, defaultViolations, isString, TypeMismatch } from '@finnair/v-validation-core';
 import moment, { Moment, MomentInput } from 'moment';
 
 export class MomentValidator extends Validator {

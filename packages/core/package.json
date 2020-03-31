@@ -1,6 +1,6 @@
 {
-  "name": "@v-validation/core",
-  "version": "0.0.1",
+  "name": "@finnair/v-validation-core",
+  "version": "0.1.0",
   "description": "V-validation core package",
   "main": "src/index.ts",
   "license": "MIT",
