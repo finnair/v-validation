@@ -4,16 +4,16 @@ name: CI
 # events but only for the master branch
 on:
   push:
-    branches: [ master ]
+    branches: [master]
   pull_request:
-    branches: [ master ]
+    branches: [master]
 
 jobs:
   build:
     runs-on: [ubuntu-latest]
     strategy:
       matrix:
-        node: [ '10', '12' ]
+        node: ['10', '12']
     name: Node ${{ matrix.node }} sample
     steps:
       - uses: actions/checkout@v2
@@ -24,4 +24,4 @@ jobs:
       - run: yarn
       - run: yarn boot
       - run: yarn build
-      - run: yarn test
+      - run: yarn test --coverage
