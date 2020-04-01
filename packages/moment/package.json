@@ -12,6 +12,14 @@
     "url": "https://github.com/finnair/v-validation.git",
     "directory": "packages/moment"
   },
+  "keywords": [
+    "validation",
+    "validate",
+    "convert",
+    "normalize",
+    "typescript",
+    "moment"
+  ],
   "scripts": {
     "build": "tsc -b ."
   },
