@@ -12,6 +12,13 @@
     "url": "https://github.com/finnair/v-validation.git",
     "directory": "packages/core"
   },
+  "keywords": [
+    "validation",
+    "validate",
+    "convert",
+    "normalize",
+    "typescript"
+  ],
   "scripts": {
     "build": "tsc -b ."
   },
