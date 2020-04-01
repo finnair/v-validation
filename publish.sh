@@ -6,5 +6,8 @@ if [[ -z "${GH_TOKEN}" ]]; then
   exit 1;
 fi
 
+set -v
+
+npm login
 lerna version ${1:-minor} --conventional-commits --create-release github
 lerna publish from-package
