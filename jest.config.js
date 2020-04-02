@@ -7,4 +7,5 @@ module.exports = {
   moduleFileExtensions: ['ts', 'js', 'json', 'node'],
   modulePathIgnorePatterns: ['/dist/'],
   testPathIgnorePatterns: ['/dist/'],
+  coveragePathIgnorePatterns: ['/dist/'],
 };
