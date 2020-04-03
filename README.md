@@ -1,5 +1,7 @@
 # v-validation
+
 ![CI](https://github.com/finnair/v-validation/workflows/CI/badge.svg?branch=master)
+[![codecov](https://codecov.io/gh/finnair/v-validation/branch/master/graph/badge.svg)](https://codecov.io/gh/finnair/v-validation)
 
 V stands for Validation.
 
