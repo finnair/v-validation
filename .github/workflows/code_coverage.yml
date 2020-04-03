@@ -1,0 +1,23 @@
+name: Code Coverage
+
+# Controls when the action will run. Triggers the workflow on push or pull request
+# events but only for the master branch
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+jobs:
+  build:
+    runs-on: [ubuntu-latest]
+    steps:
+      - uses: actions/checkout@master
+      - run: yarn
+      - run: yarn boot
+      - run: yarn build
+      - run: yarn test --coverage
+      - uses: codecov/codecov-action@v1
+        with:
+          name: v-validation # optional
+          fail_ci_if_error: true # optional (default = false)
