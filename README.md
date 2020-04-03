@@ -606,41 +606,7 @@ Time zone 00:00 is serialized as `Z`.
 
 ## Development
 
-### Requirements
-
-- node (tested with 10.x and 12.x)
-- typescript (tested with 3.7.x)
-- yarn (tested with 1.17.3)
-- lerna (tested with 3.20.2)
-- jest (tested with 25.1.0)
-
-### Commands
-
-1. Install depencencies with
-
-```shell
-yarn boot
-```
-
-2. Build with
-
-```shell
-yarn build
-```
-
-3. Test with
-
-```shell
-yarn test
-# or with coverage
-jest --coverage
-```
-
-4. Clean dependencies and built files
-
-```shell
-yarn clean
-```
+See [Contributing Guildelines](./.github/CONTRIBUTING.md).
 
 ## Roadmap
 
