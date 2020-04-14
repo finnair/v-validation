@@ -26,4 +26,4 @@ export function verifyValid(result: ValidationResult, value: any, convertedValue
   return result;
 }
 
-test.skip('', () => {});
+test.skip('do not fail build because of no tests found', () => {});

@@ -18,7 +18,7 @@ describe('path', () => {
     ).toEqual('$["@foo"].a5["http://xmlns.com/foaf/0.1/name"]'));
 
   describe('of', () => {
-    test('equal to path constructed by builder', () => expect(Path.of('$', 0, 'foo')).toEqual(index(0).property('foo')));
+    test('equal to path constructed by builder', () => expect(Path.of(0, 'foo')).toEqual(index(0).property('foo')));
 
     test('without root', () => expect(Path.of(0, 'foo')).toEqual(index(0).property('foo')));
 
