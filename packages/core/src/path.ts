@@ -30,10 +30,6 @@ export class Path {
   }
 
   static of(...path: PathComponent[]) {
-    return Path.ofNodes(path);
-  }
-
-  static ofNodes(path: PathComponent[]) {
     if (path.length === 0) {
       return ROOT;
     }
