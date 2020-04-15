@@ -1,4 +1,4 @@
-import { property, Path, index, ROOT } from './path';
+import { property, Path, index, ROOT, PathComponent } from './path';
 
 describe('path', () => {
   test('toJSON', () =>
@@ -18,10 +18,53 @@ describe('path', () => {
     ).toEqual('$["@foo"].a5["http://xmlns.com/foaf/0.1/name"]'));
 
   describe('of', () => {
-    test('equal to path constructed by builder', () => expect(Path.of('$', 0, 'foo')).toEqual(index(0).property('foo')));
+    test('equal to path constructed by builder', () => expect(Path.of(0, 'foo')).toEqual(index(0).property('foo')));
 
     test('without root', () => expect(Path.of(0, 'foo')).toEqual(index(0).property('foo')));
 
     test('alias for root', () => expect(Path.of()).toEqual(ROOT));
+  });
+
+  describe('iterable path', () => {
+    test('use path in for..of', () => {
+      const components: PathComponent[] = [];
+      for (const component of Path.of(0, 'foo', 'bar')) {
+        components.push(component);
+      }
+      expect(components).toEqual([0, 'foo', 'bar']);
+    });
+
+    test('use path in Array.from', () => {
+      expect(Array.from(Path.of(0, 'foo', 'bar'))).toEqual([0, 'foo', 'bar']);
+    });
+
+    test('Path.get', () => {
+      const path = Path.of('foo', 0, 'bar');
+      expect(path.get(0)).toEqual('foo');
+      expect(path.get(1)).toEqual(0);
+      expect(path.get(2)).toEqual('bar');
+    });
+
+    test('Path.length', () => {
+      expect(Path.of('foo', 0, 'bar').length).toEqual(3);
+    });
+  });
+
+  describe('set', () => {
+    test('set root', () => expect(Path.of().set('root', { foo: 'baz' })).toEqual({ foo: 'baz' }));
+
+    test('creates necessary nested objects', () => expect(Path.of(0, 'array', 1, 'name').set([], 'name')).toEqual([{ array: [undefined, { name: 'name' }] }]));
+
+    test("doesn't replace root object with array", () =>
+      expect(Path.of(0, 'array', 1, 'name').set({}, 'name')).toEqual({ 0: { array: [undefined, { name: 'name' }] } }));
+
+    test('creates root object if necessary', () =>
+      expect(Path.of(0, 'array', 1, 'name').set(undefined, 'name')).toEqual([{ array: [undefined, { name: 'name' }] }]));
+  });
+
+  describe('unset', () => {
+    test('deletes property when setting undefined value', () => expect(Path.of('name').unset({ name: 'name' })).toEqual({}));
+
+    test("delete doesn't create intermediate objects", () => expect(Path.of('nested', 'name').unset({})).toEqual({}));
   });
 });
