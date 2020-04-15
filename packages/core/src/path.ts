@@ -37,6 +37,47 @@ export class Path {
     return this.path[Symbol.iterator]();
   }
 
+  unset(object: any): any {
+    return this.set(object, undefined);
+  }
+
+  set(object: any, value: any): any {
+    if (this.path.length === 0) {
+      return value;
+    }
+    let index = -1;
+    const root = toObject(object, this.path);
+    let current = root;
+    for (index = 0; index < this.path.length - 1 && current; index++) {
+      const component = this.path[index];
+      const child = toObject(current[component], this.path);
+      current[component] = child;
+      current = child;
+    }
+    if (value === undefined) {
+      if (current !== undefined) {
+        delete current[this.path[index]];
+      }
+    } else {
+      current[this.path[index]] = value;
+    }
+    return root;
+
+    function toObject(current: any, path: PathComponent[]) {
+      if (typeof current === 'object') {
+        return current;
+      } else if (value !== undefined) {
+        if (typeof path[index + 1] === 'number') {
+          return [];
+        } else {
+          return {};
+        }
+      } else {
+        return undefined;
+      }
+    }
+  }
+
   static newRoot() {
     return new Path([]);
   }

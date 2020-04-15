@@ -49,4 +49,22 @@ describe('path', () => {
       expect(Path.of('foo', 0, 'bar').length).toEqual(3);
     });
   });
+
+  describe('set', () => {
+    test('set root', () => expect(Path.of().set('root', { foo: 'baz' })).toEqual({ foo: 'baz' }));
+
+    test('creates necessary nested objects', () => expect(Path.of(0, 'array', 1, 'name').set([], 'name')).toEqual([{ array: [undefined, { name: 'name' }] }]));
+
+    test("doesn't replace root object with array", () =>
+      expect(Path.of(0, 'array', 1, 'name').set({}, 'name')).toEqual({ 0: { array: [undefined, { name: 'name' }] } }));
+
+    test('creates root object if necessary', () =>
+      expect(Path.of(0, 'array', 1, 'name').set(undefined, 'name')).toEqual([{ array: [undefined, { name: 'name' }] }]));
+  });
+
+  describe('unset', () => {
+    test('deletes property when setting undefined value', () => expect(Path.of('name').unset({ name: 'name' })).toEqual({}));
+
+    test("delete doesn't create intermediate objects", () => expect(Path.of('nested', 'name').unset({})).toEqual({}));
+  });
 });
