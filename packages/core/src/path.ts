@@ -1,6 +1,6 @@
 export type PathComponent = number | string;
 
-const identifier = /^[a-zA-Z_]+[a-zA-Z0-9_]*$/;
+const identifier = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 
 export class Path {
   private readonly path: PathComponent[];
@@ -23,6 +23,18 @@ export class Path {
 
   toJSON(): string {
     return this.path.reduce((pathString: string, component: PathComponent) => pathString + componentToString(component), '$');
+  }
+
+  get length(): number {
+    return this.path.length;
+  }
+
+  get(index: number) {
+    return this.path[index];
+  }
+
+  [Symbol.iterator]() {
+    return this.path[Symbol.iterator]();
   }
 
   static newRoot() {
