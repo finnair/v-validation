@@ -67,4 +67,48 @@ describe('path', () => {
 
     test("delete doesn't create intermediate objects", () => expect(Path.of('nested', 'name').unset({})).toEqual({}));
   });
+
+  describe('validate components', () => {
+    test('string is not valid index', () => {
+      const component: any = 'foo';
+      expect(() => Path.of().index(component)).toThrow();
+    });
+
+    test('decimal is not valid index', () => {
+      const component: any = 1.2;
+      expect(() => Path.of().index(component)).toThrow();
+    });
+
+    test('negative value is not valid index', () => {
+      const component: any = -1;
+      expect(() => Path.of().index(component)).toThrow();
+    });
+
+    test('number is not valid property', () => {
+      const component: any = 0;
+      expect(() => Path.of().property(component)).toThrow();
+    });
+
+    test('array is not valid property', () => {
+      const component: any = [];
+      expect(() => Path.of().property(component)).toThrow();
+    });
+
+    describe('of', () => {
+      test('decimal is not a valid component', () => {
+        const component: any = 1.2;
+        expect(() => Path.of(component)).toThrow();
+      });
+
+      test('negative value is not a valid component', () => {
+        const component: any = -1;
+        expect(() => Path.of(component)).toThrow();
+      });
+
+      test('array is not a valid component', () => {
+        const component: any = [];
+        expect(() => Path.of(component)).toThrow();
+      });
+    });
+  });
 });
