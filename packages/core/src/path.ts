@@ -3,6 +3,8 @@ export type PathComponent = number | string;
 const identifier = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 
 export class Path {
+  public static readonly ROOT = new Path([]);
+
   private readonly path: PathComponent[];
 
   private constructor(path: PathComponent[]) {
@@ -80,13 +82,16 @@ export class Path {
     }
   }
 
+  /**
+   * @deprecated Use Path.ROOT instead
+   */
   static newRoot() {
-    return new Path([]);
+    return Path.ROOT;
   }
 
   static of(...path: PathComponent[]) {
     if (path.length === 0) {
-      return ROOT;
+      return Path.ROOT;
     }
     path.forEach(this.validateComponent);
     return new Path(path);
@@ -118,7 +123,7 @@ export class Path {
   }
 }
 
-export const ROOT = Path.newRoot();
+export const ROOT = Path.ROOT;
 
 export function property(property: string): Path {
   return ROOT.property(property);
