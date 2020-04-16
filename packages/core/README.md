@@ -1,5 +1,7 @@
 # v-validation-core
 
+[![npm version](https://badge.fury.io/js/%40finnair%2Fv-validation-core.svg)](https://badge.fury.io/js/%40finnair%2Fv-validation-core)
+
 V stands for Validation.
 
 `V` rules define how input is to be converted, normalized and validated to
