@@ -1,9 +1,9 @@
-import { property, Path, index, ROOT, PathComponent } from './path';
+import { Path, PathComponent, ROOT, property, index } from './path';
 
 describe('path', () => {
   test('toJSON', () =>
     expect(
-      property('s p a c e s')
+      Path.property('s p a c e s')
         .index(5)
         .property('regular')
         .toJSON(),
@@ -11,18 +11,18 @@ describe('path', () => {
 
   test('Weird properties', () =>
     expect(
-      property('@foo')
+      Path.property('@foo')
         .property('a5')
         .property('http://xmlns.com/foaf/0.1/name')
         .toJSON(),
     ).toEqual('$["@foo"].a5["http://xmlns.com/foaf/0.1/name"]'));
 
   describe('of', () => {
-    test('equal to path constructed by builder', () => expect(Path.of(0, 'foo')).toEqual(index(0).property('foo')));
+    test('equal to path constructed by builder', () => expect(Path.of(0, 'foo')).toEqual(Path.index(0).property('foo')));
 
-    test('without root', () => expect(Path.of(0, 'foo')).toEqual(index(0).property('foo')));
+    test('without root', () => expect(Path.of(0, 'foo')).toEqual(Path.index(0).property('foo')));
 
-    test('alias for root', () => expect(Path.of()).toEqual(ROOT));
+    test('alias for root', () => expect(Path.of()).toEqual(Path.ROOT));
   });
 
   describe('iterable path', () => {
@@ -110,5 +110,15 @@ describe('path', () => {
         expect(() => Path.of(component)).toThrow();
       });
     });
+  });
+
+  describe('@deprecated', () => {
+    test('newRoot', () => expect(Path.newRoot()).toBe(Path.ROOT));
+
+    test('ROOT', () => expect(ROOT).toBe(Path.ROOT));
+
+    test('property', () => expect(property('test')).toEqual(Path.property('test')));
+
+    test('index', () => expect(index(0)).toEqual(Path.index(0)));
   });
 });

@@ -19,8 +19,12 @@ import {
   HasValueViolation,
 } from './validators';
 import { default as V } from './V';
-import { Path, property, index, ROOT } from './path';
+import { Path } from './path';
 import { expectUndefined, expectValid, expectViolations, verifyValid } from './testUtil.spec';
+
+const ROOT = Path.ROOT,
+  index = Path.index,
+  property = Path.property;
 
 async function expectGroupViolations(value: any, group: Group, validator: Validator, ...violations: Violation[]) {
   const result = await validator.validate(value, { group });

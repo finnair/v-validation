@@ -1,5 +1,7 @@
 import deepEqual from 'deep-equal';
-import { Path, ROOT } from './path';
+import { Path } from './path';
+
+const ROOT = Path.ROOT;
 
 export interface ValidatorFn {
   (value: any, path: Path, ctx: ValidationContext): Promise<ValidationResult>;

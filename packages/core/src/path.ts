@@ -89,6 +89,14 @@ export class Path {
     return Path.ROOT;
   }
 
+  static property(property: string): Path {
+    return Path.ROOT.property(property);
+  }
+
+  static index(index: number): Path {
+    return Path.ROOT.index(index);
+  }
+
   static of(...path: PathComponent[]) {
     if (path.length === 0) {
       return Path.ROOT;
@@ -123,14 +131,23 @@ export class Path {
   }
 }
 
+/**
+ * @deprecated Use Path.ROOT instead
+ */
 export const ROOT = Path.ROOT;
 
+/**
+ * @deprecated Use Path.property instead
+ */
 export function property(property: string): Path {
-  return ROOT.property(property);
+  return Path.property(property);
 }
 
+/**
+ * @deprecated Use Path.index instead
+ */
 export function index(index: number): Path {
-  return ROOT.index(index);
+  return Path.index(index);
 }
 
 function componentToString(component: PathComponent) {
