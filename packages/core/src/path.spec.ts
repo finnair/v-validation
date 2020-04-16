@@ -38,16 +38,36 @@ describe('path', () => {
       expect(Array.from(Path.of(0, 'foo', 'bar'))).toEqual([0, 'foo', 'bar']);
     });
 
-    test('Path.get', () => {
+    test('componentAt', () => {
       const path = Path.of('foo', 0, 'bar');
-      expect(path.get(0)).toEqual('foo');
-      expect(path.get(1)).toEqual(0);
-      expect(path.get(2)).toEqual('bar');
+      expect(path.componentAt(0)).toEqual('foo');
+      expect(path.componentAt(1)).toEqual(0);
+      expect(path.componentAt(2)).toEqual('bar');
     });
 
-    test('Path.length', () => {
+    test('length', () => {
       expect(Path.of('foo', 0, 'bar').length).toEqual(3);
     });
+  });
+
+  describe('get', () => {
+    test('get root', () => expect(Path.ROOT.get('root')).toEqual('root'));
+
+    test('get property of root', () => expect(Path.of('name').get({ name: 'name' })).toEqual('name'));
+
+    test('get property of child', () => expect(Path.of('child', 'name').get({ child: { name: 'name' } })).toEqual('name'));
+
+    test('get index of root', () => expect(Path.of(1).get([1, 2])).toEqual(2));
+
+    test('get index of of child', () => expect(Path.of('child', 1).get({ child: [1, 2] })).toEqual(2));
+
+    test('get property of string', () => expect(Path.of('length').get('string')).toBeUndefined());
+
+    test('get property of nested string', () => expect(Path.of('child', 'name', 'length').get({ child: { name: 'string' } })).toBeUndefined());
+
+    test('get index of string', () => expect(Path.of(0).get('string')).toBeUndefined());
+
+    test('get index of nested string', () => expect(Path.of('child', 'name', 0).get({ child: { name: 'string' } })).toBeUndefined());
   });
 
   describe('set', () => {
