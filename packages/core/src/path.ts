@@ -33,7 +33,7 @@ export class Path {
     return this.path.length;
   }
 
-  get(index: number) {
+  componentAt(index: number) {
     return this.path[index];
   }
 
@@ -41,17 +41,33 @@ export class Path {
     return this.path[Symbol.iterator]();
   }
 
-  unset(object: any): any {
-    return this.set(object, undefined);
+  get(root: any) {
+    if (this.path.length === 0) {
+      return root;
+    }
+    let current = root;
+    let index = 0;
+    for (; index < this.path.length - 1 && typeof current === 'object'; index++) {
+      const component = this.path[index];
+      current = current[component];
+    }
+    if (index === this.path.length - 1 && typeof current === 'object') {
+      return current[this.path[this.path.length - 1]];
+    }
+    return undefined;
   }
 
-  set(object: any, value: any): any {
+  unset(root: any): any {
+    return this.set(root, undefined);
+  }
+
+  set(root: any, value: any): any {
     if (this.path.length === 0) {
       return value;
     }
     let index = -1;
-    const root = toObject(object, this.path);
-    let current = root;
+    const _root = toObject(root, this.path);
+    let current = _root;
     for (index = 0; index < this.path.length - 1 && current; index++) {
       const component = this.path[index];
       const child = toObject(current[component], this.path);
@@ -65,7 +81,7 @@ export class Path {
     } else {
       current[this.path[index]] = value;
     }
-    return root;
+    return _root;
 
     function toObject(current: any, path: PathComponent[]) {
       if (typeof current === 'object') {
