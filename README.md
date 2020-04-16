@@ -2,6 +2,7 @@
 
 ![CI](https://github.com/finnair/v-validation/workflows/CI/badge.svg?branch=master)
 [![codecov](https://codecov.io/gh/finnair/v-validation/branch/master/graph/badge.svg)](https://codecov.io/gh/finnair/v-validation)
+[![npm version](https://badge.fury.io/js/%40finnair%2Fv-validation-core.svg)](https://badge.fury.io/js/%40finnair%2Fv-validation-core)
 
 V stands for Validation.
 
@@ -96,7 +97,7 @@ const personValidator = V.object({
 Custom converters can be defined as a simple map functions.
 
 ```typescript
-const base64json = V.map(value => JSON.parse(new Buffer(value, 'base64').toString()), 'InvalidEncoding');
+const base64json = V.map((value) => JSON.parse(new Buffer(value, 'base64').toString()), 'InvalidEncoding');
 (await base64json.validate('eyAibWVzc2FnZSI6ICJIZWxsbyBXb3JsZCEiIH0=')).getValue();
 // { message: 'Hello World!' }
 
