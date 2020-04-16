@@ -2,8 +2,10 @@ import { SchemaValidator, DiscriminatorViolation } from './schema';
 import { default as V } from './V';
 import { defaultViolations, TypeMismatch, ObjectValidator, HasValueViolation } from './validators';
 import { expectViolations, expectValid } from './testUtil.spec';
-import { property } from './path';
-import { ROOT } from './path';
+import { Path } from './path';
+
+const ROOT = Path.ROOT,
+  property = Path.property;
 
 describe('schema', () => {
   describe('Validator Schema', () => {

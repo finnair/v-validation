@@ -3,6 +3,8 @@ export type PathComponent = number | string;
 const identifier = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 
 export class Path {
+  public static readonly ROOT = new Path([]);
+
   private readonly path: PathComponent[];
 
   private constructor(path: PathComponent[]) {
@@ -10,10 +12,12 @@ export class Path {
   }
 
   index(index: number): Path {
+    Path.validateIndex(index);
     return new Path(this.path.concat(index));
   }
 
   property(property: string): Path {
+    Path.validateProperty(property);
     return new Path(this.path.concat(property));
   }
 
@@ -78,26 +82,72 @@ export class Path {
     }
   }
 
+  /**
+   * @deprecated Use Path.ROOT instead
+   */
   static newRoot() {
-    return new Path([]);
+    return Path.ROOT;
+  }
+
+  static property(property: string): Path {
+    return Path.ROOT.property(property);
+  }
+
+  static index(index: number): Path {
+    return Path.ROOT.index(index);
   }
 
   static of(...path: PathComponent[]) {
     if (path.length === 0) {
-      return ROOT;
+      return Path.ROOT;
     }
+    path.forEach(this.validateComponent);
     return new Path(path);
+  }
+
+  private static validateComponent(component: any) {
+    if (typeof component === 'number') {
+      if (component < 0 || !Number.isInteger(component)) {
+        throw new Error('Expected component to be an integer >= 0');
+      }
+    } else if (typeof component !== 'string') {
+      throw new Error(`Expected component to be a string or integer, got ${component}`);
+    }
+  }
+
+  private static validateIndex(index: any) {
+    if (typeof index !== 'number') {
+      throw new Error(`Expected index to be a number, got ${index}`);
+    }
+    if (index < 0 || !Number.isInteger(index)) {
+      throw new Error('Expected index to be an integer >= 0');
+    }
+  }
+
+  private static validateProperty(property: any) {
+    if (typeof property !== 'string') {
+      throw new Error(`Expected property to be a string, got ${property}`);
+    }
   }
 }
 
-export const ROOT = Path.newRoot();
+/**
+ * @deprecated Use Path.ROOT instead
+ */
+export const ROOT = Path.ROOT;
 
+/**
+ * @deprecated Use Path.property instead
+ */
 export function property(property: string): Path {
-  return ROOT.property(property);
+  return Path.property(property);
 }
 
+/**
+ * @deprecated Use Path.index instead
+ */
 export function index(index: number): Path {
-  return ROOT.index(index);
+  return Path.index(index);
 }
 
 function componentToString(component: PathComponent) {
