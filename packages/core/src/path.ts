@@ -121,17 +121,18 @@ export class Path {
     return new Path(path);
   }
 
-  private static validateComponent(component: any) {
-    if (typeof component === 'number') {
-      if (component < 0 || !Number.isInteger(component)) {
+  static validateComponent(component: any) {
+    const type = typeof component;
+    if (type === 'number') {
+      if (component < 0 || !Number.isInteger(component as number)) {
         throw new Error('Expected component to be an integer >= 0');
       }
-    } else if (typeof component !== 'string') {
-      throw new Error(`Expected component to be a string or integer, got ${component}`);
+    } else if (type !== 'string') {
+      throw new Error(`Expected component to be a string or an integer, got ${type}: ${component}`);
     }
   }
 
-  private static validateIndex(index: any) {
+  static validateIndex(index: any) {
     if (typeof index !== 'number') {
       throw new Error(`Expected index to be a number, got ${index}`);
     }
@@ -140,7 +141,7 @@ export class Path {
     }
   }
 
-  private static validateProperty(property: any) {
+  static validateProperty(property: any) {
     if (typeof property !== 'string') {
       throw new Error(`Expected property to be a string, got ${property}`);
     }
