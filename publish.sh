@@ -8,6 +8,10 @@ fi
 
 set -v
 
+yarn clean
+yarn boot
+yarn build
+yarn test --coverage
 npm login
 lerna version ${1:-minor} --conventional-commits --create-release github
 lerna publish from-package
