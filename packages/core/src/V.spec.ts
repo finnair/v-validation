@@ -588,6 +588,21 @@ describe('inheritance', () => {
     await expectViolations({}, type, defaultViolations.notNull(property('required')));
     done();
   });
+
+  test('property order', async done => {
+    const value = (
+      await multiParentChild.validate({
+        id: '123',
+        name: 'multi-parent',
+        anything: true,
+        firstAdditional: 'firstAdditional',
+        additionalProperty: 2,
+        thirdAdditional: 'thirdAdditional',
+      })
+    ).getValue();
+    expect(Object.keys(value)).toEqual(['id', 'name', 'anything', 'firstAdditional', 'additionalProperty', 'thirdAdditional']);
+    done();
+  });
 });
 
 describe('Date', () => {
