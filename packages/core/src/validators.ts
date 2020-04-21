@@ -449,13 +449,18 @@ export class ObjectValidator extends Validator {
       if (!filter(key)) {
         return Promise.resolve(ctx.success(undefined));
       }
+      // Assign for property order
+      convertedObject[key] = undefined;
       return validator.validatePath(currentValue, path.property(key), ctx).then(result => {
         if (result.isSuccess()) {
           const newValue = result.getValue();
           if (newValue !== undefined) {
             convertedObject[key] = newValue;
+          } else {
+            delete convertedObject[key];
           }
         } else {
+          delete convertedObject[key];
           violations = violations.concat(result.getViolations());
         }
         return result;

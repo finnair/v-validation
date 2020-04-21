@@ -126,6 +126,23 @@ describe('schema', () => {
 
     test('new proxies cannot be created after constructor is finished', () =>
       expect(() => new SchemaValidator(schema => ({ discriminator: 'type', models: {} })).of('NewModel')).toThrow());
+
+    test('property order', async done => {
+      const value = (
+        await schema.validate({
+          property: 'property',
+          properties: {
+            first: { type: 'Number' },
+            second: { type: 'Number' },
+          },
+          extends: { type: 'Object' },
+          type: 'ObjectNormalizer',
+        })
+      ).getValue();
+      expect(Object.keys(value)).toEqual(['type', 'extends', 'properties', 'property']);
+      expect(Object.keys(value.properties)).toEqual(['first', 'second']);
+      done();
+    });
   });
 
   describe('Primitive Schema', () => {
