@@ -1,5 +1,5 @@
 import deepEqual from 'deep-equal';
-import { Path } from './path';
+import { Path } from '@finnair/path';
 
 const ROOT = Path.ROOT;
 

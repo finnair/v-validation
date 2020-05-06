@@ -12,7 +12,7 @@ import {
   TypeMismatch,
   Model,
 } from './validators';
-import { Path } from './path';
+import { Path } from '@finnair/path';
 
 export interface DiscriminatorFn {
   (value: any): string;

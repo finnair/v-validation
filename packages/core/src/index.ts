@@ -1,3 +1,3 @@
 export { default as V } from './V';
-export * from './path';
+export * from '@finnair/path';
 export * from './validators';

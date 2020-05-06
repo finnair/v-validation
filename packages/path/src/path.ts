@@ -98,13 +98,6 @@ export class Path {
     }
   }
 
-  /**
-   * @deprecated Use Path.ROOT instead
-   */
-  static newRoot() {
-    return Path.ROOT;
-  }
-
   static property(property: string): Path {
     return Path.ROOT.property(property);
   }
@@ -146,25 +139,6 @@ export class Path {
       throw new Error(`Expected property to be a string, got ${property}`);
     }
   }
-}
-
-/**
- * @deprecated Use Path.ROOT instead
- */
-export const ROOT = Path.ROOT;
-
-/**
- * @deprecated Use Path.property instead
- */
-export function property(property: string): Path {
-  return Path.property(property);
-}
-
-/**
- * @deprecated Use Path.index instead
- */
-export function index(index: number): Path {
-  return Path.index(index);
 }
 
 function componentToString(component: PathComponent) {

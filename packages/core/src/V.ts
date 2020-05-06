@@ -1,6 +1,6 @@
 import { default as validateUuid } from 'uuid-validate';
 import { SchemaValidator, SchemaModel } from './schema';
-import { Path } from '.';
+import { Path } from '@finnair/path';
 import {
   IgnoreValidator,
   ArrayNormalizer,

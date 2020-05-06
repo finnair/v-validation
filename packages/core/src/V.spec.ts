@@ -19,7 +19,7 @@ import {
   HasValueViolation,
 } from './validators';
 import { default as V } from './V';
-import { Path } from './path';
+import { Path } from '@finnair/path';
 import { expectUndefined, expectValid, expectViolations, verifyValid } from './testUtil.spec';
 
 const ROOT = Path.ROOT,

@@ -1,4 +1,4 @@
-import { Path, PathComponent, ROOT, property, index } from './path';
+import { Path, PathComponent } from './path';
 
 describe('path', () => {
   test('toJSON', () =>
@@ -130,15 +130,5 @@ describe('path', () => {
         expect(() => Path.of(component)).toThrow();
       });
     });
-  });
-
-  describe('@deprecated', () => {
-    test('newRoot', () => expect(Path.newRoot()).toBe(Path.ROOT));
-
-    test('ROOT', () => expect(ROOT).toBe(Path.ROOT));
-
-    test('property', () => expect(property('test')).toEqual(Path.property('test')));
-
-    test('index', () => expect(index(0)).toEqual(Path.index(0)));
   });
 });
