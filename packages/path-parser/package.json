@@ -1,0 +1,29 @@
+{
+  "name": "@finnair/path-parser",
+  "version": "0.4.0",
+  "description": "Simple object path as array of strings and numbers",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "license": "MIT",
+  "homepage": "https://github.com/finnair/v-validation/tree/master/packages/path-matcher-parser#readme",
+  "bugs": "https://github.com/finnair/v-validation/issues",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/finnair/v-validation.git",
+    "directory": "packages/core"
+  },
+  "keywords": [
+    "json",
+    "path",
+    "parser"
+  ],
+  "scripts": {
+    "build": "tsc -b ."
+  },
+  "dependencies": {
+    "@finnair/path": "0.4.0",
+    "@finnair/path-matcher": "0.4.0",
+    "@types/nearley": "2.11.1",
+    "nearley": "2.19.3"
+  }
+}

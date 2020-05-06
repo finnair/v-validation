@@ -1,0 +1,1 @@
+export { parsePath } from './parsePath';
