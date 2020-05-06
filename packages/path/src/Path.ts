@@ -1,6 +1,6 @@
 export type PathComponent = number | string;
 
-const identifier = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
+const identifierPattern = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 
 export class Path {
   public static readonly ROOT = new Path([]);
@@ -26,7 +26,7 @@ export class Path {
   }
 
   toJSON(): string {
-    return this.path.reduce((pathString: string, component: PathComponent) => pathString + componentToString(component), '$');
+    return this.path.reduce((pathString: string, component: PathComponent) => pathString + Path.componentToString(component), '$');
   }
 
   get length(): number {
@@ -139,14 +139,29 @@ export class Path {
       throw new Error(`Expected property to be a string, got ${property}`);
     }
   }
-}
 
-function componentToString(component: PathComponent) {
-  if (typeof component === 'number') {
-    return '[' + component + ']';
-  } else if (identifier.test(component)) {
-    return '.' + component;
-  } else {
-    return '[' + JSON.stringify(component) + ']';
+  static isValidIdentifier(str: string) {
+    return identifierPattern.test(str);
+  }
+
+  static componentToString(component: PathComponent) {
+    if (typeof component === 'number') {
+      return Path.indexToString(component);
+    } else {
+      return Path.propertyToString(component);
+    }
+  }
+
+  static indexToString(index: number) {
+    return '[' + index + ']';
+  }
+
+  static propertyToString(property: string) {
+    if (Path.isValidIdentifier(property)) {
+      return '.' + property;
+    } else {
+      // JsonPath uses single quotes, but that would require custom encoding of single quotes as JSON string encoding doesn't have escape for it
+      return '[' + JSON.stringify(property) + ']';
+    }
   }
 }

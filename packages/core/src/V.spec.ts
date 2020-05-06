@@ -21,6 +21,7 @@ import {
 import { default as V } from './V';
 import { Path } from '@finnair/path';
 import { expectUndefined, expectValid, expectViolations, verifyValid } from './testUtil.spec';
+import { SizeViolation } from '../dist';
 
 const ROOT = Path.ROOT,
   index = Path.index,
@@ -1144,7 +1145,7 @@ test('V.schema', () =>
     V.schema(_ => ({ discriminator: 'type', models: { Model: {} } })),
   ));
 
-describe('map', () => {
+describe('map function', () => {
   test('exeption as violation', async done => {
     const error = new Error('Error message');
     await expectViolations(
@@ -1180,13 +1181,13 @@ describe('Map', () => {
   test('undefined not allowed', () => expectViolations(undefined, V.mapType(V.any(), V.any()), defaultViolations.notNull()));
 
   describe('toMapType', () => {
+    const validator = V.toMapType(
+      V.object({
+        properties: { key1: V.required(V.string()), key2: V.required(V.string()) },
+      }),
+      V.string(),
+    );
     test('JSON roundtrip', async () => {
-      const validator = V.toMapType(
-        V.object({
-          properties: { key1: V.required(V.string()), key2: V.required(V.string()) },
-        }),
-        V.string(),
-      );
       const key = { key1: 'key1', key2: 'key2' };
       const mapArray: [MapKeyType, String][] = [[key, 'value']];
 
@@ -1211,14 +1212,26 @@ describe('Map', () => {
       // WARN! Object keys use identity hash/equals (===)
       expect(convertedMap.get(key)).toBeUndefined();
     });
+
+    test('non-array component is not allowed', () => expectViolations([{}], validator, new TypeMismatch(Path.of(0), 'Array')));
+
+    test('three element component is not allowed', () => expectViolations([[1, 2, 3]], validator, new SizeViolation(Path.of(0), 1, 2)));
+
+    test('empty array component is not allowed', () => expectViolations([[]], validator, new SizeViolation(Path.of(0), 1, 2)));
+
+    test('object is not allowed', () => expectViolations({}, validator, new TypeMismatch(Path.ROOT, 'Map OR array of [key, value] arrays')));
   });
 
   describe('mapType', () => {
-    const validator = V.mapType(V.string(), V.any(), false);
+    const validator = V.mapType(V.string(), V.string(), false);
 
     test('Map instance is valid', () => expectValid(new Map(), validator));
 
     test('object is not valid', () => expectViolations({}, validator, new TypeMismatch(ROOT, 'Map')));
+
+    test('Map has invalid value', () => expectViolations(new Map([['foo', 0]]), validator, new TypeMismatch(Path.of(0, 'value'), 'string', 0)));
+
+    test('Map has invalid key', () => expectViolations(new Map([[0, 'foo']]), validator, new TypeMismatch(Path.of(0, 'key'), 'string', 0)));
   });
 });
 

@@ -14,7 +14,9 @@
   },
   "keywords": [
     "json",
-    "path"
+    "path",
+    "matcher",
+    "JsonPath"
   ],
   "scripts": {
     "build": "tsc -b ."

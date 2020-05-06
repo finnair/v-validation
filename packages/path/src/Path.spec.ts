@@ -1,4 +1,4 @@
-import { Path, PathComponent } from './path';
+import { Path, PathComponent } from './Path';
 
 describe('path', () => {
   test('toJSON', () =>
@@ -86,6 +86,12 @@ describe('path', () => {
     test('deletes property when setting undefined value', () => expect(Path.of('name').unset({ name: 'name' })).toEqual({}));
 
     test("delete doesn't create intermediate objects", () => expect(Path.of('nested', 'name').unset({})).toEqual({}));
+  });
+
+  test('connectTo', () => {
+    const parent = Path.of('parent');
+    const child = Path.of('child');
+    expect(Array.from(child.connectTo(parent))).toEqual(['parent', 'child']);
   });
 
   describe('validate components', () => {

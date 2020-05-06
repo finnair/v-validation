@@ -15,6 +15,7 @@
   "keywords": [
     "json",
     "path",
+    "JsonPath",
     "parser"
   ],
   "scripts": {
@@ -22,7 +23,6 @@
   },
   "dependencies": {
     "@finnair/path": "0.4.0",
-    "@finnair/path-matcher": "0.4.0",
     "@types/nearley": "2.11.1",
     "nearley": "2.19.3"
   }
