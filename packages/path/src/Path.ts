@@ -25,6 +25,10 @@ export class Path {
     return new Path(newRootPath.path.concat(this.path));
   }
 
+  concat(childPath: Path) {
+    return new Path(this.path.concat(childPath.path));
+  }
+
   toJSON(): string {
     return this.path.reduce((pathString: string, component: PathComponent) => pathString + Path.componentToString(component), '$');
   }

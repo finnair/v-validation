@@ -98,6 +98,10 @@ export class UnionMatcher implements PathExpression {
     return `[${this.components.map(this.propertyToString).join(',')}]`;
   }
 
+  static of(...components: PathComponent[]) {
+    return new UnionMatcher(components);
+  }
+
   private propertyToString(property: PathComponent) {
     return JSON.stringify(property);
   }

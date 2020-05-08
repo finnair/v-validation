@@ -107,14 +107,14 @@ describe('project', () => {
 
   describe('match', () => {
     test('everything matches if there are no includes or excludes', () => {
-      const projection = new Projection();
+      const projection = Projection.of();
       expect(projection.match(Path.of())).toBe(true);
       expect(projection.match(Path.of('property'))).toBe(true);
       expect(projection.match(Path.of(1))).toBe(true);
     });
 
     test('includes partial match', () => {
-      const projection = new Projection([PathMatcher.of(1), PathMatcher.of('property')]);
+      const projection = Projection.of([PathMatcher.of(1), PathMatcher.of('property')]);
       expect(projection.match(Path.of())).toBe(true);
       expect(projection.match(Path.of('property'))).toBe(true);
       expect(projection.match(Path.of('property', 'nested'))).toBe(true);
@@ -123,12 +123,12 @@ describe('project', () => {
     });
 
     test("doesn't include sibling path", () => {
-      const projection = new Projection([PathMatcher.of('property', 'nested')]);
+      const projection = Projection.of([PathMatcher.of('property', 'nested')]);
       expect(projection.match(Path.of('property', 'nested2'))).toBe(false);
     });
 
     test('excludes by prefix', () => {
-      const projection = new Projection([], [PathMatcher.of('property2'), PathMatcher.of('property', 'nested')]);
+      const projection = Projection.of([], [PathMatcher.of('property2'), PathMatcher.of('property', 'nested')]);
       expect(projection.match(Path.of('property', 'nested'))).toBe(false);
       expect(projection.match(Path.of('property', 'nested', 0))).toBe(false);
       expect(projection.match(Path.of('property', 'nested2'))).toBe(true);
@@ -139,7 +139,7 @@ describe('project', () => {
     });
 
     test('include & exclude', () => {
-      const projection = new Projection([PathMatcher.of('property'), PathMatcher.of(1)], [PathMatcher.of(1, 0), PathMatcher.of('property', 'nested')]);
+      const projection = Projection.of([PathMatcher.of('property'), PathMatcher.of(1)], [PathMatcher.of(1, 0), PathMatcher.of('property', 'nested')]);
       expect(projection.match(Path.of())).toBe(true);
       expect(projection.match(Path.of('property', 'nested'))).toBe(false);
       expect(projection.match(Path.of('property', 'nested2'))).toBe(true);

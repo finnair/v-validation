@@ -95,9 +95,9 @@ describe('path', () => {
 
     test('match union index', () => expect(PathMatcher.of(new UnionMatcher([0, 'foo'])).match(Path.of(0))).toBe(true));
 
-    test('match union property', () => expect(PathMatcher.of(new UnionMatcher([0, 'foo'])).match(Path.of('foo'))).toBe(true));
+    test('match union property', () => expect(PathMatcher.of(UnionMatcher.of(0, 'foo')).match(Path.of('foo'))).toBe(true));
 
-    test('match union not found', () => expect(PathMatcher.of(new UnionMatcher([0, 'foo'])).match(Path.of(1))).toBe(false));
+    test('match union not found', () => expect(PathMatcher.of(UnionMatcher.of(0, 'foo')).match(Path.of(1))).toBe(false));
   });
 
   describe('prefixMatch', () => {

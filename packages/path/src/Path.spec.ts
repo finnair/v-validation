@@ -1,4 +1,6 @@
 import { Path, PathComponent } from './Path';
+import { PathMatcher } from './PathMatcher';
+import { AnyProperty, AnyIndex } from './matchers';
 
 describe('path', () => {
   test('toJSON', () =>
@@ -94,6 +96,12 @@ describe('path', () => {
     expect(Array.from(child.connectTo(parent))).toEqual(['parent', 'child']);
   });
 
+  test('concat', () => {
+    const parent = Path.of('parent');
+    const child = Path.of('child');
+    expect(Array.from(parent.concat(child))).toEqual(['parent', 'child']);
+  });
+
   describe('validate components', () => {
     test('string is not valid index', () => {
       const component: any = 'foo';
@@ -136,5 +144,12 @@ describe('path', () => {
         expect(() => Path.of(component)).toThrow();
       });
     });
+  });
+
+  test('documentation example', () => {
+    const array: any = [1, 2];
+    array.property = 'stupid thing to do';
+    expect(PathMatcher.of(AnyProperty).findValues(array)).toEqual([1, 2, 'stupid thing to do']);
+    expect(PathMatcher.of(AnyIndex).findValues(array)).toEqual([1, 2]);
   });
 });

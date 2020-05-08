@@ -2,27 +2,19 @@ import { PathMatcher } from './PathMatcher';
 import { Path } from './Path';
 
 export class Projection {
-  private readonly includeExpressions: PathMatcher[];
-  private readonly excludeExpressions: PathMatcher[];
-  private readonly allowGaps: boolean;
-
-  constructor(includes?: PathMatcher[], excludes?: PathMatcher[]) {
-    this.includeExpressions = includes ? includes.map(validatePathMatcher) : [];
-    this.excludeExpressions = excludes ? excludes.map(validatePathMatcher) : [];
-    this.allowGaps = this.includeExpressions.some(expression => expression.allowGaps) || this.excludeExpressions.some(expression => expression.allowGaps);
-  }
+  private constructor(private readonly includes: PathMatcher[], private readonly excludes: PathMatcher[], private readonly allowGaps: boolean) {}
 
   map<T>(input: T): Partial<T> {
     let output: any;
-    if (this.includeExpressions.length) {
+    if (this.includes.length) {
       input = jsonClone(input);
       output = {};
-      this.includeExpressions.forEach(expression => include(input, expression, output));
+      this.includes.forEach(expression => include(input, expression, output));
     } else {
-      output = this.excludeExpressions.length ? jsonClone(input) : input;
+      output = this.excludes.length ? jsonClone(input) : input;
     }
-    if (this.excludeExpressions.length) {
-      this.excludeExpressions.forEach(expression => exclude(output, expression));
+    if (this.excludes.length) {
+      this.excludes.forEach(expression => exclude(output, expression));
     }
     if (this.allowGaps) {
       return removeGaps(output);
@@ -31,22 +23,29 @@ export class Projection {
   }
 
   match(path: Path) {
-    if (this.includeExpressions.length) {
-      if (!this.includeExpressions.some(expression => expression.partialMatch(path))) {
+    if (this.includes.length) {
+      if (!this.includes.some(expression => expression.partialMatch(path))) {
         return false;
       }
     }
-    if (this.excludeExpressions.length) {
-      if (this.excludeExpressions.some(expression => expression.prefixMatch(path))) {
+    if (this.excludes.length) {
+      if (this.excludes.some(expression => expression.prefixMatch(path))) {
         return false;
       }
     }
     return true;
   }
+
+  static of(includes?: PathMatcher[], excludes?: PathMatcher[]) {
+    includes = includes ? includes.map(validatePathMatcher) : [];
+    excludes = excludes ? excludes.map(validatePathMatcher) : [];
+    const allowGaps = includes.some(expression => expression.allowGaps) || excludes.some(expression => expression.allowGaps);
+    return new Projection(includes, excludes, allowGaps);
+  }
 }
 
 export function projection<T>(includes?: PathMatcher[], excludes?: PathMatcher[]) {
-  const projection = new Projection(includes, excludes);
+  const projection = Projection.of(includes, excludes);
   return (input: T): Partial<T> => projection.map(input);
 }
 
