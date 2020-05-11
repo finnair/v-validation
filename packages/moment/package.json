@@ -25,9 +25,6 @@
   },
   "dependencies": {
     "@finnair/v-validation-core": "^0.4.0",
-    "@types/moment": "^2.13.0",
-    "@types/moment-timezone": "^0.5.12",
-    "moment": "^2.24.0",
-    "moment-timezone": "^0.5.28"
+    "moment": "^2.25.3"
   }
 }
