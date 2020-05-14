@@ -1,5 +1,4 @@
 import moment, { Moment } from 'moment';
-import momentTimezone from 'moment-timezone';
 import { V, defaultViolations, Validator, ValidatorOptions, ValidationResult, Violation, ROOT, TypeMismatch } from '@finnair/v-validation-core';
 import { Vmoment, dateUtcMoment, dateTimeUtcMoment, dateTimeMoment, timeMoment, dateMoment, dateTimeMillisUtcMoment, dateTimeMillisMoment } from './Vmoment';
 
@@ -24,7 +23,6 @@ function verifyValid(result: ValidationResult, value: any, convertedValue?: any)
 }
 
 describe('moment', () => {
-  momentTimezone.tz.setDefault('Europe/Helsinki');
   const toJSON = V.map((value: any) => value.toJSON());
   const toDate = V.map((value: any) => value.toDate());
 
@@ -32,12 +30,15 @@ describe('moment', () => {
 
   test('undefined is invalid', () => expectViolations(null, Vmoment.date(), defaultViolations.notNull()));
 
+  test('construct from Moment', () => {
+    const m = moment();
+    expect(m.isSame(dateTimeMillisUtcMoment(m))).toBe(true);
+    expect(m.isSame(dateTimeUtcMoment(m))).toBe(true);
+    expect(dateTimeUtcMoment(m).toJSON()).toEqual(m.utc().format('YYYY-MM-DDTHH:mm:ss') + 'Z');
+  });
+
   describe('local date', () => {
-    test('valid local date value', () => expectValid('2019-03-07', Vmoment.date().then(toDate), new Date('2019-03-06T22:00:00Z')));
-
     test('valid local date converted', () => expectValid('2019-03-07', Vmoment.date().then(toJSON), '2019-03-07'));
-
-    test('array constructor', () => expect(dateUtcMoment([2019, 1, 1]).toJSON()).toEqual('2019-02-01'));
 
     test('invalid', () => expectViolations('2019.03.07', Vmoment.date(), defaultViolations.date('2019.03.07')));
 
@@ -49,8 +50,6 @@ describe('moment', () => {
 
     test('valid local dateTime with +02:00 offset converted', () =>
       expectValid('2019-03-07T14:13:14+02:00', Vmoment.dateTime().then(toJSON), '2019-03-07T14:13:14+02:00'));
-
-    test('array constructor', () => expect(dateTimeMoment([2019, 0, 1, 1, 1, 1]).toJSON()).toEqual('2019-01-01T01:01:01+02:00'));
 
     test('clone', () => expectCloneToMatch(dateTimeMoment()));
   });
@@ -128,8 +127,6 @@ describe('moment', () => {
 
     test('valid local dateTime with +02:00 offset converted', () =>
       expectValid('2019-03-07T14:13:14.123+02:00', Vmoment.dateTimeMillis().then(toJSON), '2019-03-07T14:13:14.123+02:00'));
-
-    test('array constructor', () => expect(dateTimeMillisMoment([2019, 0, 1, 1, 1, 1, 123]).toJSON()).toEqual('2019-01-01T01:01:01.123+02:00'));
 
     test('clone', () => expectCloneToMatch(dateTimeMillisMoment()));
   });
