@@ -31,7 +31,7 @@ conform to the expected model.
 
 ## Path Parsers
 
-`@finnair/path` contains [nearley.js](https://nearley.js.org/) based parsers for `Path` and `PathMatcher`.
+`@finnair/path-parser` contains [nearley.js](https://nearley.js.org/) based parsers for `Path` and `PathMatcher`.
 
 [`@finnair/path-parser` README](./packages/path-parser/README.md)
 

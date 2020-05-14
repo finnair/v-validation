@@ -11,6 +11,7 @@ describe('parsePath', () => {
 
   test.each([
     '',
+    `$['single'quote']`,
     `$['single\'quote']`,
     '$.$',
     '$.white space',
@@ -22,6 +23,8 @@ describe('parsePath', () => {
     '$[ "whitespace" ]',
   ])(`"%s" is not valid path`, path => expect(() => parsePath(path)).toThrow());
 
-  test('documentation example', () =>
-    expect(Array.from(parsePath(`$.array[1]["\\"property\\" with spaces and 'quotes'"]`))).toEqual(['array', 1, `"property" with spaces and 'quotes'`]));
+  test('documentation examples', () => {
+    expect(parsePath(`$['\\u0027']`)).toEqual(Path.of("'"));
+    expect(Array.from(parsePath(`$.array[1]["\\"property\\" with spaces and 'quotes'"]`))).toEqual(['array', 1, `"property" with spaces and 'quotes'`]);
+  });
 });
