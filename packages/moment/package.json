@@ -25,7 +25,7 @@
   },
   "dependencies": {
     "@finnair/path": "^0.4.0",
-    "@finnair/v-validation-core": "^0.4.0",
+    "@finnair/v-validation": "^0.4.0",
     "moment": "^2.25.3"
   }
 }
