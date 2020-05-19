@@ -1,5 +1,5 @@
 import deepEqual from 'deep-equal';
-import { Path } from './path';
+import { Path } from '@finnair/path';
 
 const ROOT = Path.ROOT;
 
@@ -781,7 +781,9 @@ export class MapValidator extends Validator {
     let i = 0;
     map.forEach((value: any, key: any) => {
       const entryPath = path.index(i++);
+      // TODO: Refactor key path as index(0)
       const keyPromise = this.keys.validatePath(key, entryPath.property('key'), ctx);
+      // TODO: Refactor value path as index(1)
       const valuePromise = this.values.validatePath(value, entryPath.property('value'), ctx);
       promises.push(
         Promise.all([keyPromise, valuePromise]).then(results => {

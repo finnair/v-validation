@@ -1,4 +1,6 @@
-import { Path, PathComponent, ROOT, property, index } from './path';
+import { Path, PathComponent } from './Path';
+import { PathMatcher } from './PathMatcher';
+import { AnyProperty, AnyIndex } from './matchers';
 
 describe('path', () => {
   test('toJSON', () =>
@@ -88,6 +90,18 @@ describe('path', () => {
     test("delete doesn't create intermediate objects", () => expect(Path.of('nested', 'name').unset({})).toEqual({}));
   });
 
+  test('connectTo', () => {
+    const parent = Path.of('parent');
+    const child = Path.of('child');
+    expect(Array.from(child.connectTo(parent))).toEqual(['parent', 'child']);
+  });
+
+  test('concat', () => {
+    const parent = Path.of('parent');
+    const child = Path.of('child');
+    expect(Array.from(parent.concat(child))).toEqual(['parent', 'child']);
+  });
+
   describe('validate components', () => {
     test('string is not valid index', () => {
       const component: any = 'foo';
@@ -132,13 +146,10 @@ describe('path', () => {
     });
   });
 
-  describe('@deprecated', () => {
-    test('newRoot', () => expect(Path.newRoot()).toBe(Path.ROOT));
-
-    test('ROOT', () => expect(ROOT).toBe(Path.ROOT));
-
-    test('property', () => expect(property('test')).toEqual(Path.property('test')));
-
-    test('index', () => expect(index(0)).toEqual(Path.index(0)));
+  test('documentation example', () => {
+    const array: any = [1, 2];
+    array.property = 'stupid thing to do';
+    expect(PathMatcher.of(AnyProperty).findValues(array)).toEqual([1, 2, 'stupid thing to do']);
+    expect(PathMatcher.of(AnyIndex).findValues(array)).toEqual([1, 2]);
   });
 });

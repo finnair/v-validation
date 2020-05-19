@@ -1,6 +1,6 @@
 export type PathComponent = number | string;
 
-const identifier = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
+const identifierPattern = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 
 export class Path {
   public static readonly ROOT = new Path([]);
@@ -25,8 +25,12 @@ export class Path {
     return new Path(newRootPath.path.concat(this.path));
   }
 
+  concat(childPath: Path) {
+    return new Path(this.path.concat(childPath.path));
+  }
+
   toJSON(): string {
-    return this.path.reduce((pathString: string, component: PathComponent) => pathString + componentToString(component), '$');
+    return this.path.reduce((pathString: string, component: PathComponent) => pathString + Path.componentToString(component), '$');
   }
 
   get length(): number {
@@ -98,13 +102,6 @@ export class Path {
     }
   }
 
-  /**
-   * @deprecated Use Path.ROOT instead
-   */
-  static newRoot() {
-    return Path.ROOT;
-  }
-
   static property(property: string): Path {
     return Path.ROOT.property(property);
   }
@@ -146,33 +143,29 @@ export class Path {
       throw new Error(`Expected property to be a string, got ${property}`);
     }
   }
-}
 
-/**
- * @deprecated Use Path.ROOT instead
- */
-export const ROOT = Path.ROOT;
+  static isValidIdentifier(str: string) {
+    return identifierPattern.test(str);
+  }
 
-/**
- * @deprecated Use Path.property instead
- */
-export function property(property: string): Path {
-  return Path.property(property);
-}
+  static componentToString(component: PathComponent) {
+    if (typeof component === 'number') {
+      return Path.indexToString(component);
+    } else {
+      return Path.propertyToString(component);
+    }
+  }
 
-/**
- * @deprecated Use Path.index instead
- */
-export function index(index: number): Path {
-  return Path.index(index);
-}
+  static indexToString(index: number) {
+    return '[' + index + ']';
+  }
 
-function componentToString(component: PathComponent) {
-  if (typeof component === 'number') {
-    return '[' + component + ']';
-  } else if (identifier.test(component)) {
-    return '.' + component;
-  } else {
-    return '[' + JSON.stringify(component) + ']';
+  static propertyToString(property: string) {
+    if (Path.isValidIdentifier(property)) {
+      return '.' + property;
+    } else {
+      // JsonPath uses single quotes, but that would require custom encoding of single quotes as JSON string encoding doesn't have escape for it
+      return '[' + JSON.stringify(property) + ']';
+    }
   }
 }

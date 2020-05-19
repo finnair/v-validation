@@ -2,7 +2,7 @@ import { SchemaValidator, DiscriminatorViolation } from './schema';
 import { default as V } from './V';
 import { defaultViolations, TypeMismatch, ObjectValidator, HasValueViolation } from './validators';
 import { expectViolations, expectValid } from './testUtil.spec';
-import { Path } from './path';
+import { Path } from '@finnair/path';
 
 const ROOT = Path.ROOT,
   property = Path.property;

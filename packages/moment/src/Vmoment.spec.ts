@@ -1,5 +1,6 @@
 import moment, { Moment } from 'moment';
-import { V, defaultViolations, Validator, ValidatorOptions, ValidationResult, Violation, ROOT, TypeMismatch } from '@finnair/v-validation-core';
+import { V, defaultViolations, Validator, ValidatorOptions, ValidationResult, Violation, TypeMismatch } from '@finnair/v-validation-core';
+import { Path } from '@finnair/path';
 import { Vmoment, dateUtcMoment, dateTimeUtcMoment, dateTimeMoment, timeMoment, dateMoment, dateTimeMillisUtcMoment, dateTimeMillisMoment } from './Vmoment';
 
 async function expectViolations(value: any, validator: Validator, ...violations: Violation[]) {
@@ -140,7 +141,7 @@ describe('moment', () => {
 
     test('undefined is invalid', () => expectViolations(null, Vmoment.duration(), defaultViolations.notNull()));
 
-    test('ABC is invalid', () => expectViolations('ABC', Vmoment.duration(), new TypeMismatch(ROOT, 'Duration', 'ABC')));
+    test('ABC is invalid', () => expectViolations('ABC', Vmoment.duration(), new TypeMismatch(Path.ROOT, 'Duration', 'ABC')));
 
     test('parse serialize roundtrip', () => expectValid('P23DT23H', Vmoment.duration().then(toJSON), 'P23DT23H'));
   });
