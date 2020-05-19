@@ -5,21 +5,14 @@ See [Conventional Commits](https://conventionalcommits.org) for commit guideline
 
 # [0.6.0](https://github.com/finnair/v-validation/compare/v0.5.0...v0.6.0) (2020-05-19)
 
-
-### Bug Fixes
-
-* Changelog + try fixing publish failing because of private package(?) ([589a896](https://github.com/finnair/v-validation/commit/589a89674b17e48148341878492f57a57f69c966))
-
-
-
-
-
-# [0.5.0](https://github.com/finnair/v-validation/compare/v0.4.0...v0.5.0) (2020-05-19)
-
-BREAKING CHANGES:
+## BREAKING CHANGES:
 
 - Move Path into `@finnair/path` package
 - Rename package `@finnair/v-validation-core` to `v-validation`
+
+# [0.5.0](https://github.com/finnair/v-validation/compare/v0.4.0...v0.5.0) (2020-05-19)
+
+Publish failed.
 
 # [0.4.0](https://github.com/finnair/v-validation/compare/v0.3.0...v0.4.0) (2020-04-21)
 
