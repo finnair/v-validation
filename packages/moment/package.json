@@ -1,6 +1,7 @@
 {
   "name": "@finnair/v-validation-moment",
   "version": "0.5.0",
+  "private": false,
   "description": "Moment validators",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
