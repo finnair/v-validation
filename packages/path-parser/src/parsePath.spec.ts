@@ -1,5 +1,5 @@
 import { parsePath } from './parsePath';
-import { Path } from '@finnair/v-validation-core';
+import { Path } from '@finnair/path';
 
 describe('parsePath', () => {
   test('root', () => expect(parsePath('$')).toEqual(Path.ROOT));
