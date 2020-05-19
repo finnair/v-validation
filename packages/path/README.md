@@ -42,13 +42,13 @@ const changes: Map<Path, any> = analyzeChanges(updatedValue, originalValue);
 // analyzeChanges implementation is not in this library's scope
 ```
 
-### Detect Interresting Changes
+### Detect Interesting Changes
 
-In message based systems, consumers may be interrested only in specific changes. Once a change is analyzed, `PathMatcher` can be used to check if it's of interest to a particular consumer.
+In message based systems, consumers may be interested only in specific changes. Once a change is analyzed, `PathMatcher` can be used to check if it's of interest to a particular consumer.
 
 ```typescript
-const subscription = [PathMatcher.of('interrestingProperty'), PathMatcher.of('interestingArray', AnyIndex, 'someProperty')];
-const isInterresting = Array.from(changes.keys()).some(path => subscription.some(pathMatcher => pathMatcher.prefixMatch(path)));
+const subscription = [PathMatcher.of('interestingProperty'), PathMatcher.of('interestingArray', AnyIndex, 'someProperty')];
+const isInteresting = Array.from(changes.keys()).some(path => subscription.some(pathMatcher => pathMatcher.prefixMatch(path)));
 ```
 
 ### Apply Changes (Patch)
