@@ -2,7 +2,7 @@
 
 # v-validation-moment
 
-`@finnair/v-validation-moment` is an extension to `@finnair/v-validation-core`.
+`@finnair/v-validation-moment` is an extension to `@finnair/v-validation`.
 
 `Vmoment` extension uses custom Moment extensions to support full JSON roundtrip with strict validation.
 

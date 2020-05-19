@@ -1,5 +1,5 @@
 {
-  "name": "@finnair/v-validation-core",
+  "name": "@finnair/v-validation",
   "version": "0.4.0",
   "description": "V-validation core package",
   "main": "dist/index.js",

@@ -1,5 +1,5 @@
 import moment, { Moment } from 'moment';
-import { V, defaultViolations, Validator, ValidatorOptions, ValidationResult, Violation, TypeMismatch } from '@finnair/v-validation-core';
+import { V, defaultViolations, Validator, ValidatorOptions, ValidationResult, Violation, TypeMismatch } from '@finnair/v-validation';
 import { Path } from '@finnair/path';
 import { Vmoment, dateUtcMoment, dateTimeUtcMoment, dateTimeMoment, timeMoment, dateMoment, dateTimeMillisUtcMoment, dateTimeMillisMoment } from './Vmoment';
 

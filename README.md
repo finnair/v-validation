@@ -1,6 +1,6 @@
 ![CI](https://github.com/finnair/v-validation/workflows/CI/badge.svg?branch=master)
 [![codecov](https://codecov.io/gh/finnair/v-validation/branch/master/graph/badge.svg)](https://codecov.io/gh/finnair/v-validation)
-[![npm version](https://badge.fury.io/js/%40finnair%2Fv-validation-core.svg)](https://badge.fury.io/js/%40finnair%2Fv-validation-core)
+[![npm version](https://badge.fury.io/js/%40finnair%2Fv-validation.svg)](https://badge.fury.io/js/%40finnair%2Fv-validation)
 
 # Packages
 
@@ -40,7 +40,7 @@ conform to the expected model.
 Install desired packages using [`yarn`](https://yarnpkg.com/en/package/jest):
 
 ```bash
-yarn add @finnair/v-validation-core
+yarn add @finnair/v-validation
 yarn add @finnair/v-validation-moment
 yarn add @finnair/path
 yarn add @finnair/path-parser
@@ -49,7 +49,7 @@ yarn add @finnair/path-parser
 Or [`npm`](https://www.npmjs.com/):
 
 ```bash
-npm install @finnair/v-validation-core
+npm install @finnair/v-validation
 npm install @finnair/v-validation-moment
 npm install @finnair/path
 npm install @finnair/path-parser
