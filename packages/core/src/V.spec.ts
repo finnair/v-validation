@@ -17,11 +17,11 @@ import {
   IfValidator,
   WhenGroupValidator,
   HasValueViolation,
+  SizeViolation,
 } from './validators';
 import { default as V } from './V';
 import { Path } from '@finnair/path';
 import { expectUndefined, expectValid, expectViolations, verifyValid } from './testUtil.spec';
-import { SizeViolation } from '../dist';
 
 const ROOT = Path.ROOT,
   index = Path.index,
