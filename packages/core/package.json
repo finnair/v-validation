@@ -24,10 +24,10 @@
     "build": "tsc -b ."
   },
   "dependencies": {
-    "@finnair/path": "^0.6.1",
-    "@types/deep-equal": "^1.0.1",
-    "@types/uuid-validate": "^0.0.1",
-    "deep-equal": "^2.0.1",
-    "uuid-validate": "^0.0.3"
+    "@finnair/path": "0.6.1",
+    "@types/deep-equal": "1.0.1",
+    "@types/uuid-validate": "0.0.1",
+    "deep-equal": "2.0.1",
+    "uuid-validate": "0.0.3"
   }
 }

@@ -3,7 +3,7 @@ import { Path } from '@finnair/path';
 import moment, { Moment, MomentInput } from 'moment';
 
 export class MomentValidator extends Validator {
-  constructor(public readonly type: string, public readonly parse: (value?: MomentInput | Moment) => Moment) {
+  constructor(public readonly type: string, public readonly parse: (value?: MomentInput) => Moment) {
     super();
   }
   async validatePath(value: any, path: Path, ctx: ValidationContext): Promise<ValidationResult> {
@@ -36,12 +36,12 @@ export class DurationValidator extends Validator {
   }
 }
 
-function maybeDateFormat(value?: MomentInput | Moment, dateFormat?: string) {
+function maybeDateFormat(value?: MomentInput, dateFormat?: string) {
   return isString(value) ? dateFormat : undefined;
 }
 
 const dateFormat = 'YYYY-MM-DD';
-export function dateMoment(value?: MomentInput | Moment) {
+export function dateMoment(value?: MomentInput): Moment {
   return Object.setPrototypeOf(moment(value, maybeDateFormat(value, dateFormat), true), dateMoment.prototype);
 }
 Object.setPrototypeOf(dateMoment.prototype, moment.prototype);
@@ -53,7 +53,7 @@ dateMoment.prototype.clone = function clone() {
   return dateMoment(this);
 };
 
-export function dateUtcMoment(value?: MomentInput | Moment) {
+export function dateUtcMoment(value?: MomentInput): Moment {
   return Object.setPrototypeOf(moment.utc(value, maybeDateFormat(value, dateFormat), true), dateUtcMoment.prototype);
 }
 Object.setPrototypeOf(dateUtcMoment.prototype, moment.prototype);
@@ -67,7 +67,7 @@ dateUtcMoment.prototype.clone = function clone() {
 
 const dateTimeFormat = 'YYYY-MM-DDTHH:mm:ss';
 const dateTimeFormatTz = dateTimeFormat + 'Z';
-export function dateTimeMoment(value?: MomentInput | Moment) {
+export function dateTimeMoment(value?: MomentInput): Moment {
   return Object.setPrototypeOf(moment.parseZone(value, maybeDateFormat(value, dateTimeFormatTz), true), dateTimeMoment.prototype);
 }
 Object.setPrototypeOf(dateTimeMoment.prototype, moment.prototype);
@@ -82,7 +82,7 @@ dateTimeMoment.prototype.clone = function clone() {
   return dateTimeMoment(this);
 };
 
-export function dateTimeUtcMoment(value?: MomentInput | Moment) {
+export function dateTimeUtcMoment(value?: MomentInput): Moment {
   return Object.setPrototypeOf(moment.utc(value, maybeDateFormat(value, dateTimeFormatTz), true), dateTimeUtcMoment.prototype);
 }
 Object.setPrototypeOf(dateTimeUtcMoment.prototype, moment.prototype);
@@ -104,7 +104,7 @@ dateTimeUtcMoment.prototype.utcOffset = function utcOffset(offset?: number) {
 
 const dateTimeMillisFormat = 'YYYY-MM-DDTHH:mm:ss.SSS';
 const dateTimeMillisFormatTz = dateTimeMillisFormat + 'Z';
-export function dateTimeMillisMoment(value?: MomentInput | Moment) {
+export function dateTimeMillisMoment(value?: MomentInput): Moment {
   return Object.setPrototypeOf(moment.parseZone(value, maybeDateFormat(value, dateTimeMillisFormatTz), true), dateTimeMillisMoment.prototype);
 }
 Object.setPrototypeOf(dateTimeMillisMoment.prototype, moment.prototype);
@@ -119,7 +119,7 @@ dateTimeMillisMoment.prototype.clone = function clone() {
   return dateTimeMillisMoment(this);
 };
 
-export function dateTimeMillisUtcMoment(value?: MomentInput | Moment) {
+export function dateTimeMillisUtcMoment(value?: MomentInput): Moment {
   return Object.setPrototypeOf(moment.utc(value, maybeDateFormat(value, dateTimeMillisFormatTz), true), dateTimeMillisUtcMoment.prototype);
 }
 Object.setPrototypeOf(dateTimeMillisUtcMoment.prototype, moment.prototype);
@@ -140,7 +140,7 @@ dateTimeMillisUtcMoment.prototype.utcOffset = function utcOffset(offset?: number
 };
 
 const timeFormat = 'HH:mm:ss';
-export function timeMoment(value?: MomentInput | Moment) {
+export function timeMoment(value?: MomentInput): Moment {
   return Object.setPrototypeOf(moment.parseZone(value, maybeDateFormat(value, timeFormat), true), timeMoment.prototype);
 }
 Object.setPrototypeOf(timeMoment.prototype, moment.prototype);
