@@ -1,6 +1,6 @@
 import { SchemaValidator, DiscriminatorViolation } from './schema';
 import { default as V } from './V';
-import { defaultViolations, TypeMismatch, ObjectValidator, HasValueViolation } from './validators';
+import { defaultViolations, TypeMismatch, ObjectValidator, HasValueViolation, Violation } from './validators';
 import { expectViolations, expectValid } from './testUtil.spec';
 import { Path } from '@finnair/path';
 
@@ -200,6 +200,40 @@ describe('schema', () => {
     await expectValid({ type: 'Foo' }, schema.raw('InvalidType'));
     await expectViolations({ type: 'InvalidType' }, schema, new HasValueViolation(property('type'), 'Foo', 'InvalidType'));
     done();
+  });
+});
+
+describe('ClassModel.then', () => {
+  const schema = new SchemaValidator(schema => ({
+    discriminator: 'type',
+    models: {
+      PasswordChangeRequest: {
+        properties: {
+          pw1: V.string(),
+          pw2: V.string(),
+        },
+        then: V.assertTrue(user => user.pw1 === user.pw2, 'PasswordVerification', Path.of('pw2')),
+      },
+      NewUserRequest: {
+        extends: 'PasswordChangeRequest',
+        properties: {
+          name: V.string(),
+        },
+        then: V.assertTrue(user => user.pw1.indexOf(user.name) < 0, 'BadPassword', Path.of('pw1')),
+      },
+    },
+  }));
+  test('passwords match', () => expectValid({ type: 'PasswordChangeRequest', pw1: 'test', pw2: 'test' }, schema));
+
+  test('passwords mismatch', () =>
+    expectViolations({ type: 'PasswordChangeRequest', pw1: 'test', pw2: 't3st' }, schema, new Violation(Path.of('pw2'), 'PasswordVerification')));
+
+  describe('inherited then', () => {
+    test('BadPassword', () =>
+      expectViolations({ type: 'NewUserRequest', pw1: 'test', pw2: 'test', name: 'tes' }, schema, new Violation(Path.of('pw1'), 'BadPassword')));
+
+    test('child then is applied after successfull parent then', () =>
+      expectViolations({ type: 'NewUserRequest', pw1: 'test', pw2: 't3st', name: 'tes' }, schema, new Violation(Path.of('pw2'), 'PasswordVerification')));
   });
 });
 

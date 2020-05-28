@@ -32,6 +32,7 @@ export interface ClassModel {
   readonly additionalProperties?: boolean | MapEntryModel | MapEntryModel[];
   readonly extends?: ClassParentModel;
   readonly ownProperties?: PropertyModel;
+  readonly then?: Validator;
 }
 
 export class ModelRef extends Validator {
@@ -163,6 +164,7 @@ export class SchemaValidator extends Validator {
         properties: classModel.properties,
         additionalProperties: classModel.additionalProperties,
         ownProperties,
+        then: classModel.then,
       };
       validator = new ObjectValidator(model);
     }
