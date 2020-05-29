@@ -447,18 +447,18 @@ describe('objects', () => {
     );
   });
 
-  describe('ownProperties', () => {
+  describe('localProperties', () => {
     const parent = V.object({
       properties: {
         type: V.string(),
       },
-      ownProperties: {
+      localProperties: {
         type: 'Parent',
       },
     });
     const child = V.object({
       extends: parent,
-      ownProperties: {
+      localProperties: {
         type: 'Child',
       },
     });

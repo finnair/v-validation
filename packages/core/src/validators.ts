@@ -286,7 +286,7 @@ export type ParentModel = Model | ObjectValidator | (Model | ObjectValidator)[];
 export interface Model {
   readonly extends?: ParentModel;
   readonly properties?: PropertyModel;
-  readonly ownProperties?: PropertyModel;
+  readonly localProperties?: PropertyModel;
   readonly additionalProperties?: boolean | MapEntryModel | MapEntryModel[];
   readonly then?: Validator | Validator[];
 }
@@ -378,7 +378,7 @@ export function mergeProperties(from: Properties, to: Properties): Properties {
 export class ObjectValidator extends Validator {
   private readonly properties: Properties;
 
-  private readonly ownProperties: Properties;
+  private readonly localProperties: Properties;
 
   private readonly additionalProperties: MapEntryValidator[];
 
@@ -410,7 +410,7 @@ export class ObjectValidator extends Validator {
     }
     this.additionalProperties = additionalProperties.concat(getMapEntryValidators(model.additionalProperties));
     this.properties = mergeProperties(getPropertyValidators(model.properties), properties);
-    this.ownProperties = getPropertyValidators(model.ownProperties);
+    this.localProperties = getPropertyValidators(model.localProperties);
     this.thenValidator = thenValidator;
   }
 
@@ -445,11 +445,11 @@ export class ObjectValidator extends Validator {
     for (const key in this.properties) {
       promises.push(validateProperty(key, value[key], this.properties[key]));
     }
-    for (const key in this.ownProperties) {
-      promises.push(validateProperty(key, value[key], this.ownProperties[key]));
+    for (const key in this.localProperties) {
+      promises.push(validateProperty(key, value[key], this.localProperties[key]));
     }
     for (const key in value) {
-      if (!this.properties[key] && !this.ownProperties[key]) {
+      if (!this.properties[key] && !this.localProperties[key]) {
         promises.push(validateAdditionalProperty(key, value[key], this.additionalProperties));
       }
     }

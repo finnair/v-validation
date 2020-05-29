@@ -191,7 +191,7 @@ describe('schema', () => {
       discriminator: 'type',
       models: {
         InvalidType: {
-          ownProperties: {
+          localProperties: {
             type: 'Foo', // As a schema this can never be valid
           },
         },
