@@ -606,6 +606,37 @@ describe('inheritance', () => {
   });
 });
 
+describe('object then', () => {
+  const passwordValidator = V.object({
+    properties: {
+      pw1: V.string(),
+      pw2: V.string(),
+    },
+    then: V.assertTrue(user => user.pw1 === user.pw2, 'PasswordVerification', Path.of('pw2')),
+  });
+
+  test('passwords match', () => expectValid({ pw1: 'test', pw2: 'test' }, passwordValidator));
+
+  test('passwords mismatch', () => expectViolations({ pw1: 'test', pw2: 't3st' }, passwordValidator, new Violation(Path.of('pw2'), 'PasswordVerification')));
+
+  test('run after property validators', () => expectViolations({ pw1: 'test' }, passwordValidator, defaultViolations.notNull(Path.of('pw2'))));
+
+  describe('inherited then', () => {
+    const userValidator = V.object({
+      extends: passwordValidator,
+      properties: {
+        name: V.string(),
+      },
+      then: V.assertTrue(user => user.pw1.indexOf(user.name) < 0, 'BadPassword', Path.of('pw1')),
+    });
+
+    test('BadPassword', () => expectViolations({ pw1: 'test', pw2: 'test', name: 'tes' }, userValidator, new Violation(Path.of('pw1'), 'BadPassword')));
+
+    test('child then is applied after successfull parent then', () =>
+      expectViolations({ pw1: 'test', pw2: 't3st', name: 'tes' }, userValidator, new Violation(Path.of('pw2'), 'PasswordVerification')));
+  });
+});
+
 describe('Date', () => {
   const now = new Date();
   const validator = V.object({

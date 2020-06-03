@@ -284,10 +284,11 @@ export type PropertyModel = { [s: string]: string | number | Validator | Validat
 export type ParentModel = Model | ObjectValidator | (Model | ObjectValidator)[];
 
 export interface Model {
+  readonly extends?: ParentModel;
   readonly properties?: PropertyModel;
   readonly ownProperties?: PropertyModel;
   readonly additionalProperties?: boolean | MapEntryModel | MapEntryModel[];
-  readonly extends?: ParentModel;
+  readonly then?: Validator | Validator[];
 }
 
 export interface MapEntryModel {
@@ -383,19 +384,34 @@ export class ObjectValidator extends Validator {
 
   public readonly parentValidators: ObjectValidator[];
 
+  public readonly thenValidator: undefined | Validator;
+
   constructor(public readonly model: Model) {
     super();
     let properties: Properties = {};
     let additionalProperties: MapEntryValidator[] = [];
+    let inheritedThenValidators: Validator[] = [];
 
     this.parentValidators = getParentValidators(model.extends);
     this.parentValidators.forEach((parent: ObjectValidator) => {
       additionalProperties = additionalProperties.concat(parent.additionalProperties);
       properties = mergeProperties(parent.properties, properties);
+      if (parent.thenValidator) {
+        inheritedThenValidators = inheritedThenValidators.concat(parent.thenValidator);
+      }
     });
+    let thenValidator = inheritedThenValidators.length ? maybeAllOfValidator(inheritedThenValidators) : undefined;
+    if (model.then) {
+      if (thenValidator) {
+        thenValidator = thenValidator.then(maybeAllOfValidator(model.then));
+      } else {
+        thenValidator = maybeAllOfValidator(model.then);
+      }
+    }
     this.additionalProperties = additionalProperties.concat(getMapEntryValidators(model.additionalProperties));
     this.properties = mergeProperties(getPropertyValidators(model.properties), properties);
     this.ownProperties = getPropertyValidators(model.ownProperties);
+    this.thenValidator = thenValidator;
   }
 
   withProperty(name: string, ...validator: Validator[]) {
@@ -440,6 +456,9 @@ export class ObjectValidator extends Validator {
 
     return Promise.all(promises).then(_ => {
       if (violations.length === 0) {
+        if (this.thenValidator) {
+          return this.thenValidator.validatePath(convertedObject, path, ctx);
+        }
         return ctx.success(convertedObject);
       }
       return ctx.failure(violations, convertedObject);
