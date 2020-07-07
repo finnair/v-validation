@@ -637,6 +637,46 @@ describe('object then', () => {
   });
 });
 
+describe('object localThen', () => {
+  const parent = V.object({
+    properties: {
+      name: V.string(),
+      upper: V.optional(V.boolean()),
+    },
+    then: V.map(obj => {
+      if (obj.upper) {
+        obj.name = (obj.name as string).toUpperCase();
+      }
+      return obj;
+    }),
+    localThen: V.map(obj => `parent:${obj.name}`),
+  });
+  const child = V.object({
+    extends: parent,
+    localThen: V.map(obj => `child:${obj.name}`),
+  });
+
+  test('parent', async done => {
+    expect((await parent.validate({ name: 'Darth' })).getValue()).toEqual('parent:Darth');
+    done();
+  });
+
+  test('child', async done => {
+    expect((await child.validate({ name: 'Luke' })).getValue()).toEqual('child:Luke');
+    done();
+  });
+
+  test('then applies for parent', async done => {
+    expect((await parent.validate({ name: 'Darth', upper: true })).getValue()).toEqual('parent:DARTH');
+    done();
+  });
+
+  test('then applies for child', async done => {
+    expect((await child.validate({ name: 'Luke', upper: true })).getValue()).toEqual('child:LUKE');
+    done();
+  });
+});
+
 describe('Date', () => {
   const now = new Date();
   const validator = V.object({

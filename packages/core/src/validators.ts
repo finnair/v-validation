@@ -289,6 +289,7 @@ export interface Model {
   readonly localProperties?: PropertyModel;
   readonly additionalProperties?: boolean | MapEntryModel | MapEntryModel[];
   readonly then?: Validator | Validator[];
+  readonly localThen?: Validator;
 }
 
 export interface MapEntryModel {
@@ -386,6 +387,8 @@ export class ObjectValidator extends Validator {
 
   public readonly thenValidator: undefined | Validator;
 
+  private readonly localThenValidator: undefined | Validator;
+
   constructor(public readonly model: Model) {
     super();
     let properties: Properties = {};
@@ -408,6 +411,7 @@ export class ObjectValidator extends Validator {
         thenValidator = maybeAllOfValidator(model.then);
       }
     }
+    this.localThenValidator = model.localThen;
     this.additionalProperties = additionalProperties.concat(getMapEntryValidators(model.additionalProperties));
     this.properties = mergeProperties(getPropertyValidators(model.properties), properties);
     this.localProperties = getPropertyValidators(model.localProperties);
@@ -440,29 +444,33 @@ export class ObjectValidator extends Validator {
     }
 
     let violations: Violation[] = [];
-    let promises: Promise<ValidationResult>[] = [];
+    const propertyResults: Promise<ValidationResult>[] = [];
 
     for (const key in this.properties) {
-      promises.push(validateProperty(key, value[key], this.properties[key]));
+      propertyResults.push(validateProperty(key, value[key], this.properties[key]));
     }
     for (const key in this.localProperties) {
-      promises.push(validateProperty(key, value[key], this.localProperties[key]));
+      propertyResults.push(validateProperty(key, value[key], this.localProperties[key]));
     }
     for (const key in value) {
       if (!this.properties[key] && !this.localProperties[key]) {
-        promises.push(validateAdditionalProperty(key, value[key], this.additionalProperties));
+        propertyResults.push(validateAdditionalProperty(key, value[key], this.additionalProperties));
       }
     }
 
-    return Promise.all(promises).then(_ => {
+    let validationChain = Promise.all(propertyResults).then(_ => {
       if (violations.length === 0) {
-        if (this.thenValidator) {
-          return this.thenValidator.validatePath(convertedObject, path, ctx);
-        }
         return ctx.success(convertedObject);
       }
       return ctx.failure(violations, convertedObject);
     });
+    if (this.thenValidator) {
+      validationChain = validationChain.then(result => (result.isSuccess() ? this.thenValidator!.validatePath(result.getValue(), path, ctx) : result));
+    }
+    if (this.localThenValidator) {
+      validationChain = validationChain.then(result => (result.isSuccess() ? this.localThenValidator!.validatePath(result.getValue(), path, ctx) : result));
+    }
+    return validationChain;
 
     function validateProperty(key: string, currentValue: any, validator: Validator) {
       if (!filter(key)) {
