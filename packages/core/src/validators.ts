@@ -281,9 +281,9 @@ export interface AssertTrue {
 
 export type PropertyModel = { [s: string]: string | number | Validator | Validator[] };
 
-export type ParentModel = Model | ObjectValidator | (Model | ObjectValidator)[];
+export type ParentModel = ObjectModel | ObjectValidator | (ObjectModel | ObjectValidator)[];
 
-export interface Model {
+export interface ObjectModel {
   readonly extends?: ParentModel;
   readonly properties?: PropertyModel;
   readonly localProperties?: PropertyModel;
@@ -320,7 +320,7 @@ function getParentValidators(parents: undefined | ParentModel): ObjectValidator[
     if (modelOrValidator instanceof ObjectValidator) {
       return modelOrValidator as ObjectValidator;
     }
-    return new ObjectValidator(modelOrValidator as Model);
+    return new ObjectValidator(modelOrValidator as ObjectModel);
   });
 }
 
@@ -389,7 +389,7 @@ export class ObjectValidator extends Validator {
 
   private readonly localThenValidator: undefined | Validator;
 
-  constructor(public readonly model: Model) {
+  constructor(public readonly model: ObjectModel) {
     super();
     let properties: Properties = {};
     let additionalProperties: MapEntryValidator[] = [];

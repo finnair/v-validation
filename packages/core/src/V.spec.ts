@@ -13,7 +13,7 @@ import {
   isString,
   ValidationContext,
   ErrorViolation,
-  Model,
+  ObjectModel,
   IfValidator,
   WhenGroupValidator,
   HasValueViolation,
@@ -431,7 +431,7 @@ describe('objects', () => {
 
   test('custom property filtering extension', () => {
     class DropAllPropertiesValidator extends ObjectValidator {
-      constructor(model: Model) {
+      constructor(model: ObjectModel) {
         super(model);
       }
       validatePath(value: any, path: Path, ctx: ValidationContext): Promise<ValidationResult> {
