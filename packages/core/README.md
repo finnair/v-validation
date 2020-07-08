@@ -134,7 +134,7 @@ const UserRegistrationValidator = V.object({
     password1: V.string().then(V.pattern(/[A-Z]/), V.pattern(/[a-z]/), V.pattern(/[0-9]/), V.size(8, 32)),
     password2: V.string(),
   },
-  // then: checkPassword, // An alternative way of defining cross-property rules. This allows extending UserRegistrationValidator.
+  // then: checkPassword, /* An alternative way of defining cross-property rules. This allows extending UserRegistrationValidator. */
 }).then(checkPassword); // Because of this, UserRegistrationValidator is actually a ThenValidator, which cannot be extended by V.object().
 
 // 3) INPUT VALIDATION
@@ -223,6 +223,9 @@ V.toInteger().then(V.min(1), V.max(1000), V.assertTrue(isPrime));
 3. references to parent model(s),
 4. local (non-inheritable) properties and
 5. then validator for cross-property rules
+6. local then for non-inheritable mapping
+
+### Named Properties
 
 An object may have any named property defined in a parent `properties`, it's own `properties` or `localProperties`, which in turn are not inherited.
 
@@ -270,6 +273,16 @@ const abike = { type: 'Bike', wheelCount: 2, sideBags: false };
 // ]
 ```
 
+### Optional Properties
+
+Most validation rules require a non-null and non-undefined value. Optional properties need to be defined with `V.optional`:
+
+```typescript
+V.optional(V.integer());
+```
+
+### Additional Properties
+
 Additional properties can be allowed or disallowed in general or by key pattern(s). Again a child model may further restrict parent's rules.
 
 ```typescript
@@ -302,13 +315,12 @@ All additional-property-validators consist of two parts, key and value validator
 returning success for the key. The value validator is only run if the key validator is successful. Setting `additionalProperties: true` is simply a shortcut for a case
 where both key and value validators allow anything; and `additionalProperties: false` is a shortcut for any key and a value validator that always returns `UnknownPropertyDenied` error.
 
-## Optional Properties
+### Then
 
-Most validation rules require a non-null and non-undefined value. Optional properties need to be defined with `V.optional`:
+An object may define inheritable cross-property rules with object model `then` and non-inheritable validations or, e.g. mappings to corresponding a classes, using `localThen`. As `localProperties`, `localThen` is not inherited by extending validators.
 
-```typescript
-V.optional(V.integer());
-```
+`Then` validation rules are run after all the properties are validated successfully and `localThen`
+is the last step in the validation chain. Inherited `then` rules are executed before child's own.
 
 ## <a name="array">Arrays</a>
 

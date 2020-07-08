@@ -411,11 +411,11 @@ export class ObjectValidator extends Validator {
         thenValidator = maybeAllOfValidator(model.then);
       }
     }
-    this.localThenValidator = model.localThen;
     this.additionalProperties = additionalProperties.concat(getMapEntryValidators(model.additionalProperties));
     this.properties = mergeProperties(getPropertyValidators(model.properties), properties);
     this.localProperties = getPropertyValidators(model.localProperties);
     this.thenValidator = thenValidator;
+    this.localThenValidator = model.localThen;
   }
 
   withProperty(name: string, ...validator: Validator[]) {
