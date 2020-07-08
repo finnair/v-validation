@@ -33,6 +33,7 @@ export interface ClassModel {
   readonly extends?: ClassParentModel;
   readonly localProperties?: PropertyModel;
   readonly then?: Validator;
+  readonly localThen?: Validator;
 }
 
 export class ModelRef extends Validator {
@@ -165,6 +166,7 @@ export class SchemaValidator extends Validator {
         additionalProperties: classModel.additionalProperties,
         localProperties,
         then: classModel.then,
+        localThen: classModel.localThen,
       };
       validator = new ObjectValidator(model);
     }

@@ -675,6 +675,17 @@ describe('object localThen', () => {
     expect((await child.validate({ name: 'Luke', upper: true })).getValue()).toEqual('child:LUKE');
     done();
   });
+
+  test('localThen is skipped on field validation error', async done => {
+    const model = V.object({
+      properties: {
+        name: V.string(),
+      },
+      localThen: V.map(obj => `parent:${obj.name}`),
+    });
+    await expectViolations({}, model, defaultViolations.notNull(property('name')));
+    done();
+  });
 });
 
 describe('Date', () => {

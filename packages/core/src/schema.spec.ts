@@ -237,6 +237,25 @@ describe('ClassModel.then', () => {
   });
 });
 
+describe('ClassModel.localThen', () => {
+  const schema = new SchemaValidator(schema => ({
+    discriminator: () => 'Model',
+    models: {
+      Model: {
+        properties: {
+          name: V.string(),
+        },
+        localThen: V.map(obj => `${obj.name}`),
+      },
+    },
+  }));
+
+  test('localThen is called', async done => {
+    expect((await schema.validate({ name: 'localThen' })).getValue()).toEqual('localThen');
+    done();
+  });
+});
+
 describe('Recursive object', () => {
   const schema = new SchemaValidator(schema => ({
     // TODO: Make discriminator optional if there's only one model
