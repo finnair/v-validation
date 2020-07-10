@@ -38,7 +38,7 @@ import {
   BooleanNormalizer,
   MinValidator,
   MaxValidator,
-  Model,
+  ObjectModel,
   ObjectValidator,
   ObjectNormalizer,
   MapValidator,
@@ -131,7 +131,7 @@ const V = {
 
   max: (max: number, inclusive = true) => new MaxValidator(max, inclusive),
 
-  object: (model: Model) => new ObjectValidator(model),
+  object: (model: ObjectModel) => new ObjectValidator(model),
 
   toObject: (property: string) => new ObjectNormalizer(property),
 

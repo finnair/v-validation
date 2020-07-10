@@ -216,7 +216,7 @@ V.toInteger().then(V.min(1), V.max(1000), V.assertTrue(isPrime));
 
 ## <a name="object">V.object</a>
 
-`V.object` allows defining polymorphic object models. Object models consists of
+`V.object` allows defining hierarchical object models (see [Schema](#schema) about polymorphism). `ObjectModel` consists of
 
 1. named properties as references to other validators,
 2. rules defining what, if any, additional (unnamed) properties are allowed,
@@ -317,7 +317,7 @@ where both key and value validators allow anything; and `additionalProperties: f
 
 ### Then
 
-An object may define inheritable cross-property rules with object model `then` and non-inheritable validations or, e.g. mappings to corresponding a classes, using `localThen`. As `localProperties`, `localThen` is not inherited by extending validators.
+An object may define inheritable cross-property rules with `ObjectModel.then` and non-inheritable validations or, e.g. mappings to corresponding a classes, using `localThen`. As `localProperties`, `localThen` is not inherited by extending validators.
 
 `Then` validation rules are run after all the properties are validated successfully and `localThen`
 is the last step in the validation chain. Inherited `then` rules are executed before child's own.
@@ -342,8 +342,7 @@ Polymorphims requires that objects are somehow tagged with a type used to valida
 one needs a _discriminator_ property or a function to infer object's type. This type is then used to actually validate the object.
 
 Polymorphic schemas are recursive in nature: 1) a child needs to know it's parents so that it may extend them and 2) unless the type information is natively bound to
-an object being validated, the parent needs to know it's children so that it may verify input's type and dispatch validation.
-As (direct) cyclic references are not possible, SchemaValidator is created with a callback function that supports referencing other models within the schema by name
+the object being validated, the parent needs to know it's children so that it may dispatch the validation to the correct child. As (direct) cyclic references are not possible, SchemaValidator is created with a callback function that supports referencing other models within the schema by name
 even before they are defined:
 
 1. An object may extend other models by simply referencing them by name.

@@ -10,7 +10,7 @@ import {
   isString,
   Violation,
   TypeMismatch,
-  Model,
+  ObjectModel,
 } from './validators';
 import { Path } from '@finnair/path';
 
@@ -160,7 +160,7 @@ export class SchemaValidator extends Validator {
           localProperties[discriminatorProperty] = name;
         }
       }
-      const model: Model = {
+      const model: ObjectModel = {
         extends: this.getParentValidators(classModel.extends, models, seen),
         properties: classModel.properties,
         additionalProperties: classModel.additionalProperties,
