@@ -31,8 +31,9 @@ export interface ClassModel {
   readonly properties?: PropertyModel;
   readonly additionalProperties?: boolean | MapEntryModel | MapEntryModel[];
   readonly extends?: ClassParentModel;
-  readonly ownProperties?: PropertyModel;
+  readonly localProperties?: PropertyModel;
   readonly then?: Validator;
+  readonly localThen?: Validator;
 }
 
 export class ModelRef extends Validator {
@@ -152,19 +153,20 @@ export class SchemaValidator extends Validator {
       validator = models[name] as Validator;
     } else {
       const classModel = models[name] as ClassModel;
-      const ownProperties = classModel.ownProperties || {};
+      const localProperties = classModel.localProperties || {};
       if (isString(this.discriminator)) {
         const discriminatorProperty: string = this.discriminator as string;
-        if (!ownProperties[discriminatorProperty]) {
-          ownProperties[discriminatorProperty] = name;
+        if (!localProperties[discriminatorProperty]) {
+          localProperties[discriminatorProperty] = name;
         }
       }
       const model: Model = {
         extends: this.getParentValidators(classModel.extends, models, seen),
         properties: classModel.properties,
         additionalProperties: classModel.additionalProperties,
-        ownProperties,
+        localProperties,
         then: classModel.then,
+        localThen: classModel.localThen,
       };
       validator = new ObjectValidator(model);
     }

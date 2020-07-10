@@ -191,7 +191,7 @@ describe('schema', () => {
       discriminator: 'type',
       models: {
         InvalidType: {
-          ownProperties: {
+          localProperties: {
             type: 'Foo', // As a schema this can never be valid
           },
         },
@@ -234,6 +234,25 @@ describe('ClassModel.then', () => {
 
     test('child then is applied after successfull parent then', () =>
       expectViolations({ type: 'NewUserRequest', pw1: 'test', pw2: 't3st', name: 'tes' }, schema, new Violation(Path.of('pw2'), 'PasswordVerification')));
+  });
+});
+
+describe('ClassModel.localThen', () => {
+  const schema = new SchemaValidator(schema => ({
+    discriminator: () => 'Model',
+    models: {
+      Model: {
+        properties: {
+          name: V.string(),
+        },
+        localThen: V.map(obj => `${obj.name}`),
+      },
+    },
+  }));
+
+  test('localThen is called', async done => {
+    expect((await schema.validate({ name: 'localThen' })).getValue()).toEqual('localThen');
+    done();
   });
 });
 

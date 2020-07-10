@@ -134,7 +134,8 @@ const UserRegistrationValidator = V.object({
     password1: V.string().then(V.pattern(/[A-Z]/), V.pattern(/[a-z]/), V.pattern(/[0-9]/), V.size(8, 32)),
     password2: V.string(),
   },
-}).then(checkPassword);
+  // then: checkPassword, /* An alternative way of defining cross-property rules. This allows extending UserRegistrationValidator. */
+}).then(checkPassword); // Because of this, UserRegistrationValidator is actually a ThenValidator, which cannot be extended by V.object().
 
 // 3) INPUT VALIDATION
 (await UserRegistrationValidator.validate({ password1: 'FooBar' })).getValue();
@@ -217,12 +218,18 @@ V.toInteger().then(V.min(1), V.max(1000), V.assertTrue(isPrime));
 
 `V.object` allows defining polymorphic object models. Object models consists of
 
-1. named properties that are references to other validators,
-2. additional property rules,
-3. references to parent models and
-4. own (non-inheritable) properties.
+1. named properties as references to other validators,
+2. rules defining what, if any, additional (unnamed) properties are allowed,
+3. references to parent model(s),
+4. local (non-inheritable) properties and
+5. then validator for cross-property rules
+6. local then for non-inheritable mapping
 
-An object may have any property defined in a parent model(s) properties or it's own properties. A child model may extend the validation rules of any parent property. In such a case parent's property validator is executed first and, if success, the converted value is validated against child's property validators. A child may only further restrict parent's property rules.
+### Named Properties
+
+An object may have any named property defined in a parent `properties`, it's own `properties` or `localProperties`, which in turn are not inherited.
+
+A child model may extend the validation rules of any inherited properties. In such a case inherited property validators are executed first and, if success, the converted value is validated against child's property validators. A child may only further restrict parent's property rules.
 
 ```typescript
 const vehicle = V.object({
@@ -230,7 +237,7 @@ const vehicle = V.object({
     wheelCount: V.required(V.toInteger(), V.min(0)),
     ownerName: V.optional(V.string()),
   },
-  ownProperties: {
+  localProperties: {
     type: 'Vehicle', // This rule is not inherited! A string or number value is a shortcur for V.hasValue(...).
   },
 });
@@ -241,7 +248,7 @@ const bike = V.object({
     wheelCount: V.allOf(V.min(1), V.max(3)), // Extend parent rules
     sideBags: V.boolean(), // Add a property
   },
-  ownProperties: {
+  localProperties: {
     type: 'Bike',
   },
 });
@@ -265,6 +272,16 @@ const abike = { type: 'Bike', wheelCount: 2, sideBags: false };
 //   }
 // ]
 ```
+
+### Optional Properties
+
+Most validation rules require a non-null and non-undefined value. Optional properties need to be defined with `V.optional`:
+
+```typescript
+V.optional(V.integer());
+```
+
+### Additional Properties
 
 Additional properties can be allowed or disallowed in general or by key pattern(s). Again a child model may further restrict parent's rules.
 
@@ -298,13 +315,12 @@ All additional-property-validators consist of two parts, key and value validator
 returning success for the key. The value validator is only run if the key validator is successful. Setting `additionalProperties: true` is simply a shortcut for a case
 where both key and value validators allow anything; and `additionalProperties: false` is a shortcut for any key and a value validator that always returns `UnknownPropertyDenied` error.
 
-## Optional Properties
+### Then
 
-Most validation rules require a non-null and non-undefined value. Optional properties need to be defined with `V.optional`:
+An object may define inheritable cross-property rules with object model `then` and non-inheritable validations or, e.g. mappings to corresponding a classes, using `localThen`. As `localProperties`, `localThen` is not inherited by extending validators.
 
-```typescript
-V.optional(V.integer());
-```
+`Then` validation rules are run after all the properties are validated successfully and `localThen`
+is the last step in the validation chain. Inherited `then` rules are executed before child's own.
 
 ## <a name="array">Arrays</a>
 
@@ -386,7 +402,7 @@ const schema = V.schema((schema: SchemaValidator) => ({
 (await schema.raw('Object').validate({ type: 'ObjectNormalizer', property: 'value' })).isSuccess();
 // false
 
-// Property based discriminator is validated as own property (i.e. not inherited)
+// Property based discriminator is validated as local property (i.e. not inherited)
 (await schema.raw('Object').validate({ type: 'Object' })).isSuccess();
 // true
 (await schema.raw('Object').validate({ type: 'ObjectNormalizer' })).isSuccess();
