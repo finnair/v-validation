@@ -203,7 +203,7 @@ describe('schema', () => {
   });
 });
 
-describe('ClassModel.then', () => {
+describe('ClassModel.next', () => {
   const schema = new SchemaValidator(schema => ({
     discriminator: 'type',
     models: {
@@ -212,14 +212,14 @@ describe('ClassModel.then', () => {
           pw1: V.string(),
           pw2: V.string(),
         },
-        then: V.assertTrue(user => user.pw1 === user.pw2, 'PasswordVerification', Path.of('pw2')),
+        next: V.assertTrue(user => user.pw1 === user.pw2, 'PasswordVerification', Path.of('pw2')),
       },
       NewUserRequest: {
         extends: 'PasswordChangeRequest',
         properties: {
           name: V.string(),
         },
-        then: V.assertTrue(user => user.pw1.indexOf(user.name) < 0, 'BadPassword', Path.of('pw1')),
+        next: V.assertTrue(user => user.pw1.indexOf(user.name) < 0, 'BadPassword', Path.of('pw1')),
       },
     },
   }));
@@ -228,16 +228,16 @@ describe('ClassModel.then', () => {
   test('passwords mismatch', () =>
     expectViolations({ type: 'PasswordChangeRequest', pw1: 'test', pw2: 't3st' }, schema, new Violation(Path.of('pw2'), 'PasswordVerification')));
 
-  describe('inherited then', () => {
+  describe('inherited next', () => {
     test('BadPassword', () =>
       expectViolations({ type: 'NewUserRequest', pw1: 'test', pw2: 'test', name: 'tes' }, schema, new Violation(Path.of('pw1'), 'BadPassword')));
 
-    test('child then is applied after successfull parent then', () =>
+    test('child next is applied after successfull parent next', () =>
       expectViolations({ type: 'NewUserRequest', pw1: 'test', pw2: 't3st', name: 'tes' }, schema, new Violation(Path.of('pw2'), 'PasswordVerification')));
   });
 });
 
-describe('ClassModel.localThen', () => {
+describe('ClassModel.localNext', () => {
   const schema = new SchemaValidator(schema => ({
     discriminator: () => 'Model',
     models: {
@@ -245,13 +245,13 @@ describe('ClassModel.localThen', () => {
         properties: {
           name: V.string(),
         },
-        localThen: V.map(obj => `${obj.name}`),
+        localNext: V.map(obj => `${obj.name}`),
       },
     },
   }));
 
-  test('localThen is called', async done => {
-    expect((await schema.validate({ name: 'localThen' })).getValue()).toEqual('localThen');
+  test('localNext is called', async done => {
+    expect((await schema.validate({ name: 'localNext' })).getValue()).toEqual('localNext');
     done();
   });
 });

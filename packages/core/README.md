@@ -46,7 +46,7 @@ npm install @finnair/v-validation
 Validators can be chained and combined.
 
 ```typescript
-const percentageValidator = V.integer().then(V.min(0), V.max(100));
+const percentageValidator = V.integer().next(V.min(0), V.max(100));
 (await percentageValidator.validate(123)).getValue();
 // ValidationError: [
 //   {
@@ -74,7 +74,7 @@ Validators are essentially immutable functions that can be combined to form more
 ```typescript
 const personValidator = V.object({
   properties: {
-    name: V.required(V.string(), V.notBlank()), // Another way of saying V.string().then(V.notBlank())
+    name: V.required(V.string(), V.notBlank()), // Another way of saying V.string().next(V.notBlank())
     dateOfBirth: Vmoment.date(), // Requires a non-null value, a Moment instance or YYYY-MM-DD formatted string
     nickName: V.optional(V.string()),
   },
@@ -131,11 +131,11 @@ const checkPassword = V.fn(async (value: UserRegistration, path: Path, ctx: Vali
 
 const UserRegistrationValidator = V.object({
   properties: {
-    password1: V.string().then(V.pattern(/[A-Z]/), V.pattern(/[a-z]/), V.pattern(/[0-9]/), V.size(8, 32)),
+    password1: V.string().next(V.pattern(/[A-Z]/), V.pattern(/[a-z]/), V.pattern(/[0-9]/), V.size(8, 32)),
     password2: V.string(),
   },
-  // then: checkPassword, /* An alternative way of defining cross-property rules. This allows extending UserRegistrationValidator. */
-}).then(checkPassword); // Because of this, UserRegistrationValidator is actually a ThenValidator, which cannot be extended by V.object().
+  // next: checkPassword, /* An alternative way of defining cross-property rules. This allows extending UserRegistrationValidator. */
+}).next(checkPassword); // Because of this, UserRegistrationValidator is actually a NextValidator, which cannot be extended by V.object().
 
 // 3) INPUT VALIDATION
 (await UserRegistrationValidator.validate({ password1: 'FooBar' })).getValue();
@@ -196,12 +196,12 @@ As a matter of principle, `V` doesn't modify the value being validated. All conv
 
 Conversions are always applied internally as in validation rule combinations latter rules may depend on conversions applied earlier. E.g. checking if a date is in future relies on the value actually being a Date.
 
-## <a name="then">Validator Chaining</a>
+## <a name="next">Validator Chaining</a>
 
-All validators can be chained using `Validator.then(...allOf: Validator[])` function. Then-validators are only run for successful results with the converted value. Often occurring pattern is to first verify/convert the type and then run the rest of the validations, e.g. validating a prime number between 1 and 1000:
+All validators can be chained using `Validator.next(...allOf: Validator[])` function. Next-validators are only run for successful results with the converted value. Often occurring pattern is to first verify/convert the type and then run the rest of the validations, e.g. validating a prime number between 1 and 1000:
 
 ```typescript
-V.toInteger().then(V.min(1), V.max(1000), V.assertTrue(isPrime));
+V.toInteger().next(V.min(1), V.max(1000), V.assertTrue(isPrime));
 ```
 
 ## Combining Validators
@@ -212,7 +212,7 @@ V.toInteger().then(V.min(1), V.max(1000), V.assertTrue(isPrime));
   - validators are run in parallel and the results are combined
   - if conversion happens, all the validators must return the same value (deepEquals)
 - `oneOf` - exactly one validator must match while others should return false
-- `compositionOf` - validators are run one after another against the (current) converted value (a shortcut for [`Validator.then`](#then))
+- `compositionOf` - validators are run one after another against the (current) converted value (a shortcut for [`Validator.next`](#next))
 
 ## <a name="object">V.object</a>
 
@@ -222,8 +222,8 @@ V.toInteger().then(V.min(1), V.max(1000), V.assertTrue(isPrime));
 2. rules defining what, if any, additional (unnamed) properties are allowed,
 3. references to parent model(s),
 4. local (non-inheritable) properties and
-5. then validator for cross-property rules
-6. local then for non-inheritable mapping
+5. next validator for cross-property rules
+6. local next for non-inheritable mapping
 
 ### Named Properties
 
@@ -315,19 +315,19 @@ All additional-property-validators consist of two parts, key and value validator
 returning success for the key. The value validator is only run if the key validator is successful. Setting `additionalProperties: true` is simply a shortcut for a case
 where both key and value validators allow anything; and `additionalProperties: false` is a shortcut for any key and a value validator that always returns `UnknownPropertyDenied` error.
 
-### Then
+### Next
 
-An object may define inheritable cross-property rules with `ObjectModel.then` and non-inheritable validations or, e.g. mappings to corresponding a classes, using `localThen`. As `localProperties`, `localThen` is not inherited by extending validators.
+An object may define inheritable cross-property rules with `ObjectModel.next` and non-inheritable validations or, e.g. mappings to corresponding a classes, using `localNext`. As `localProperties`, `localNext` is not inherited by extending validators.
 
-`Then` validation rules are run after all the properties are validated successfully and `localThen`
-is the last step in the validation chain. Inherited `then` rules are executed before child's own.
+`Next` validation rules are run after all the properties are validated successfully and `localNext`
+is the last step in the validation chain. Inherited `next` rules are executed before child's own.
 
 ## <a name="array">Arrays</a>
 
 Arrays are defined in terms of their element type:
 
 ```typescript
-V.array(V.integer()).then(V.size(1, 100)); // An integer array of size 1 to 100
+V.array(V.integer()).next(V.size(1, 100)); // An integer array of size 1 to 100
 ```
 
 Note that basic validators do not handle polymoprhism even though they support inheritance. For example this definition would not validate elements against `bike` or `aircraft`:

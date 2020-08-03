@@ -139,7 +139,7 @@ describe('strings', () => {
 
     test('undefined is not valid', () => expectViolations(undefined, V.pattern(regexp), defaultViolations.notNull()));
 
-    test('convert to string', () => expectValid(123, V.toString().then(V.pattern('^[0-9]+$')), '123'));
+    test('convert to string', () => expectValid(123, V.toString().next(V.pattern('^[0-9]+$')), '123'));
 
     test('violation toJSON', () => {
       expect(JSON.parse(JSON.stringify(defaultViolations.pattern(/[A-Z]+/i, '123')))).toEqual({
@@ -393,9 +393,9 @@ describe('objects', () => {
         password1: V.allOf(V.string(), V.notEmpty()),
         password2: [V.string(), V.notEmpty()],
       },
-    }).thenMap(value => new PasswordRequest(value as IPasswordRequest));
+    }).nextMap(value => new PasswordRequest(value as IPasswordRequest));
 
-    const validator = modelValidator.then(
+    const validator = modelValidator.next(
       V.assertTrue((request: PasswordRequest) => request.password1 === request.password2, 'ConfirmPassword', property('password1')),
     );
 
@@ -606,13 +606,13 @@ describe('inheritance', () => {
   });
 });
 
-describe('object then', () => {
+describe('object next', () => {
   const passwordValidator = V.object({
     properties: {
       pw1: V.string(),
       pw2: V.string(),
     },
-    then: V.assertTrue(user => user.pw1 === user.pw2, 'PasswordVerification', Path.of('pw2')),
+    next: V.assertTrue(user => user.pw1 === user.pw2, 'PasswordVerification', Path.of('pw2')),
   });
 
   test('passwords match', () => expectValid({ pw1: 'test', pw2: 'test' }, passwordValidator));
@@ -621,39 +621,39 @@ describe('object then', () => {
 
   test('run after property validators', () => expectViolations({ pw1: 'test' }, passwordValidator, defaultViolations.notNull(Path.of('pw2'))));
 
-  describe('inherited then', () => {
+  describe('inherited next', () => {
     const userValidator = V.object({
       extends: passwordValidator,
       properties: {
         name: V.string(),
       },
-      then: V.assertTrue(user => user.pw1.indexOf(user.name) < 0, 'BadPassword', Path.of('pw1')),
+      next: V.assertTrue(user => user.pw1.indexOf(user.name) < 0, 'BadPassword', Path.of('pw1')),
     });
 
     test('BadPassword', () => expectViolations({ pw1: 'test', pw2: 'test', name: 'tes' }, userValidator, new Violation(Path.of('pw1'), 'BadPassword')));
 
-    test('child then is applied after successfull parent then', () =>
+    test('child next is applied after successfull parent next', () =>
       expectViolations({ pw1: 'test', pw2: 't3st', name: 'tes' }, userValidator, new Violation(Path.of('pw2'), 'PasswordVerification')));
   });
 });
 
-describe('object localThen', () => {
+describe('object localNext', () => {
   const parent = V.object({
     properties: {
       name: V.string(),
       upper: V.optional(V.boolean()),
     },
-    then: V.map(obj => {
+    next: V.map(obj => {
       if (obj.upper) {
         obj.name = (obj.name as string).toUpperCase();
       }
       return obj;
     }),
-    localThen: V.map(obj => `parent:${obj.name}`),
+    localNext: V.map(obj => `parent:${obj.name}`),
   });
   const child = V.object({
     extends: parent,
-    localThen: V.map(obj => `child:${obj.name}`),
+    localNext: V.map(obj => `child:${obj.name}`),
   });
 
   test('parent', async done => {
@@ -666,22 +666,22 @@ describe('object localThen', () => {
     done();
   });
 
-  test('then applies for parent', async done => {
+  test('next applies for parent', async done => {
     expect((await parent.validate({ name: 'Darth', upper: true })).getValue()).toEqual('parent:DARTH');
     done();
   });
 
-  test('then applies for child', async done => {
+  test('next applies for child', async done => {
     expect((await child.validate({ name: 'Luke', upper: true })).getValue()).toEqual('child:LUKE');
     done();
   });
 
-  test('localThen is skipped on field validation error', async done => {
+  test('localNext is skipped on field validation error', async done => {
     const model = V.object({
       properties: {
         name: V.string(),
       },
-      localThen: V.map(obj => `parent:${obj.name}`),
+      localNext: V.map(obj => `parent:${obj.name}`),
     });
     await expectViolations({}, model, defaultViolations.notNull(property('name')));
     done();
@@ -723,7 +723,7 @@ describe('Date', () => {
     }
     const validator = V.object({
       properties: {
-        date: V.date().then(V.fn(notInstanceOfDate, 'NotInstanceOfDate')),
+        date: V.date().next(V.fn(notInstanceOfDate, 'NotInstanceOfDate')),
       },
     });
     const object = {
@@ -734,7 +734,7 @@ describe('Date', () => {
 });
 
 describe('compositionOf', () => {
-  test('only first failure returned', () => expectViolations(null, V.notNull().then(V.notEmpty()), defaultViolations.notNull()));
+  test('only first failure returned', () => expectViolations(null, V.notNull().next(V.notEmpty()), defaultViolations.notNull()));
 });
 
 describe('enum', () => {
@@ -824,7 +824,7 @@ describe('arrays', () => {
     test('convert to Set', () =>
       expectValid(
         ['foo', 'foo', 'foo'],
-        V.array(V.string()).thenMap(array => new Set(array)),
+        V.array(V.string()).nextMap(array => new Set(array)),
         new Set(['foo']),
       ));
   });
@@ -874,11 +874,11 @@ describe('number', () => {
 
     test('min larger value', () => expectValid(1.2, V.min(1.1, false)));
 
-    test('min inclusive equal (string) value', () => expectValid('1.1', V.check(V.toNumber().then(V.min(1.1, true)))));
+    test('min inclusive equal (string) value', () => expectValid('1.1', V.check(V.toNumber().next(V.min(1.1, true)))));
 
     test('min strict equal value', () => expectViolations(1.1, V.min(1.1, false), defaultViolations.min(1.1, false, 1.1)));
 
-    test('min strict equal (string) value', () => expectViolations('1.1', V.toNumber().then(V.min(1.1, false)), defaultViolations.min(1.1, false, 1.1)));
+    test('min strict equal (string) value', () => expectViolations('1.1', V.toNumber().next(V.min(1.1, false)), defaultViolations.min(1.1, false, 1.1)));
   });
 
   describe('max', () => {
@@ -892,12 +892,12 @@ describe('number', () => {
 
     test('max smaller value', () => expectValid(1.0, V.max(1.1, false)));
 
-    test('max inclusive equal (string) value', () => expectValid('1.1', V.check(V.toNumber().then(V.max(1.1, true)))));
+    test('max inclusive equal (string) value', () => expectValid('1.1', V.check(V.toNumber().next(V.max(1.1, true)))));
 
     test('max strict equal value', () => expectViolations(1.1, V.max(1.1, false), defaultViolations.max(1.1, false, 1.1)));
 
     test('max strict equal (string) value', () =>
-      expectViolations('1.1', V.check(V.toNumber().then(V.max(1.1, false))), defaultViolations.max(1.1, false, 1.1)));
+      expectViolations('1.1', V.check(V.toNumber().next(V.max(1.1, false))), defaultViolations.max(1.1, false, 1.1)));
 
     test('invalid max inclusive', () => expectViolations(2, V.max(1, true), defaultViolations.max(1, true, 2)));
   });
@@ -914,11 +914,11 @@ describe('number', () => {
     describe('min', () => {
       test('min inclusive equal value', () => expectValid(0, V.min(0, true)));
 
-      test('min inclusive equal (string) value', () => expectValid('1', V.check(V.toNumber().then(V.min(1, true)))));
+      test('min inclusive equal (string) value', () => expectValid('1', V.check(V.toNumber().next(V.min(1, true)))));
 
       test('min strict equal value', () => expectViolations(0, V.min(0, false), defaultViolations.min(0, false, 0)));
 
-      test('min strict equal (string) value', () => expectViolations('1', V.toNumber().then(V.min(1, false)), defaultViolations.min(1, false, 1)));
+      test('min strict equal (string) value', () => expectViolations('1', V.toNumber().next(V.min(1, false)), defaultViolations.min(1, false, 1)));
     });
 
     describe('convert', () => {
@@ -979,8 +979,8 @@ describe('async validation', () => {
     });
   });
 
-  describe('then', () => {
-    const validator = defer(V.string()).then(defer(V.hasValue('true')));
+  describe('next', () => {
+    const validator = defer(V.string()).next(defer(V.hasValue('true')));
     test('valid', async done => {
       await expectValid('true', validator);
       done();
