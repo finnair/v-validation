@@ -71,15 +71,15 @@ export abstract class Validator {
 
   abstract validatePath(value: any, path: Path, ctx: ValidationContext): Promise<ValidationResult>;
 
-  then(...allOf: Validator[]): Validator {
+  next(...allOf: Validator[]): Validator {
     if (allOf.length == 0) {
       return this;
     }
-    return new ThenValidator(this, maybeAllOfValidator(allOf));
+    return new NextValidator(this, maybeAllOfValidator(allOf));
   }
 
-  thenMap(fn: MappingFn): Validator {
-    return this.then(new ValueMapper(fn));
+  nextMap(fn: MappingFn): Validator {
+    return this.next(new ValueMapper(fn));
   }
 }
 
@@ -288,8 +288,8 @@ export interface ObjectModel {
   readonly properties?: PropertyModel;
   readonly localProperties?: PropertyModel;
   readonly additionalProperties?: boolean | MapEntryModel | MapEntryModel[];
-  readonly then?: Validator | Validator[];
-  readonly localThen?: Validator;
+  readonly next?: Validator | Validator[];
+  readonly localNext?: Validator;
 }
 
 export interface MapEntryModel {
@@ -367,7 +367,7 @@ export function mergeProperties(from: Properties, to: Properties): Properties {
   if (from) {
     for (const key in from) {
       if (to[key]) {
-        to[key] = to[key].then(from[key]);
+        to[key] = to[key].next(from[key]);
       } else {
         to[key] = from[key];
       }
@@ -385,9 +385,9 @@ export class ObjectValidator extends Validator {
 
   public readonly parentValidators: ObjectValidator[];
 
-  public readonly thenValidator: undefined | Validator;
+  public readonly nextValidator: undefined | Validator;
 
-  private readonly localThenValidator: undefined | Validator;
+  private readonly localNextValidator: undefined | Validator;
 
   constructor(public readonly model: ObjectModel) {
     super();
@@ -399,23 +399,23 @@ export class ObjectValidator extends Validator {
     this.parentValidators.forEach((parent: ObjectValidator) => {
       additionalProperties = additionalProperties.concat(parent.additionalProperties);
       properties = mergeProperties(parent.properties, properties);
-      if (parent.thenValidator) {
-        inheritedThenValidators = inheritedThenValidators.concat(parent.thenValidator);
+      if (parent.nextValidator) {
+        inheritedThenValidators = inheritedThenValidators.concat(parent.nextValidator);
       }
     });
-    let thenValidator = inheritedThenValidators.length ? maybeAllOfValidator(inheritedThenValidators) : undefined;
-    if (model.then) {
-      if (thenValidator) {
-        thenValidator = thenValidator.then(maybeAllOfValidator(model.then));
+    let nextValidator = inheritedThenValidators.length ? maybeAllOfValidator(inheritedThenValidators) : undefined;
+    if (model.next) {
+      if (nextValidator) {
+        nextValidator = nextValidator.next(maybeAllOfValidator(model.next));
       } else {
-        thenValidator = maybeAllOfValidator(model.then);
+        nextValidator = maybeAllOfValidator(model.next);
       }
     }
     this.additionalProperties = additionalProperties.concat(getMapEntryValidators(model.additionalProperties));
     this.properties = mergeProperties(getPropertyValidators(model.properties), properties);
     this.localProperties = getPropertyValidators(model.localProperties);
-    this.thenValidator = thenValidator;
-    this.localThenValidator = model.localThen;
+    this.nextValidator = nextValidator;
+    this.localNextValidator = model.localNext;
   }
 
   withProperty(name: string, ...validator: Validator[]) {
@@ -464,11 +464,11 @@ export class ObjectValidator extends Validator {
       }
       return ctx.failure(violations, convertedObject);
     });
-    if (this.thenValidator) {
-      validationChain = validationChain.then(result => (result.isSuccess() ? this.thenValidator!.validatePath(result.getValue(), path, ctx) : result));
+    if (this.nextValidator) {
+      validationChain = validationChain.then(result => (result.isSuccess() ? this.nextValidator!.validatePath(result.getValue(), path, ctx) : result));
     }
-    if (this.localThenValidator) {
-      validationChain = validationChain.then(result => (result.isSuccess() ? this.localThenValidator!.validatePath(result.getValue(), path, ctx) : result));
+    if (this.localNextValidator) {
+      validationChain = validationChain.then(result => (result.isSuccess() ? this.localNextValidator!.validatePath(result.getValue(), path, ctx) : result));
     }
     return validationChain;
 
@@ -611,15 +611,15 @@ export class ArrayNormalizer extends ArrayValidator {
   }
 }
 
-export class ThenValidator extends Validator {
-  constructor(public readonly first: Validator, public readonly next: Validator) {
+export class NextValidator extends Validator {
+  constructor(public readonly firstValidator: Validator, public readonly nextValidator: Validator) {
     super();
   }
 
   async validatePath(value: any, path: Path, ctx: ValidationContext): Promise<ValidationResult> {
-    return this.first.validatePath(value, path, ctx).then(firstResult => {
+    return this.firstValidator.validatePath(value, path, ctx).then(firstResult => {
       if (firstResult.isSuccess()) {
-        return this.next.validatePath(firstResult.getValue(), path, ctx).then(nextResult => {
+        return this.nextValidator.validatePath(firstResult.getValue(), path, ctx).then(nextResult => {
           if (nextResult.isSuccess()) {
             return nextResult;
           }
@@ -1312,7 +1312,7 @@ export class OptionalValidator extends Validator {
   constructor(type: Validator, allOf: Validator[]) {
     super();
     if (allOf && allOf.length > 0) {
-      this.validator = new ThenValidator(type, maybeAllOfValidator(allOf));
+      this.validator = new NextValidator(type, maybeAllOfValidator(allOf));
     } else {
       this.validator = type;
     }

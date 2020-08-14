@@ -39,7 +39,7 @@ describe('moment', () => {
   });
 
   describe('local date', () => {
-    test('valid local date converted', () => expectValid('2019-03-07', Vmoment.date().then(toJSON), '2019-03-07'));
+    test('valid local date converted', () => expectValid('2019-03-07', Vmoment.date().next(toJSON), '2019-03-07'));
 
     test('invalid', () => expectViolations('2019.03.07', Vmoment.date(), defaultViolations.date('2019.03.07')));
 
@@ -47,18 +47,18 @@ describe('moment', () => {
   });
 
   describe('local dateTime', () => {
-    test('retain timezone', () => expectValid('2019-03-07T14:13:14+02:00', Vmoment.dateTime().then(toJSON), '2019-03-07T14:13:14+02:00'));
+    test('retain timezone', () => expectValid('2019-03-07T14:13:14+02:00', Vmoment.dateTime().next(toJSON), '2019-03-07T14:13:14+02:00'));
 
     test('valid local dateTime with +02:00 offset converted', () =>
-      expectValid('2019-03-07T14:13:14+02:00', Vmoment.dateTime().then(toJSON), '2019-03-07T14:13:14+02:00'));
+      expectValid('2019-03-07T14:13:14+02:00', Vmoment.dateTime().next(toJSON), '2019-03-07T14:13:14+02:00'));
 
     test('clone', () => expectCloneToMatch(dateTimeMoment()));
   });
 
   describe('dateUtc', () => {
-    test('valid utc date value', () => expectValid('2019-03-07', Vmoment.dateUtc().then(toDate), new Date('2019-03-07T00:00:00Z')));
+    test('valid utc date value', () => expectValid('2019-03-07', Vmoment.dateUtc().next(toDate), new Date('2019-03-07T00:00:00Z')));
 
-    test('valid utc date converted', () => expectValid('2019-03-07', Vmoment.dateUtc().then(toJSON), '2019-03-07'));
+    test('valid utc date converted', () => expectValid('2019-03-07', Vmoment.dateUtc().next(toJSON), '2019-03-07'));
 
     test('array constructor', () => expect(dateUtcMoment([2019, 0, 1]).toJSON()).toEqual('2019-01-01'));
 
@@ -66,13 +66,13 @@ describe('moment', () => {
   });
 
   describe('dateTimeUtc', () => {
-    test('valid utc dateTime converted', () => expectValid('2019-03-07T12:13:14Z', Vmoment.dateTimeUtc().then(toJSON), '2019-03-07T12:13:14Z'));
+    test('valid utc dateTime converted', () => expectValid('2019-03-07T12:13:14Z', Vmoment.dateTimeUtc().next(toJSON), '2019-03-07T12:13:14Z'));
 
     test('valid utc dateTime with +00:00 offset converted', () =>
-      expectValid('2019-03-07T12:13:14+00:00', Vmoment.dateTimeUtc().then(toJSON), '2019-03-07T12:13:14Z'));
+      expectValid('2019-03-07T12:13:14+00:00', Vmoment.dateTimeUtc().next(toJSON), '2019-03-07T12:13:14Z'));
 
     test('valid utc dateTime with +02:00 offset converted', () =>
-      expectValid('2019-03-07T14:13:14+02:00', Vmoment.dateTimeUtc().then(toJSON), '2019-03-07T12:13:14Z'));
+      expectValid('2019-03-07T14:13:14+02:00', Vmoment.dateTimeUtc().next(toJSON), '2019-03-07T12:13:14Z'));
 
     test('array constructor', () => expect(dateTimeUtcMoment([2019, 0, 1, 1, 1, 1]).toJSON()).toEqual('2019-01-01T01:01:01Z'));
 
@@ -95,13 +95,13 @@ describe('moment', () => {
   });
 
   describe('dateTimeMillisUtc', () => {
-    test('valid utc dateTime converted', () => expectValid('2019-03-07T12:13:14.123Z', Vmoment.dateTimeMillisUtc().then(toJSON), '2019-03-07T12:13:14.123Z'));
+    test('valid utc dateTime converted', () => expectValid('2019-03-07T12:13:14.123Z', Vmoment.dateTimeMillisUtc().next(toJSON), '2019-03-07T12:13:14.123Z'));
 
     test('valid utc dateTime with +00:00 offset converted', () =>
-      expectValid('2019-03-07T12:13:14.123+00:00', Vmoment.dateTimeMillisUtc().then(toJSON), '2019-03-07T12:13:14.123Z'));
+      expectValid('2019-03-07T12:13:14.123+00:00', Vmoment.dateTimeMillisUtc().next(toJSON), '2019-03-07T12:13:14.123Z'));
 
     test('valid utc dateTime with +02:00 offset converted', () =>
-      expectValid('2019-03-07T14:13:14.123+02:00', Vmoment.dateTimeMillisUtc().then(toJSON), '2019-03-07T12:13:14.123Z'));
+      expectValid('2019-03-07T14:13:14.123+02:00', Vmoment.dateTimeMillisUtc().next(toJSON), '2019-03-07T12:13:14.123Z'));
 
     test('array constructor', () => expect(dateTimeMillisUtcMoment([2019, 0, 1, 1, 1, 1, 123]).toJSON()).toEqual('2019-01-01T01:01:01.123Z'));
 
@@ -124,16 +124,16 @@ describe('moment', () => {
   });
 
   describe('local dateTimeMillis', () => {
-    test('retain timezone', () => expectValid('2019-03-07T14:13:14.123+02:00', Vmoment.dateTimeMillis().then(toJSON), '2019-03-07T14:13:14.123+02:00'));
+    test('retain timezone', () => expectValid('2019-03-07T14:13:14.123+02:00', Vmoment.dateTimeMillis().next(toJSON), '2019-03-07T14:13:14.123+02:00'));
 
     test('valid local dateTime with +02:00 offset converted', () =>
-      expectValid('2019-03-07T14:13:14.123+02:00', Vmoment.dateTimeMillis().then(toJSON), '2019-03-07T14:13:14.123+02:00'));
+      expectValid('2019-03-07T14:13:14.123+02:00', Vmoment.dateTimeMillis().next(toJSON), '2019-03-07T14:13:14.123+02:00'));
 
     test('clone', () => expectCloneToMatch(dateTimeMillisMoment()));
   });
 
   describe('normalize Moment', () => {
-    test('valid utc date', () => expectValid(moment('2019-03-07T12:13:14Z'), Vmoment.dateUtc().then(toJSON), '2019-03-07'));
+    test('valid utc date', () => expectValid(moment('2019-03-07T12:13:14Z'), Vmoment.dateUtc().next(toJSON), '2019-03-07'));
   });
 
   describe('duration', () => {
@@ -143,7 +143,7 @@ describe('moment', () => {
 
     test('ABC is invalid', () => expectViolations('ABC', Vmoment.duration(), new TypeMismatch(Path.ROOT, 'Duration', 'ABC')));
 
-    test('parse serialize roundtrip', () => expectValid('P23DT23H', Vmoment.duration().then(toJSON), 'P23DT23H'));
+    test('parse serialize roundtrip', () => expectValid('P23DT23H', Vmoment.duration().next(toJSON), 'P23DT23H'));
   });
 
   describe('time', () => {

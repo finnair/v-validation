@@ -83,7 +83,7 @@ const V = {
 
   optional: (type: Validator, ...allOf: Validator[]) => new OptionalValidator(type, allOf),
 
-  required: (type: Validator, ...allOf: Validator[]) => new NotNullOrUndefinedValidator().then(type).then(...allOf),
+  required: (type: Validator, ...allOf: Validator[]) => new NotNullOrUndefinedValidator().next(type).next(...allOf),
 
   if: (fn: AssertTrue, ...allOf: Validator[]) => new IfValidator([new Conditional(fn, allOf)]),
 
