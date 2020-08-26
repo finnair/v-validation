@@ -3,6 +3,30 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.7.0](https://github.com/finnair/v-validation/compare/v0.6.2...v0.7.0) (2020-08-26)
+
+
+### Features
+
+* refactor "then" to "next" ([9b02d2c](https://github.com/finnair/v-validation/commit/9b02d2c6cca8f6a5e44633b6dad2df2ecec28af2))
+
+
+### BREAKING CHANGES
+
+* Validator:
+  * then -> next
+  * thenMap -> nextMap
+
+ObjectModel & ClassModel:
+  * then -> next
+  * localThen -> localNext
+
+Signed-off-by: Samppa Saarela <samppa.saarela@iki.fi>
+
+
+
+
+
 ## [0.6.2](https://github.com/finnair/v-validation/compare/v0.6.1...v0.6.2) (2020-05-22)
 
 
