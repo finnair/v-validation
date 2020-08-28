@@ -30,6 +30,9 @@
     "printWidth": 160,
     "singleQuote": true
   },
+  "engines": {
+    "node": ">= 10.14.2"
+  },
   "resolutions": {
     "minimist": ">=0.2.1"
   }
