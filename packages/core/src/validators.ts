@@ -465,12 +465,12 @@ export class ObjectValidator extends Validator {
       return ctx.failure(violations, convertedObject);
     });
     if (this.nextValidator) {
-      const next = this.nextValidator;
-      validationChain = validationChain.then(result => (result.isSuccess() ? next.validatePath(result.getValue(), path, ctx) : result));
+      const validator = this.nextValidator;
+      validationChain = validationChain.then(result => (result.isSuccess() ? validator.validatePath(result.getValue(), path, ctx) : result));
     }
     if (this.localNextValidator) {
-      const next = this.localNextValidator;
-      validationChain = validationChain.then(result => (result.isSuccess() ? next.validatePath(result.getValue(), path, ctx) : result));
+      const validator = this.localNextValidator;
+      validationChain = validationChain.then(result => (result.isSuccess() ? validator.validatePath(result.getValue(), path, ctx) : result));
     }
     return validationChain;
 
