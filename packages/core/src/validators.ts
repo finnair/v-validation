@@ -569,7 +569,7 @@ export class ArrayValidator extends Validator {
       return ctx.failure(defaultViolations.notNull(path), value);
     }
     if (!Array.isArray(value)) {
-      return ctx.failure(new TypeMismatch(path, 'array'), value);
+      return ctx.failure(new TypeMismatch(path, 'array', value), value);
     }
     const convertedArray: Array<any> = [];
     const cycleResult = ctx.registerObject(value, path, convertedArray);
@@ -718,7 +718,7 @@ export class AnyOfValidator extends Validator {
         const result = await validator.validatePath(value, path, ctx);
         result.isSuccess() ? passes.push(result.getValue()) : failures.push(...result.getViolations());
       }
-    }
+    };
 
     await validateAll(this.validators);
     return passes.length > 0 ? ctx.success(passes.pop()) : ctx.failure(failures, value);
@@ -1395,3 +1395,27 @@ const allowNoneMapEntries: MapEntryValidator = new MapEntryValidator({
   keys: new AnyValidator(),
   values: strictUnknownPropertyValidator,
 });
+
+export class JsonValidator extends Validator {
+  public readonly validator: Validator;
+
+  constructor(allOf: Validator[]) {
+    super();
+    this.validator = maybeAllOfValidator(allOf);
+  }
+
+  async validatePath(value: any, path: Path, ctx: ValidationContext): Promise<ValidationResult> {
+    if (isNullOrUndefined(value)) {
+      return ctx.failure(defaultViolations.notNull(path), value);
+    }
+    if (!isString(value)) {
+      return ctx.failure(defaultViolations.string(value, path), value);
+    }
+    try {
+      const parsedValue = JSON.parse(value);
+      return this.validator.validatePath(parsedValue, path, ctx);
+    } catch (e) {
+      return ctx.failure(new TypeMismatch(path, 'JSON', value), value);
+    }
+  }
+}

@@ -28,7 +28,8 @@
     "trailingComma": "all",
     "tabWidth": 2,
     "printWidth": 160,
-    "singleQuote": true
+    "singleQuote": true,
+    "arrowParens": "avoid"
   },
   "engines": {
     "node": ">= 10.14.2"

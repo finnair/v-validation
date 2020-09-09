@@ -51,6 +51,7 @@ import {
   CompositionValidator,
   EnumValidator,
   HasValueValidator,
+  JsonValidator,
 } from './validators';
 
 const ignoreValidator = new IgnoreValidator(),
@@ -61,9 +62,9 @@ const ignoreValidator = new IgnoreValidator(),
   nullOrUndefinedValidator = new IsNullOrUndefinedValidator(),
   notEmptyValidator = new NotEmptyValidator(),
   notBlankValidator = new NotBlankValidator(),
-  emptyToNullValidator = new ValueMapper(val => (isNullOrUndefined(val) || val === '' ? null : val)),
-  emptyToUndefinedValidator = new ValueMapper(val => (isNullOrUndefined(val) || val === '' ? undefined : val)),
-  undefinedToNullValidator = new ValueMapper(val => (val === undefined ? null : val)),
+  emptyToNullValidator = new ValueMapper((val) => (isNullOrUndefined(val) || val === '' ? null : val)),
+  emptyToUndefinedValidator = new ValueMapper((val) => (isNullOrUndefined(val) || val === '' ? undefined : val)),
+  undefinedToNullValidator = new ValueMapper((val) => (val === undefined ? null : val)),
   booleanValidator = new BooleanValidator(),
   numberValidator = new NumberValidator(NumberFormat.number),
   toNumberValidator = new NumberNormalizer(NumberFormat.number),
@@ -108,9 +109,9 @@ const V = {
 
   undefinedToNull: () => undefinedToNullValidator,
 
-  emptyTo: (defaultValue: any) => new ValueMapper(val => (isNullOrUndefined(val) || val === '' ? defaultValue : val)),
+  emptyTo: (defaultValue: any) => new ValueMapper((val) => (isNullOrUndefined(val) || val === '' ? defaultValue : val)),
 
-  uuid: (version?: number) => new AssertTrueValidator(value => !isNullOrUndefined(value) && validateUuid(value, version), 'UUID'),
+  uuid: (version?: number) => new AssertTrueValidator((value) => !isNullOrUndefined(value) && validateUuid(value, version), 'UUID'),
 
   pattern: (pattern: string | RegExp, flags?: string) => new PatternValidator(pattern, flags),
 
@@ -144,7 +145,7 @@ const V = {
   /** WARN: Objects as Map keys use identity hash/equals, i.e. === */
   toMapType: (keys: Validator, values: Validator) => new MapNormalizer(keys, values),
 
-  nullTo: (defaultValue: any) => new ValueMapper(value => (isNullOrUndefined(value) ? defaultValue : value)),
+  nullTo: (defaultValue: any) => new ValueMapper((value) => (isNullOrUndefined(value) ? defaultValue : value)),
 
   array: (...items: Validator[]) => new ArrayValidator(maybeAllOfValidator(items)),
 
@@ -169,6 +170,8 @@ const V = {
   assertTrue: (fn: AssertTrue, type: string = 'AssertTrue', path?: Path) => new AssertTrueValidator(fn, type, path),
 
   hasValue: (expectedValue: any) => new HasValueValidator(expectedValue),
+
+  json: (...validators: Validator[]) => new JsonValidator(validators),
 };
 
 export default V;
