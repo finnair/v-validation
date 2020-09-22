@@ -211,6 +211,7 @@ V.toInteger().next(V.min(1), V.max(1000), V.assertTrue(isPrime));
 - `allOf` - value must satisfy all the validators
   - validators are run in parallel and the results are combined
   - if conversion happens, all the validators must return the same value (deepEquals)
+- `anyOf` - at least one of the validators must match
 - `oneOf` - exactly one validator must match while others should return false
 - `compositionOf` - validators are run one after another against the (current) converted value (a shortcut for [`Validator.next`](#next))
 
@@ -560,6 +561,7 @@ Unless otherwise stated, all validators require non-null and non-undefined value
 | toArray                 | items: Validator                                                 | Converts undefined to an empty array and non-arrays to single-valued arrays.                                                               |
 | size                    | min: number, max: number                                         |  Asserts that input's numeric `length` property is between min and max (both inclusive).                                                   |
 | allOf                   | ...validators: Validator[]                                       | Requires that all given validators match. Validators are run in parallel and in case they convert the input, all must provide same output. |
+| anyOf                   | ...validators: Validator[]                                       | Requires minimum one of given validators matches. Validators are run in parallel and in case of failure, all violations will be returned.  |
 | oneOf                   | ...validators: Validator[]                                       | Requires that exactly one of the given validators match.                                                                                   |
 | compositionOf           | ...validators: Validator[]                                       | Runs given the validators one after another, chaining the result.                                                                          |
 | emptyToUndefined        |                                                                  | Converts null or empty string to undefined. Does not touch any other values.                                                               |
@@ -591,6 +593,7 @@ All `Violations` have following propertie in common:
 | ErrorViolation         | Error                 | error: any                       | An unspecified Error that was thrown and caught.                                    |
 | HasValueViolation      | HasValue              | expectedValue: any               | Input does not match (deepEqual) expectedValue.                                     |
 | PatternViolationi      | Pattern               | pattern: string                  | Input does not match the regular expression (pattern).                              |
+| AnyOfMismatch          | AnyOf                 |                                  | Input matches >=1 of the provided validators.                                       |
 | OneOfMismatch          | OneOf                 | matches: number                  | Input matches 0 or >= 2 of the configured validators.                               |
 | MaxViolation           | Max                   | max: number, inclusive: boolean  | Input is greater-than or greater-than-or-equal, if `inclusive=true`, than `max`.    |
 | MinViolation           | Min                   |  min: number, inclusive: boolean | Input is less-than or less-than-or-equal if inclusive=true than `min`.              |
