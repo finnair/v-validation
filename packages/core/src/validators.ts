@@ -719,14 +719,15 @@ export class AnyOfValidator extends Validator {
     const passes: ValidationResult[] = [];
     const failures: Violation[] = [];
 
-    const validateAll = (validators: Validator[]) =>
-      validators.map(async (validator) => {
+    const validateAll = async (validators: Validator[]): Promise<void> => {
+      for (const validator of validators) {
         const result = await validator.validatePath(value, path, ctx);
         result.isSuccess() ? passes.push(result.getValue()) : failures.push(...result.getViolations());
-      });
+      }
+    }
 
-    return Promise.allSettled(validateAll(this.validators)).then((_) =>
-      passes.length > 0 ? ctx.success(passes.pop()) : ctx.failure(failures, value));
+    await validateAll(this.validators);
+    return passes.length > 0 ? ctx.success(passes.pop()) : ctx.failure(failures, value);
   }
 }
 
