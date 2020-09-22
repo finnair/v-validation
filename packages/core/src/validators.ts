@@ -158,12 +158,6 @@ export class PatternViolation extends Violation {
   }
 }
 
-export class AnyOfMismatch extends Violation {
-  constructor(path: Path) {
-    super(path, ValidatorType.AnyOf);
-  }
-}
-
 export class OneOfMismatch extends Violation {
   constructor(path: Path, public readonly matches: number) {
     super(path, ValidatorType.OneOf);

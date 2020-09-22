@@ -593,7 +593,6 @@ All `Violations` have following propertie in common:
 | ErrorViolation         | Error                 | error: any                       | An unspecified Error that was thrown and caught.                                    |
 | HasValueViolation      | HasValue              | expectedValue: any               | Input does not match (deepEqual) expectedValue.                                     |
 | PatternViolationi      | Pattern               | pattern: string                  | Input does not match the regular expression (pattern).                              |
-| AnyOfMismatch          | AnyOf                 |                                  | Input matches >=1 of the provided validators.                                       |
 | OneOfMismatch          | OneOf                 | matches: number                  | Input matches 0 or >= 2 of the configured validators.                               |
 | MaxViolation           | Max                   | max: number, inclusive: boolean  | Input is greater-than or greater-than-or-equal, if `inclusive=true`, than `max`.    |
 | MinViolation           | Min                   |  min: number, inclusive: boolean | Input is less-than or less-than-or-equal if inclusive=true than `min`.              |
