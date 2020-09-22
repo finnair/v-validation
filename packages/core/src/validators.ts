@@ -158,6 +158,12 @@ export class PatternViolation extends Violation {
   }
 }
 
+export class AnyOfMismatch extends Violation {
+  constructor(path: Path) {
+    super(path, ValidatorType.AnyOf);
+  }
+}
+
 export class OneOfMismatch extends Violation {
   constructor(path: Path, public readonly matches: number) {
     super(path, ValidatorType.OneOf);
@@ -251,6 +257,7 @@ export enum ValidatorType {
   NotBlank = 'NotBlank',
   Date = 'Date',
   DateTime = 'DateTime',
+  AnyOf = 'AnyOf',
   OneOf = 'OneOf',
   Pattern = 'Pattern',
 }
@@ -701,6 +708,25 @@ export class OneOfValidator extends Validator {
         });
       });
     }
+  }
+}
+
+export class AnyOfValidator extends Validator {
+  constructor(public readonly validators: Validator[]) {
+    super();
+  }
+  async validatePath(value: any, path: Path, ctx: ValidationContext): Promise<ValidationResult> {
+    const passes: ValidationResult[] = [];
+    const failures: Violation[] = [];
+
+    const validateAll = (validators: Validator[]) =>
+      validators.map(async (validator) => {
+        const result = await validator.validatePath(value, path, ctx);
+        result.isSuccess() ? passes.push(result.getValue()) : failures.push(...result.getViolations());
+      });
+
+    return Promise.allSettled(validateAll(this.validators)).then((_) =>
+      passes.length > 0 ? ctx.success(passes.pop()) : ctx.failure(failures, value));
   }
 }
 

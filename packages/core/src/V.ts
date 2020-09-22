@@ -46,6 +46,7 @@ import {
   ArrayValidator,
   SizeValidator,
   AllOfValidator,
+  AnyOfValidator,
   OneOfValidator,
   CompositionValidator,
   EnumValidator,
@@ -154,6 +155,8 @@ const V = {
   properties: (keys: Validator | Validator[], values: Validator | Validator[]) => new ObjectValidator({ additionalProperties: { keys, values } }),
 
   allOf: (...validators: Validator[]) => new AllOfValidator(validators),
+
+  anyOf: (...validators: Validator[]) => new AnyOfValidator(validators),
 
   oneOf: (...validators: Validator[]) => new OneOfValidator(validators),
 
