@@ -18,6 +18,7 @@ import {
   WhenGroupValidator,
   HasValueViolation,
   SizeViolation,
+  EnumMismatch
 } from './validators';
 import { default as V } from './V';
 import { Path } from '@finnair/path';
@@ -792,6 +793,41 @@ describe('oneOf', () => {
 
     test('no matches', () => expectViolations('ABD', validator, defaultViolations.oneOf(0)));
   });
+});
+
+describe('anyOf', () => {
+  enum EnumType {
+    A = 'ABC',
+  }
+
+  const violationHasValue = new HasValueViolation(ROOT, '2019-01-24T09:10:00Z', 'ABD');
+  const violationTypeMismatch = new TypeMismatch(ROOT, 'Date', 'ABD');
+  const violationEnumMismatch = new EnumMismatch(ROOT, 'EnumType', 'ABD');
+
+  const noMatchesViolations: Violation[] = [
+    violationHasValue, violationTypeMismatch, violationEnumMismatch
+  ]
+
+  const validator = V.anyOf(V.hasValue('2019-01-24T09:10:00Z'), V.date(), V.enum(EnumType, 'EnumType'));
+
+  describe('single context', () => {
+    test('valid enum', () => expectValid('ABC', validator, EnumType.A));
+    test('valid date', () => expectValid(validDateString, validator, validDate));
+    test('no matches', () => expectViolations('ABD', validator, ...noMatchesViolations));
+  })
+
+  describe('array context', () => {
+    const matchingArray = ['2019-01-24T09:10:00Z', validDate, 'ABC'];
+    const arrayValidator = V.array(validator);
+
+    test('valid items in array', () => arrayValidator.validate(matchingArray).then((result) => {
+      expect(result.getValue().length).toBe(3);
+      expect(result.getViolations()).toEqual([]);
+    }));
+    test('fails due to invalid item added', () => arrayValidator.validate([...matchingArray, 'ABD']).then((result) => {
+      expect(result.getViolations().length).toBe(3);
+    }))
+  })
 });
 
 describe('arrays', () => {
