@@ -571,6 +571,7 @@ Unless otherwise stated, all validators require non-null and non-undefined value
 | undefinedToNull         |                                                                  | Convets undefined to null. Does not touch any other values.                                                                                |
 | if...elseif...else      | fn: AssertTrue, ...allOf: Validator[]                            | Configures validators (`allOf`) to be executed for cases where if/elseif AssertTrue fn returns true.                                       |
 | whenGroup...otherwise   | group: GroupOrName, ...allOf: Validator[]                        | Defines validation rules (`allOf`) to be executed for given `ValidatorOptions.group`.                                                      |
+| json                    | ...validators: Validator[]                                       | Parse JSON input and validate it against given validators.                                                                                 |
 
 ## Violations
 
