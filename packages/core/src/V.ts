@@ -51,6 +51,7 @@ import {
   CompositionValidator,
   EnumValidator,
   HasValueValidator,
+  JsonValidator,
 } from './validators';
 
 const ignoreValidator = new IgnoreValidator(),
@@ -169,6 +170,8 @@ const V = {
   assertTrue: (fn: AssertTrue, type: string = 'AssertTrue', path?: Path) => new AssertTrueValidator(fn, type, path),
 
   hasValue: (expectedValue: any) => new HasValueValidator(expectedValue),
+
+  json: (...validators: Validator[]) => new JsonValidator(validators),
 };
 
 export default V;

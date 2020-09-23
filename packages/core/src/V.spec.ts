@@ -18,7 +18,7 @@ import {
   WhenGroupValidator,
   HasValueViolation,
   SizeViolation,
-  EnumMismatch
+  EnumMismatch,
 } from './validators';
 import { default as V } from './V';
 import { Path } from '@finnair/path';
@@ -804,9 +804,7 @@ describe('anyOf', () => {
   const violationTypeMismatch = new TypeMismatch(ROOT, 'Date', 'ABD');
   const violationEnumMismatch = new EnumMismatch(ROOT, 'EnumType', 'ABD');
 
-  const noMatchesViolations: Violation[] = [
-    violationHasValue, violationTypeMismatch, violationEnumMismatch
-  ]
+  const noMatchesViolations: Violation[] = [violationHasValue, violationTypeMismatch, violationEnumMismatch];
 
   const validator = V.anyOf(V.hasValue('2019-01-24T09:10:00Z'), V.date(), V.enum(EnumType, 'EnumType'));
 
@@ -814,20 +812,22 @@ describe('anyOf', () => {
     test('valid enum', () => expectValid('ABC', validator, EnumType.A));
     test('valid date', () => expectValid(validDateString, validator, validDate));
     test('no matches', () => expectViolations('ABD', validator, ...noMatchesViolations));
-  })
+  });
 
   describe('array context', () => {
     const matchingArray = ['2019-01-24T09:10:00Z', validDate, 'ABC'];
     const arrayValidator = V.array(validator);
 
-    test('valid items in array', () => arrayValidator.validate(matchingArray).then((result) => {
-      expect(result.getValue().length).toBe(3);
-      expect(result.getViolations()).toEqual([]);
-    }));
-    test('fails due to invalid item added', () => arrayValidator.validate([...matchingArray, 'ABD']).then((result) => {
-      expect(result.getViolations().length).toBe(3);
-    }))
-  })
+    test('valid items in array', () =>
+      arrayValidator.validate(matchingArray).then(result => {
+        expect(result.getValue().length).toBe(3);
+        expect(result.getViolations()).toEqual([]);
+      }));
+    test('fails due to invalid item added', () =>
+      arrayValidator.validate([...matchingArray, 'ABD']).then(result => {
+        expect(result.getViolations().length).toBe(3);
+      }));
+  });
 });
 
 describe('arrays', () => {
@@ -850,7 +850,7 @@ describe('arrays', () => {
 
   test('null is not allowed', () => expectViolations(null, V.array(V.string()), defaultViolations.notNull(ROOT)));
 
-  test('non-array is not allowed', () => expectViolations({}, V.array(V.string()), new TypeMismatch(ROOT, 'array')));
+  test('non-array is not allowed', () => expectViolations({}, V.array(V.string()), new TypeMismatch(ROOT, 'array', {})));
 
   describe('convert', () => {
     const dateArray = V.toArray(V.date());
@@ -1117,9 +1117,7 @@ describe('groups', () => {
   });
 
   describe('chaining', () => {
-    const whenChainValidator = V.whenGroup(DEFAULT, V.notNull())
-      .whenGroup(parent, V.notEmpty())
-      .otherwise(V.string());
+    const whenChainValidator = V.whenGroup(DEFAULT, V.notNull()).whenGroup(parent, V.notEmpty()).otherwise(V.string());
 
     test('chain first match', () => expectGroupViolations(null, withDefault, whenChainValidator, defaultViolations.notNull()));
 
@@ -1296,6 +1294,11 @@ describe('map function', () => {
 });
 
 describe('Map', () => {
+  interface MapKeyType {
+    key1: string;
+    key2: string;
+  }
+
   test('undefined not allowed', () => expectViolations(undefined, V.mapType(V.any(), V.any()), defaultViolations.notNull()));
 
   describe('toMapType', () => {
@@ -1353,7 +1356,18 @@ describe('Map', () => {
   });
 });
 
-interface MapKeyType {
-  key1: string;
-  key2: string;
-}
+describe('json', () => {
+  const validator = V.json(V.array(V.string()));
+
+  test('undefined is invalid', () => expectViolations(undefined, validator, defaultViolations.notNull()));
+
+  test('null is invalid', () => expectViolations(null, validator, defaultViolations.notNull()));
+
+  test('JSON string array is valid', () => expectValid('["foo", "bar"]', validator, ['foo', 'bar']));
+
+  test('JSON object is invalid', () => expectViolations('{}', validator, new TypeMismatch(Path.of(), 'array', {})));
+
+  test('Invalid JSON', () => expectViolations('["foo", "bar"', validator, new TypeMismatch(Path.of(), 'JSON', '["foo", "bar"')));
+
+  test('Non-string input is invalid', () => expectViolations(123, validator, new TypeMismatch(Path.of(), 'string', 123)));
+});
