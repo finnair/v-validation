@@ -5,65 +5,49 @@ See [Conventional Commits](https://conventionalcommits.org) for commit guideline
 
 # [0.9.0](https://github.com/finnair/v-validation/compare/v0.8.0...v0.9.0) (2020-09-23)
 
-**Note:** Version bump only for package @finnair/v-validation
+### Features
 
-
-
-
+- V.json - parse and validate JSON input
+- V.anyOf - match if one or more of given validators match
 
 # [0.8.0](https://github.com/finnair/v-validation/compare/v0.7.0...v0.8.0) (2020-09-09)
 
-**Note:** Version bump only for package @finnair/v-validation
+### Bug Fixes
 
+- Fix losing context in arrow functions ([5c27b10283](https://github.com/finnair/v-validation/commit/5c27b10283e560b90a6f9ff9b4db8dcb87c99dbc))
 
-
-
+- Fix TypeScript target and pin node engine ([dd85776](https://github.com/finnair/v-validation/commit/dd85776364e3ace78cc4b4d2cdbbe73485517daf))
 
 # [0.7.0](https://github.com/finnair/v-validation/compare/v0.6.2...v0.7.0) (2020-08-26)
 
-
 ### Features
 
-* refactor "then" to "next" ([9b02d2c](https://github.com/finnair/v-validation/commit/9b02d2c6cca8f6a5e44633b6dad2df2ecec28af2))
-
+- refactor "then" to "next" ([9b02d2c](https://github.com/finnair/v-validation/commit/9b02d2c6cca8f6a5e44633b6dad2df2ecec28af2))
 
 ### BREAKING CHANGES
 
-* Validator:
-  * then -> next
-  * thenMap -> nextMap
+- Validator:
+  - then -> next
+  - thenMap -> nextMap
 
 ObjectModel & ClassModel:
-  * then -> next
-  * localThen -> localNext
+
+- then -> next
+- localThen -> localNext
 
 Signed-off-by: Samppa Saarela <samppa.saarela@iki.fi>
 
-
-
-
-
 ## [0.6.2](https://github.com/finnair/v-validation/compare/v0.6.1...v0.6.2) (2020-05-22)
-
 
 ### Bug Fixes
 
-* Update Moment.js and fix dependencies ([2e9a16d](https://github.com/finnair/v-validation/commit/2e9a16d297994a557133a853ed6556d16552c21a))
-
-
-
-
+- Update Moment.js and fix dependencies ([2e9a16d](https://github.com/finnair/v-validation/commit/2e9a16d297994a557133a853ed6556d16552c21a))
 
 ## [0.6.1](https://github.com/finnair/v-validation/compare/v0.6.0...v0.6.1) (2020-05-22)
 
-
 ### Bug Fixes
 
-* NPM ignore node_modules ([9f1264f](https://github.com/finnair/v-validation/commit/9f1264f5086e406d30f94f5a47aa3fb6956d725a))
-
-
-
-
+- NPM ignore node_modules ([9f1264f](https://github.com/finnair/v-validation/commit/9f1264f5086e406d30f94f5a47aa3fb6956d725a))
 
 # [0.6.0](https://github.com/finnair/v-validation/compare/v0.5.0...v0.6.0) (2020-05-19)
 
