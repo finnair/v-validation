@@ -1,6 +1,6 @@
 {
   "name": "@finnair/v-validation-moment",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "private": false,
   "description": "Moment validators",
   "main": "dist/index.js",
@@ -26,7 +26,7 @@
   },
   "dependencies": {
     "@finnair/path": "^0.9.0",
-    "@finnair/v-validation": "^0.9.0",
+    "@finnair/v-validation": "^0.9.1",
     "moment": "2.27.0"
   }
 }
