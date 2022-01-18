@@ -288,7 +288,7 @@ describe('objects', () => {
       expectValid(object, V.object({}), object, { ignoreUnknownProperties: true });
     });
 
-    test('log warning using warnLogger', async done => {
+    test('log warning using warnLogger', async() => {
       const object = { unknownProperty: true };
       const warnings: Violation[] = [];
       await expectValid(object, V.object({}), object, {
@@ -296,14 +296,12 @@ describe('objects', () => {
         warnLogger: (violation: Violation) => warnings.push(violation),
       });
       expect(warnings).toEqual([defaultViolations.unknownProperty(property('unknownProperty'))]);
-      done();
     });
 
-    test('explicitly denied additionalProperties are still not allowed', async done => {
+    test('explicitly denied additionalProperties are still not allowed', async() => {
       const object = { unknownProperty: true };
       const result = await V.object({ additionalProperties: false }).validate(object, { ignoreUnknownProperties: true });
       expect(result).toEqual(new ValidationResult([defaultViolations.unknownPropertyDenied(property('unknownProperty'))]));
-      done();
     });
   });
 
@@ -365,10 +363,9 @@ describe('objects', () => {
     expectViolations('string', V.object({}), defaultViolations.object(ROOT));
   });
 
-  test('parent may disallow additional properties for child models', async done => {
+  test('parent may disallow additional properties for child models', async() => {
     const validator = V.object({ extends: { additionalProperties: false }, additionalProperties: true });
     await expectViolations({ property: 'string' }, validator, defaultViolations.unknownPropertyDenied(ROOT.property('property')));
-    done();
   });
 
   test('properties', () => expectValid({ foo: 'bar' }, V.properties(V.string(), V.string())));
@@ -421,12 +418,11 @@ describe('objects', () => {
       expect(() => V.object({ properties: { property: V.string() } }).withProperty('property', V.number())).toThrow();
     });
 
-    test('cyclic data', async done => {
+    test('cyclic data', async() => {
       const first: any = { first: 'first' };
       const second: any = { first: 'second', next: first };
       first.next = second;
       expectValid(first, validator, first, { allowCycles: true });
-      done();
     });
   });
 
@@ -575,7 +571,7 @@ describe('inheritance', () => {
       defaultViolations.notNull(property('id')),
     ));
 
-  test("child's extended property validators are only run after successful parent property validation", async done => {
+  test("child's extended property validators are only run after successful parent property validation", async() => {
     const type = V.object({
       extends: {
         properties: {
@@ -588,10 +584,9 @@ describe('inheritance', () => {
     });
 
     await expectViolations({}, type, defaultViolations.notNull(property('required')));
-    done();
   });
 
-  test('property order', async done => {
+  test('property order', async() => {
     const value = (
       await multiParentChild.validate({
         id: '123',
@@ -603,7 +598,6 @@ describe('inheritance', () => {
       })
     ).getValue();
     expect(Object.keys(value)).toEqual(['id', 'name', 'anything', 'firstAdditional', 'additionalProperty', 'thirdAdditional']);
-    done();
   });
 });
 
@@ -657,27 +651,23 @@ describe('object localNext', () => {
     localNext: V.map(obj => `child:${obj.name}`),
   });
 
-  test('parent', async done => {
+  test('parent', async() => {
     expect((await parent.validate({ name: 'Darth' })).getValue()).toEqual('parent:Darth');
-    done();
   });
 
-  test('child', async done => {
+  test('child', async() => {
     expect((await child.validate({ name: 'Luke' })).getValue()).toEqual('child:Luke');
-    done();
   });
 
-  test('next applies for parent', async done => {
+  test('next applies for parent', async() => {
     expect((await parent.validate({ name: 'Darth', upper: true })).getValue()).toEqual('parent:DARTH');
-    done();
   });
 
-  test('next applies for child', async done => {
+  test('next applies for child', async() => {
     expect((await child.validate({ name: 'Luke', upper: true })).getValue()).toEqual('child:LUKE');
-    done();
   });
 
-  test('localNext is skipped on field validation error', async done => {
+  test('localNext is skipped on field validation error', async() => {
     const model = V.object({
       properties: {
         name: V.string(),
@@ -685,7 +675,6 @@ describe('object localNext', () => {
       localNext: V.map(obj => `parent:${obj.name}`),
     });
     await expectViolations({}, model, defaultViolations.notNull(property('name')));
-    done();
   });
 });
 
@@ -767,14 +756,13 @@ describe('enum', () => {
       ignoreUnknownEnumValues: true,
     }));
 
-  test('ignoreUnknownEnumValues with warning', async done => {
+  test('ignoreUnknownEnumValues with warning', async() => {
     const warnings: Violation[] = [];
     await expectValid('B', V.enum(StrEnum, 'StrEnum'), 'B', {
       ignoreUnknownEnumValues: true,
       warnLogger: (violation: Violation) => warnings.push(violation),
     });
     expect(warnings).toEqual([defaultViolations.enum('StrEnum', 'B')]);
-    done();
   });
 });
 
@@ -975,7 +963,7 @@ describe('null or undefined', () => {
 
 describe('async validation', () => {
   describe('allOf', () => {
-    test('results ordered by timeout', async done => {
+    test('results ordered by timeout', async() => {
       await expectViolations(
         '',
         V.allOf(defer(V.notEmpty(), 10), defer(V.toNumber(), 5), V.date()),
@@ -983,48 +971,40 @@ describe('async validation', () => {
         defaultViolations.number(''),
         defaultViolations.notEmpty(),
       );
-      done();
     });
 
-    test('allow conversion', async done => {
+    test('allow conversion', async() => {
       await expectValid('123', V.allOf(V.string(), V.toInteger()), 123);
-      done();
     });
 
-    test('conflicting conversions not allowed', async done => {
+    test('conflicting conversions not allowed', async() => {
       try {
         await V.allOf(defer(V.toInteger(), 3), defer(V.toObject('value'), 1)).validate('123');
         fail('expected an error');
       } catch (e) {
         // as expected
-      } finally {
-        done();
       }
     });
   });
 
   describe('oneOf', () => {
-    test('valid', async done => {
+    test('valid', async() => {
       await expectValid('abc', V.oneOf(defer(V.number()), defer(V.string())));
-      done();
     });
 
-    test('invalid', async done => {
+    test('invalid', async() => {
       await expectViolations(true, V.oneOf(defer(V.number()), defer(V.string())), defaultViolations.oneOf(0));
-      done();
     });
   });
 
   describe('next', () => {
     const validator = defer(V.string()).next(defer(V.hasValue('true')));
-    test('valid', async done => {
+    test('valid', async() => {
       await expectValid('true', validator);
-      done();
     });
 
-    test('invalid', async done => {
+    test('invalid', async() => {
       await expectViolations(true, validator, defaultViolations.string(true));
-      done();
     });
   });
 });
@@ -1207,9 +1187,8 @@ describe('if', () => {
 });
 
 describe('ignore', () => {
-  test('converts any value to undefined', async done => {
+  test('converts any value to undefined', async() => {
     expectUndefined('any value', V.ignore());
-    done();
   });
 });
 
@@ -1262,7 +1241,7 @@ test('V.schema', () =>
   ));
 
 describe('map function', () => {
-  test('exeption as violation', async done => {
+  test('exeption as violation', async() => {
     const error = new Error('Error message');
     await expectViolations(
       'anything',
@@ -1271,25 +1250,22 @@ describe('map function', () => {
       }),
       new ErrorViolation(ROOT, error),
     );
-    done();
   });
 
-  test('promise throwing a ValidationError', async done => {
+  test('promise throwing a ValidationError', async() => {
     await expectViolations(
       'abc',
       V.map(async (value: any) => (await defer(V.number()).validate(value)).getValue()),
       defaultViolations.number('abc'),
     );
-    done();
   });
 
-  test('promise returning a Violation', async done => {
+  test('promise returning a Violation', async() => {
     await expectViolations(
       'any value',
       V.map(_ => new Promise(resolve => resolve(defaultViolations.notNull()))),
       defaultViolations.notNull(),
     );
-    done();
   });
 });
 
