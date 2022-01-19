@@ -43,7 +43,7 @@ describe('schema', () => {
       },
     }));
 
-    test('examples', async done => {
+    test('examples', async () => {
       // SchemaValidator is a Validator like any other
       expect((await schema.validate({ type: 'ObjectNormalizer', property: 'value' })).isSuccess()).toBe(true);
       // true
@@ -67,7 +67,6 @@ describe('schema', () => {
       // true
       expect((await schema.raw('Object').validate({ type: 'ObjectNormalizer' })).isSuccess()).toBe(false);
       // false
-      done();
     });
 
     test('null value is not allowed', () => expectViolations(null, schema, defaultViolations.notNull(ROOT)));
@@ -127,7 +126,7 @@ describe('schema', () => {
     test('new proxies cannot be created after constructor is finished', () =>
       expect(() => new SchemaValidator(schema => ({ discriminator: 'type', models: {} })).of('NewModel')).toThrow());
 
-    test('property order', async done => {
+    test('property order', async () => {
       const value = (
         await schema.validate({
           property: 'property',
@@ -141,7 +140,6 @@ describe('schema', () => {
       ).getValue();
       expect(Object.keys(value)).toEqual(['type', 'extends', 'properties', 'property']);
       expect(Object.keys(value.properties)).toEqual(['first', 'second']);
-      done();
     });
   });
 
@@ -186,7 +184,7 @@ describe('schema', () => {
         new SchemaValidator(schema => ({ discriminator: 'type', models: { BadType: { properties: { illegalReference: schema.of('IllagalReference') } } } })),
     ).toThrow());
 
-  test("discriminator doesn't overwrite existing ownProperty", async done => {
+  test("discriminator doesn't overwrite existing ownProperty", async () => {
     const schema = new SchemaValidator(schema => ({
       discriminator: 'type',
       models: {
@@ -199,7 +197,6 @@ describe('schema', () => {
     }));
     await expectValid({ type: 'Foo' }, schema.raw('InvalidType'));
     await expectViolations({ type: 'InvalidType' }, schema, new HasValueViolation(property('type'), 'Foo', 'InvalidType'));
-    done();
   });
 });
 
@@ -250,9 +247,8 @@ describe('ClassModel.localNext', () => {
     },
   }));
 
-  test('localNext is called', async done => {
+  test('localNext is called', async () => {
     expect((await schema.validate({ name: 'localNext' })).getValue()).toEqual('localNext');
-    done();
   });
 });
 
@@ -274,7 +270,7 @@ describe('Recursive object', () => {
 
   test('valid LinkedList', () => expectValid({ name: 'first', head: 1, tail: { name: 'second', head: 2 } }, schema));
 
-  test('cyclic data allowed', async done => {
+  test('cyclic data allowed', async () => {
     const first: any = { name: 'first' };
     const second: any = { name: 'second', head: first, tail: first };
     first.head = second;
@@ -284,10 +280,9 @@ describe('Recursive object', () => {
     expect(result.head).not.toBe(second);
     expect(result.head).toBe(result.tail);
     expect(result.head.tail).toBe(result);
-    done();
   });
 
-  test('cyclic data not allowed by default', async done => {
+  test('cyclic data not allowed by default', async () => {
     const first: any = { name: 'first' };
     const second: any = { name: 'second', head: first, tail: first };
     first.head = second;
@@ -299,7 +294,6 @@ describe('Recursive object', () => {
       defaultViolations.cycle(property('head').property('head')),
       defaultViolations.cycle(property('head').property('tail')),
     );
-    done();
   });
 });
 
@@ -312,7 +306,7 @@ describe('Recursive array', () => {
     },
   }));
 
-  test('nested recursive array is allowed', async done => {
+  test('nested recursive array is allowed', async () => {
     const array: any[] = [];
     array[0] = array;
     array[1] = array;
@@ -321,6 +315,5 @@ describe('Recursive array', () => {
     expect(result).not.toBe(array);
     expect(result[0]).toBe(result);
     expect(result[1]).toBe(result);
-    done();
   });
 });
