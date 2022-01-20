@@ -17,3 +17,4 @@ npm config set access public
 npm login
 npx lerna version ${1:-minor} --conventional-commits --create-release github
 npx lerna publish from-package
+echo 'Check/update CHANGELOG.md files and draft a Github Release manually'
