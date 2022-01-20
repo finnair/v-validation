@@ -41,6 +41,8 @@ yarn clean
 
 ## Publishing
 
+Make sure that git remote origin points to `git@github.com:finnair/v-validation.git`.
+
 Publishing uses [@lerna/version](https://github.com/lerna/lerna/tree/master/commands/version) and [@lerna/publish](https://github.com/lerna/lerna/tree/master/commands/publish).
 
 Publishing requires npm credentials with access to `finnair` organization and `GH_TOKEN` environment variable, i.e. your GitHub authentication token for `public_repo` scope (under Settings > Developer settings > Personal access tokens).
@@ -48,3 +50,5 @@ Publishing requires npm credentials with access to `finnair` organization and `G
 ```shell
 ./publish.sh [patch|minor|major]
 ```
+
+After publishing to NPM, check/update CHANGELOG.md files and draft a Github Release manually.
