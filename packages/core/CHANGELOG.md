@@ -5,22 +5,21 @@ See [Conventional Commits](https://conventionalcommits.org) for commit guideline
 
 ## [1.0.1](https://github.com/finnair/v-validation/compare/v0.9.1...v1.0.1) (2022-01-20)
 
-**Note:** Version bump only for package @finnair/v-validation
+### Features
 
+- Add support for Node v14 and v16
+- Update Jest and Lerna
+- Update other vulnerable packages
 
+### BREAKING CHANGES
 
-
+- Drop support for Node v10
 
 ## [0.9.1](https://github.com/finnair/v-validation/compare/v0.9.0...v0.9.1) (2020-12-07)
 
-
 ### Bug Fixes
 
-* Bumped deep-equal from 2.0.3 to 2.0.5 ([#54](https://github.com/finnair/v-validation/issues/54)) ([159fd62](https://github.com/finnair/v-validation/commit/159fd62fd3efc09d11903fcaa1f01e7123f56f35))
-
-
-
-
+- Bumped deep-equal from 2.0.3 to 2.0.5 ([#54](https://github.com/finnair/v-validation/issues/54)) ([159fd62](https://github.com/finnair/v-validation/commit/159fd62fd3efc09d11903fcaa1f01e7123f56f35))
 
 # [0.9.0](https://github.com/finnair/v-validation/compare/v0.8.0...v0.9.0) (2020-09-23)
 
