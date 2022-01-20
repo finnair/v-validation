@@ -5,11 +5,11 @@
 
 ## Requirements
 
-- node (tested with 10.x and 12.x)
-- typescript (tested with 3.7.x)
-- yarn (tested with 1.17.3)
-- lerna (tested with 3.20.2)
-- jest (tested with 25.1.0)
+- node (tested with 12.x, 14x, and 16.x)
+- typescript (tested with 4.5.x)
+- yarn (tested with 1.22.10)
+- lerna (tested with 4.0.0)
+- jest (tested with 27.4.7)
 
 ## Commands
 
