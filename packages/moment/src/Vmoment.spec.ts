@@ -105,6 +105,10 @@ describe('moment', () => {
 
     test('array constructor', () => expect(dateTimeMillisUtcMoment([2019, 0, 1, 1, 1, 1, 123]).toJSON()).toEqual('2019-01-01T01:01:01.123Z'));
 
+    test('millis required', () => expectViolations('2019-03-07T12:13:14Z', Vmoment.dateTimeMillis(), defaultViolations.date('2019-03-07T12:13:14Z', Path.ROOT, 'DateTimeMillis')));
+
+    test('two digit millis is not allowed', () => expectViolations('2019-03-07T12:13:14.1Z', Vmoment.dateTimeMillis(), defaultViolations.date('2019-03-07T12:13:14.1Z', Path.ROOT, 'DateTimeMillis')));
+
     test('convert dateTimeMillisUtcMoment to local time', () => {
       const d: moment.Moment = dateTimeMillisUtcMoment('2019-05-21T12:13:14.123Z');
       expect(
