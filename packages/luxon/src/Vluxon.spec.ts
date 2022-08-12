@@ -65,6 +65,13 @@ describe('Vluxon', () => {
       expectValid(now, Vluxon.date(), new DateLuxon(now))
     });
 
+    test('fromISO', () => {
+      const value = '2019-03-07T00:00:00Z'
+      const wrapper = DateLuxon.fromISO(value);
+      expect(wrapper).toBeInstanceOf(DateLuxon)
+      expect(wrapper).toEqual(new DateLuxon(DateTime.fromISO(value)))
+    })
+
     test('wrap', () => {
       const luxon = new DateLuxon(DateTime.utc(2022, 1, 15, 1, 2, 3));
       const result = luxon.wrap(dt => dt.plus(Duration.fromObject({ month: 1 })));
@@ -111,6 +118,13 @@ describe('Vluxon', () => {
       const now = DateTime.now();
       expectValid(now, Vluxon.dateUtc(), new DateUtcLuxon(now))
     });
+
+    test('fromISO', () => {
+      const value = '2019-03-07T00:00:00Z'
+      const wrapper = DateUtcLuxon.fromISO(value);
+      expect(wrapper).toBeInstanceOf(DateUtcLuxon)
+      expect(wrapper).toEqual(new DateUtcLuxon(DateTime.fromISO(value)))
+    })
 
     test('wrap', () => {
       const luxon = new DateUtcLuxon(DateTime.utc(2022, 1, 15, 1, 2, 3));
@@ -176,6 +190,13 @@ describe('Vluxon', () => {
       const now = DateTime.now();
       expectValid(now, Vluxon.dateTime(), new DateTimeLuxon(now))
     });
+
+    test('fromISO', () => {
+      const value = '2019-03-07T00:00:00Z'
+      const wrapper = DateTimeLuxon.fromISO(value);
+      expect(wrapper).toBeInstanceOf(DateTimeLuxon)
+      expect(wrapper).toEqual(new DateTimeLuxon(DateTime.fromISO(value)))
+    })
 
     test('wrap', () => {
       const luxon = new DateTimeLuxon(DateTime.utc(2022, 1, 15, 12, 30, 0));
@@ -251,6 +272,13 @@ describe('Vluxon', () => {
       const now = DateTime.now();
       expectValid(now, Vluxon.dateTimeUtc(), new DateTimeUtcLuxon(now))
     });
+
+    test('fromISO', () => {
+      const value = '2019-03-07T00:00:00Z'
+      const wrapper = DateTimeUtcLuxon.fromISO(value);
+      expect(wrapper).toBeInstanceOf(DateTimeUtcLuxon)
+      expect(wrapper).toEqual(new DateTimeUtcLuxon(DateTime.fromISO(value)))
+    })
 
     test('apply', () => {
       const luxon = new DateTimeUtcLuxon(DateTime.utc(2022, 1, 15, 12, 30, 0));
@@ -330,6 +358,13 @@ describe('Vluxon', () => {
       expectValid(now, Vluxon.dateTimeMillis(), new DateTimeMillisLuxon(now))
     });
 
+    test('fromISO', () => {
+      const value = '2019-03-07T00:00:00Z'
+      const wrapper = DateTimeMillisLuxon.fromISO(value);
+      expect(wrapper).toBeInstanceOf(DateTimeMillisLuxon)
+      expect(wrapper).toEqual(new DateTimeMillisLuxon(DateTime.fromISO(value)))
+    })
+
     test('wrap', () => {
       const luxon = new DateTimeMillisLuxon(DateTime.utc(2022, 1, 15, 12, 30, 0, 123));
       const result = luxon.wrap(dt => dt.plus(Duration.fromObject({ month: 1 })));
@@ -405,6 +440,13 @@ describe('Vluxon', () => {
       expectValid(now, Vluxon.dateTimeMillisUtc(), new DateTimeMillisUtcLuxon(now))
     });
 
+    test('fromISO', () => {
+      const value = '2019-03-07T00:00:00Z'
+      const wrapper = DateTimeMillisUtcLuxon.fromISO(value);
+      expect(wrapper).toBeInstanceOf(DateTimeMillisUtcLuxon)
+      expect(wrapper).toEqual(new DateTimeMillisUtcLuxon(DateTime.fromISO(value)))
+    })
+
     test('apply', () => {
       const luxon = new DateTimeMillisUtcLuxon(DateTime.utc(2022, 1, 15, 12, 30, 0, 123));
       expect(luxon.apply(dt => dt.year)).toEqual(2022)
@@ -462,6 +504,13 @@ describe('Vluxon', () => {
     test('direct constructor', () => expect(new TimeLuxon(DateTime.local(2019, 1, 1, 1, 2, 3)).toJSON()).toEqual('01:02:03'));
 
     test('local time of date', () => expect(new TimeLuxon(DateTime.local(2019, 1, 1, 12, 13, 14)).dateTime).toEqual(DateTime.fromISO('2019-01-01T12:13:14+02')));
+
+    test('fromISO', () => {
+      const value = '2019-03-07T00:00:00Z'
+      const wrapper = TimeLuxon.fromISO(value);
+      expect(wrapper).toBeInstanceOf(TimeLuxon)
+      expect(wrapper).toEqual(new TimeLuxon(DateTime.fromISO(value)))
+    })
 
     test('wrap', () => {
       const luxon = new TimeLuxon(DateTime.utc(2022, 1, 15, 1, 2, 3));
