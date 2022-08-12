@@ -27,9 +27,9 @@ export class DurationValidator extends Validator {
       return ctx.failure(defaultViolations.notNull(path), value);
     }
     if ((isString(value) && durationPattern.test(value)) || moment.isDuration(value)) {
-      value = moment.duration(value);
-      if (value.isValid()) {
-        return ctx.success(value);
+      const convertedValue = moment.duration(value);
+      if (convertedValue.isValid()) {
+        return ctx.success(convertedValue);
       }
     }
     return ctx.failure(new TypeMismatch(path, 'Duration', value), value);
