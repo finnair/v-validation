@@ -49,6 +49,10 @@ export class DateLuxon extends LuxonDateTime {
     super(input)
   }
 
+  public static fromISO(value: string) {
+    return new DateLuxon(DateTime.fromISO(value))
+  }
+
   protected normalize(dateTime: DateTime): DateTime {
     return dateTime.startOf('day')
   }
@@ -66,6 +70,10 @@ export class DateUtcLuxon extends LuxonDateTime {
 
   constructor(input: LuxonDateTimeInput) {
     super(input)
+  }
+
+  public static fromISO(value: string) {
+    return new DateUtcLuxon(DateTime.fromISO(value))
   }
 
   protected normalize(dateTime: DateTime): DateTime {
@@ -91,6 +99,10 @@ export class DateTimeLuxon extends LuxonDateTime {
     super(input)
   }
 
+  public static fromISO(value: string) {
+    return new DateTimeLuxon(DateTime.fromISO(value))
+  }
+
   wrap(fn: (dateTime: DateTime) => DateTime): DateTimeLuxon {
     return new DateTimeLuxon(fn(this.dateTime))
   }
@@ -107,6 +119,10 @@ export class DateTimeUtcLuxon extends LuxonDateTime {
 
   constructor(input: LuxonDateTimeInput) {
     super(input)
+  }
+
+  public static fromISO(value: string) {
+    return new DateTimeUtcLuxon(DateTime.fromISO(value))
   }
 
   protected normalize(dateTime: DateTime): DateTime {
@@ -132,6 +148,10 @@ export class DateTimeMillisLuxon extends LuxonDateTime {
     super(input)
   }
 
+  public static fromISO(value: string) {
+    return new DateTimeMillisLuxon(DateTime.fromISO(value))
+  }
+
   wrap(fn: (dateTime: DateTime) => DateTime): DateTimeMillisLuxon {
     return new DateTimeMillisLuxon(fn(this.dateTime))
   }
@@ -148,6 +168,10 @@ export class DateTimeMillisUtcLuxon extends LuxonDateTime {
 
   constructor(input: LuxonDateTimeInput) {
     super(input)
+  }
+
+  public static fromISO(value: string) {
+    return new DateTimeMillisUtcLuxon(DateTime.fromISO(value))
   }
 
   protected normalize(dateTime: DateTime): DateTime {
@@ -169,6 +193,10 @@ export class TimeLuxon extends LuxonDateTime {
   
   constructor(input: LuxonDateTimeInput) {
     super(input)
+  }
+
+  public static fromISO(value: string) {
+    return new TimeLuxon(DateTime.fromISO(value))
   }
 
   wrap(fn: (dateTime: DateTime) => DateTime): TimeLuxon {
