@@ -1,6 +1,6 @@
 {
   "name": "@finnair/v-validation-luxon",
-  "version": "1.1.0-alpha.1",
+  "version": "1.1.0-alpha.2",
   "private": false,
   "description": "Luxon validators",
   "main": "dist/index.js",
