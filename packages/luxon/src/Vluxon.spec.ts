@@ -77,6 +77,13 @@ describe('Vluxon', () => {
       expect(wrapper).toBeInstanceOf(type);
       expect(wrapper).toEqual(new type(DateTime.fromMillis(value)));
     })
+
+
+    test(`${type.name}.now()`, () => {
+      const wrapper = type.now();
+      expect(wrapper).toBeInstanceOf(type);
+    })
+  });
   });
 
   describe('date', () => {
