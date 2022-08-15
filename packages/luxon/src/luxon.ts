@@ -47,6 +47,10 @@ export class DateLuxon extends LuxonDateTime {
     super(input);
   }
 
+  public static now() {
+    return new DateLuxon(DateTime.now());
+  }
+
   public static fromISO(value: string, options?: Object) {
     return new DateLuxon(DateTime.fromISO(value, options));
   }
@@ -75,6 +79,10 @@ export class DateLuxon extends LuxonDateTime {
 export class DateUtcLuxon extends LuxonDateTime {
   constructor(input: LuxonDateTimeInput) {
     super(input);
+  }
+
+  public static now() {
+    return new DateUtcLuxon(DateTime.now());
   }
 
   public static fromISO(value: string, options?: Object) {
@@ -111,6 +119,10 @@ export class DateTimeLuxon extends LuxonDateTime {
     super(input);
   }
 
+  public static now() {
+    return new DateTimeLuxon(DateTime.now());
+  }
+
   public static fromISO(value: string, options?: Object) {
     return new DateTimeLuxon(DateTime.fromISO(value, options));
   }
@@ -138,6 +150,10 @@ export class DateTimeLuxon extends LuxonDateTime {
 export class DateTimeUtcLuxon extends LuxonDateTime {
   constructor(input: LuxonDateTimeInput) {
     super(input);
+  }
+
+  public static now() {
+    return new DateTimeUtcLuxon(DateTime.now());
   }
 
   public static fromISO(value: string) {
@@ -174,6 +190,10 @@ export class DateTimeMillisLuxon extends LuxonDateTime {
     super(input);
   }
 
+  public static now() {
+    return new DateTimeMillisLuxon(DateTime.now());
+  }
+
   public static fromISO(value: string) {
     return new DateTimeMillisLuxon(DateTime.fromISO(value));
   }
@@ -201,6 +221,10 @@ export class DateTimeMillisLuxon extends LuxonDateTime {
 export class DateTimeMillisUtcLuxon extends LuxonDateTime {
   constructor(input: LuxonDateTimeInput) {
     super(input);
+  }
+
+  public static now() {
+    return new DateTimeMillisUtcLuxon(DateTime.now());
   }
 
   public static fromISO(value: string, options?: Object) {
@@ -233,6 +257,10 @@ export class TimeLuxon extends LuxonDateTime {
 
   constructor(input: LuxonDateTimeInput) {
     super(input);
+  }
+
+  public static now() {
+    return new TimeLuxon(DateTime.now());
   }
 
   public static fromISO(value: string, options?: Object) {
