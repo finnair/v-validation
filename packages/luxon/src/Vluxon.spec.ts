@@ -84,6 +84,14 @@ describe('Vluxon', () => {
       expect(wrapper).toBeInstanceOf(type);
     })
   });
+
+  describe('comparisons', () => {
+    const a = DateTimeUtcLuxon.now();
+    const b: DateTimeUtcLuxon = a.wrap(dt => dt.plus({ days: 1 }));
+    test('<', () => expect(a < b).toBe(true));
+    test('<=', () => expect(a <= a).toBe(true));
+    test('>', () => expect(b > a).toBe(true));
+    test('>=', () => expect(b >= b).toBe(true));
   });
 
   describe('date', () => {
