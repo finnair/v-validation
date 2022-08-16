@@ -1,4 +1,4 @@
-import { DateTime } from 'luxon';
+import { DateTime, DateTimeOptions } from 'luxon';
 
 export type LuxonDateTimeInput = DateTime | LuxonDateTime;
 
@@ -16,9 +16,7 @@ export abstract class LuxonDateTime {
     }
   }
 
-  protected normalize(dateTime: DateTime) {
-    return dateTime;
-  }
+  protected abstract normalize(dateTime: DateTime): DateTime;
 
   apply<R>(fn: (dateTime: DateTime) => R): R {
     return fn(this.dateTime);
@@ -26,6 +24,10 @@ export abstract class LuxonDateTime {
 
   valueOf(): number {
     return this.dateTime.valueOf();
+  }
+
+  as<T extends LuxonDateTime>(type: { new(...args: any[]): T }): T {
+    return new type(this.dateTime);
   }
 
   equals(other: any) {
@@ -40,7 +42,7 @@ export abstract class LuxonDateTime {
   abstract toJSON(): string;
 }
 
-export class DateLuxon extends LuxonDateTime {
+export class LocalDateLuxon extends LuxonDateTime {
   public static readonly format = 'yyyy-MM-dd';
 
   constructor(input: LuxonDateTimeInput) {
@@ -48,65 +50,67 @@ export class DateLuxon extends LuxonDateTime {
   }
 
   public static now() {
-    return new DateLuxon(DateTime.now());
+    return new LocalDateLuxon(DateTime.now());
   }
 
-  public static fromISO(value: string, options?: Object) {
-    return new DateLuxon(DateTime.fromISO(value, options));
+  public static fromISO(value: string, options?: DateTimeOptions) {
+    return new LocalDateLuxon(DateTime.fromISO(value, options));
   }
 
-  public static fromJSDate(date: Date, options?: Object) {
-    return new DateLuxon(DateTime.fromJSDate(date, options));
+  public static fromJSDate(date: Date, options?: DateTimeOptions) {
+    return new LocalDateLuxon(DateTime.fromJSDate(date, options));
   }
 
-  public static fromMillis(milliseconds: number, options?: Object) {
-    return new DateLuxon(DateTime.fromMillis(milliseconds, options));
+  public static fromMillis(milliseconds: number, options?: DateTimeOptions) {
+    return new LocalDateLuxon(DateTime.fromMillis(milliseconds, options));
   }
 
   protected normalize(dateTime: DateTime): DateTime {
-    return dateTime.startOf('day');
+    return DateTime.utc(dateTime.year, dateTime.month, dateTime.day);
   }
 
-  wrap(fn: (dateTime: DateTime) => DateTime): DateLuxon {
-    return new DateLuxon(fn(this.dateTime));
+  wrap(fn: (dateTime: DateTime) => DateTime): LocalDateLuxon {
+    return new LocalDateLuxon(fn(this.dateTime));
   }
 
   toJSON() {
-    return this.dateTime.toFormat(DateLuxon.format);
+    return this.dateTime.toFormat(LocalDateLuxon.format);
   }
 }
 
-export class DateUtcLuxon extends LuxonDateTime {
+export class LocalTimeLuxon extends LuxonDateTime {
+  public static readonly format = 'HH:mm:ss';
+
   constructor(input: LuxonDateTimeInput) {
     super(input);
   }
 
   public static now() {
-    return new DateUtcLuxon(DateTime.now());
+    return new LocalTimeLuxon(DateTime.now());
   }
 
-  public static fromISO(value: string, options?: Object) {
-    return new DateUtcLuxon(DateTime.fromISO(value, options));
+  public static fromISO(value: string, options?: DateTimeOptions) {
+    return new LocalTimeLuxon(DateTime.fromISO(value, options));
   }
 
-  public static fromJSDate(date: Date, options?: Object) {
-    return new DateUtcLuxon(DateTime.fromJSDate(date, options));
+  public static fromJSDate(date: Date, options?: DateTimeOptions) {
+    return new LocalTimeLuxon(DateTime.fromJSDate(date, options));
   }
 
-  public static fromMillis(milliseconds: number, options?: Object) {
-    return new DateUtcLuxon(DateTime.fromMillis(milliseconds, options));
+  public static fromMillis(milliseconds: number, options?: DateTimeOptions) {
+    return new LocalTimeLuxon(DateTime.fromMillis(milliseconds, options));
   }
 
   protected normalize(dateTime: DateTime): DateTime {
-    return DateTime.utc(dateTime.year, dateTime.month, dateTime.day, 0, 0, 0);
+    return DateTime.utc(1970, 1, 1, dateTime.hour, dateTime.minute, dateTime.second);
   }
 
-  wrap(fn: (dateTime: DateTime) => DateTime): DateUtcLuxon {
-    return new DateUtcLuxon(fn(this.dateTime));
+  wrap(fn: (dateTime: DateTime) => DateTime): LocalTimeLuxon {
+    return new LocalTimeLuxon(fn(this.dateTime));
   }
 
   toJSON() {
-    return this.dateTime.toFormat(DateLuxon.format);
+    return this.dateTime.toFormat(LocalTimeLuxon.format);
   }
 }
 
@@ -123,16 +127,20 @@ export class DateTimeLuxon extends LuxonDateTime {
     return new DateTimeLuxon(DateTime.now());
   }
 
-  public static fromISO(value: string, options?: Object) {
+  public static fromISO(value: string, options?: DateTimeOptions) {
     return new DateTimeLuxon(DateTime.fromISO(value, options));
   }
 
-  public static fromJSDate(date: Date, options?: Object) {
+  public static fromJSDate(date: Date, options?: DateTimeOptions) {
     return new DateTimeLuxon(DateTime.fromJSDate(date, options));
   }
 
-  public static fromMillis(milliseconds: number, options?: Object) {
+  public static fromMillis(milliseconds: number, options?: DateTimeOptions) {
     return new DateTimeLuxon(DateTime.fromMillis(milliseconds, options));
+  }
+
+  protected normalize(dateTime: DateTime): DateTime {
+    return dateTime.startOf('second');
   }
 
   wrap(fn: (dateTime: DateTime) => DateTime): DateTimeLuxon {
@@ -160,16 +168,16 @@ export class DateTimeUtcLuxon extends LuxonDateTime {
     return new DateTimeUtcLuxon(DateTime.fromISO(value));
   }
 
-  public static fromJSDate(date: Date, options?: Object) {
+  public static fromJSDate(date: Date, options?: DateTimeOptions) {
     return new DateTimeUtcLuxon(DateTime.fromJSDate(date, options));
   }
 
-  public static fromMillis(milliseconds: number, options?: Object) {
+  public static fromMillis(milliseconds: number, options?: DateTimeOptions) {
     return new DateTimeUtcLuxon(DateTime.fromMillis(milliseconds, options));
   }
 
   protected normalize(dateTime: DateTime): DateTime {
-    return dateTime.toUTC();
+    return dateTime.toUTC().startOf('second');
   }
 
   wrap(fn: (dateTime: DateTime) => DateTime): DateTimeUtcLuxon {
@@ -198,12 +206,16 @@ export class DateTimeMillisLuxon extends LuxonDateTime {
     return new DateTimeMillisLuxon(DateTime.fromISO(value));
   }
 
-  public static fromJSDate(date: Date, options?: Object) {
+  public static fromJSDate(date: Date, options?: DateTimeOptions) {
     return new DateTimeMillisLuxon(DateTime.fromJSDate(date, options));
   }
 
-  public static fromMillis(milliseconds: number, options?: Object) {
+  public static fromMillis(milliseconds: number, options?: DateTimeOptions) {
     return new DateTimeMillisLuxon(DateTime.fromMillis(milliseconds, options));
+  }
+
+  protected normalize(dateTime: DateTime): DateTime {
+    return dateTime;
   }
 
   wrap(fn: (dateTime: DateTime) => DateTime): DateTimeMillisLuxon {
@@ -227,15 +239,15 @@ export class DateTimeMillisUtcLuxon extends LuxonDateTime {
     return new DateTimeMillisUtcLuxon(DateTime.now());
   }
 
-  public static fromISO(value: string, options?: Object) {
+  public static fromISO(value: string, options?: DateTimeOptions) {
     return new DateTimeMillisUtcLuxon(DateTime.fromISO(value, options));
   }
 
-  public static fromJSDate(date: Date, options?: Object) {
+  public static fromJSDate(date: Date, options?: DateTimeOptions) {
     return new DateTimeMillisUtcLuxon(DateTime.fromJSDate(date, options));
   }
 
-  public static fromMillis(milliseconds: number, options?: Object) {
+  public static fromMillis(milliseconds: number, options?: DateTimeOptions) {
     return new DateTimeMillisUtcLuxon(DateTime.fromMillis(milliseconds, options));
   }
 
@@ -249,37 +261,5 @@ export class DateTimeMillisUtcLuxon extends LuxonDateTime {
 
   toJSON() {
     return this.dateTime.toFormat(DateTimeMillisLuxon.format) + 'Z';
-  }
-}
-
-export class TimeLuxon extends LuxonDateTime {
-  public static readonly format = 'HH:mm:ss';
-
-  constructor(input: LuxonDateTimeInput) {
-    super(input);
-  }
-
-  public static now() {
-    return new TimeLuxon(DateTime.now());
-  }
-
-  public static fromISO(value: string, options?: Object) {
-    return new TimeLuxon(DateTime.fromISO(value, options));
-  }
-
-  public static fromJSDate(date: Date, options?: Object) {
-    return new TimeLuxon(DateTime.fromJSDate(date, options));
-  }
-
-  public static fromMillis(milliseconds: number, options?: Object) {
-    return new TimeLuxon(DateTime.fromMillis(milliseconds, options));
-  }
-
-  wrap(fn: (dateTime: DateTime) => DateTime): TimeLuxon {
-    return new TimeLuxon(fn(this.dateTime));
-  }
-
-  toJSON() {
-    return this.dateTime.toFormat(TimeLuxon.format);
   }
 }
