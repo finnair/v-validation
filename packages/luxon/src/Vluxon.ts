@@ -1,7 +1,7 @@
 import { ValidationContext, isNullOrUndefined, defaultViolations, isString, V, Validator, ValidationResult, TypeMismatch } from '@finnair/v-validation';
 import { Path } from '@finnair/path';
-import { DateTime, Duration } from 'luxon';
-import { DateLuxon, DateTimeLuxon, DateTimeMillisLuxon, DateTimeMillisUtcLuxon, DateTimeUtcLuxon, DateUtcLuxon, LuxonDateTime, TimeLuxon } from './luxon';
+import { DateTime, Duration, FixedOffsetZone, Zone } from 'luxon';
+import { LocalDateLuxon, DateTimeLuxon, DateTimeMillisLuxon, DateTimeMillisUtcLuxon, DateTimeUtcLuxon, LuxonDateTime, LocalTimeLuxon } from './luxon';
 
 export type LuxonInput = string | DateTime | LuxonDateTime
 
@@ -11,10 +11,11 @@ export interface ValidateLuxonParams {
   ctx: ValidationContext;
   type: string;
   proto: any;
-  pattern: RegExp
+  pattern: RegExp;
+  defaultZone?: Zone;
 }
 
-export function validateLuxon({value, path, ctx, type, proto, pattern}: ValidateLuxonParams) {
+export function validateLuxon({value, path, ctx, type, proto, pattern, defaultZone}: ValidateLuxonParams) {
   if (isNullOrUndefined(value)) {
     return ctx.failure(defaultViolations.notNull(path), value);
   }
@@ -28,7 +29,7 @@ export function validateLuxon({value, path, ctx, type, proto, pattern}: Validate
   }
   else if (isString(value)) {
     if (pattern.test(value)) {
-      const dateTime = DateTime.fromISO(value, {setZone: true});
+      const dateTime = DateTime.fromISO(value, {setZone: true, zone: defaultZone });
       if (dateTime.isValid) {
         return ctx.success(new proto(dateTime));
       }
@@ -39,25 +40,29 @@ export function validateLuxon({value, path, ctx, type, proto, pattern}: Validate
 
 const datePattern = /^\d{4}-\d{2}-\d{2}$/
 
-async function dateValidator(value: any, path: Path, ctx: ValidationContext) {
+async function localDateValidator(value: any, path: Path, ctx: ValidationContext) {
   return validateLuxon({
     value, 
     path, 
     ctx, 
     type: 'Date', 
-    proto: DateLuxon, 
-    pattern: datePattern
+    proto: LocalDateLuxon, 
+    pattern: datePattern,
+    defaultZone: FixedOffsetZone.utcInstance,
   });
 }
 
-async function dateUtcValidator(value: any, path: Path, ctx: ValidationContext) {
+const timePattern = /^\d{2}:\d{2}:\d{2}$/
+
+async function localTimeValidator(value: any, path: Path, ctx: ValidationContext) {
   return validateLuxon({
     value, 
     path, 
     ctx, 
-    type: 'Date', 
-    proto: DateUtcLuxon, 
-    pattern: datePattern
+    type: 'Time', 
+    proto: LocalTimeLuxon, 
+    pattern: timePattern,
+    defaultZone: FixedOffsetZone.utcInstance,
   });
 }
 
@@ -70,7 +75,7 @@ async function dateTimeValidator(value: any, path: Path, ctx: ValidationContext)
     ctx, 
     type: 'DateTime', 
     proto: DateTimeLuxon, 
-    pattern: dateTimePattern
+    pattern: dateTimePattern,
   });
 }
 
@@ -109,19 +114,6 @@ async function dateTimeMillisUtcValidator(value: any, path: Path, ctx: Validatio
   });
 }
 
-const timePattern = /^\d{2}:\d{2}:\d{2}$/
-
-async function timeValidator(value: any, path: Path, ctx: ValidationContext) {
-  return validateLuxon({
-    value, 
-    path, 
-    ctx, 
-    type: 'Time', 
-    proto: TimeLuxon, 
-    pattern: timePattern
-  });
-}
-
 const durationPattern = /^P(?!$)(\d+(?:\.\d+)?Y)?(\d+(?:\.\d+)?M)?(\d+(?:\.\d+)?W)?(\d+(?:\.\d+)?D)?(T(?=\d)(\d+(?:\.\d+)?H)?(\d+(?:\.\d+)?M)?(\d+(?:\.\d+)?S)?)?$/;
 
 export class DurationValidator extends Validator {
@@ -142,12 +134,11 @@ export class DurationValidator extends Validator {
   }
 }
 export const Vluxon = {
-  date: () => V.fn(dateValidator),
-  dateUtc: () => V.fn(dateUtcValidator),
+  localDate: () => V.fn(localDateValidator),
+  localTime: () => V.fn(localTimeValidator),
   dateTime: () => V.fn(dateTimeValidator),
   dateTimeUtc: () => V.fn(dateTimeUtcValidator),
   dateTimeMillis: () => V.fn(dateTimeMillisValidator),
   dateTimeMillisUtc: () => V.fn(dateTimeMillisUtcValidator),
-  time: () => V.fn(timeValidator),
   duration: () => new DurationValidator(),
 };
