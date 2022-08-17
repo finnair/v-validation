@@ -27,6 +27,9 @@ export abstract class LuxonDateTime {
   }
 
   as<T extends LuxonDateTime>(type: { new(...args: any[]): T }): T {
+    if (this instanceof type) {
+      return this;
+    }
     return new type(this.dateTime);
   }
 
