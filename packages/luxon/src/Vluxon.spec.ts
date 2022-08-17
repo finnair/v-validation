@@ -123,7 +123,12 @@ describe('Vluxon', () => {
       const converted = dateTimeMillis.as(DateTimeUtcLuxon);
       expect(converted).toBeInstanceOf(DateTimeUtcLuxon);
       expect(converted).toEqual(dateTime)
-    })
+    });
+
+    test("returns this in case it's of correct type", () => {
+      const d = DateTimeMillisUtcLuxon.fromMillis(1660563253490);
+      expect(d.as(DateTimeMillisUtcLuxon)).toBe(d);
+    });
   });
 
   describe('localDate', () => {
