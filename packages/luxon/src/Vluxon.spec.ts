@@ -4,6 +4,8 @@ import { LocalDateLuxon, DateTimeLuxon, DateTimeMillisLuxon, DateTimeMillisUtcLu
 import { DateTime, Duration, FixedOffsetZone, IANAZone, Settings } from 'luxon';
 import { Path } from '@finnair/path';
 
+const itif = (condition: boolean) => condition ? it : it.skip;
+
 async function expectViolations(value: any, validator: Validator, ...violations: Violation[]) {
   const result = await validator.validate(value);
   expect(result).toEqual(new ValidationResult(violations));
@@ -24,9 +26,17 @@ function verifyValid(result: ValidationResult, value: any, convertedValue?: any)
   return result;
 }
 
+const originalNow = Settings.now;
+
 describe('Vluxon', () => {
-  beforeAll(() => (Settings.defaultZone = 'Europe/Helsinki'));
-  afterAll(() => (Settings.defaultZone = 'system'));
+  beforeAll(() => {
+    Settings.defaultZone = 'Europe/Helsinki';
+  });
+
+  afterAll(() => {
+    Settings.defaultZone = 'system';
+    Settings.now = originalNow;
+  });
 
   const toJSON = V.map((value: any) => value.toJSON());
   const toLuxon = V.map((value: LuxonDateTime) => value.dateTime);
@@ -60,26 +70,40 @@ describe('Vluxon', () => {
       const value = new Date();
       const wrapper = type.fromJSDate(value);
       expect(wrapper).toBeInstanceOf(type);
-      expect(wrapper).toEqual(new type(DateTime.fromJSDate(value)));
     })
 
     test(`${type.name}.fromISO`, () => {
       const value = '2019-03-07T00:00:00Z';
       const wrapper = type.fromISO(value);
       expect(wrapper).toBeInstanceOf(type);
-      expect(wrapper).toEqual(new type(DateTime.fromISO(value)));
     })
 
     test(`${type.name}.fromMillis`, () => {
       const value = 1660549128159;
       const wrapper = type.fromMillis(value);
       expect(wrapper).toBeInstanceOf(type);
-      expect(wrapper).toEqual(new type(DateTime.fromMillis(value)));
     })
 
     test(`${type.name}.now()`, () => {
+      if (type.now) {
+        const wrapper = type.now();
+        expect(wrapper).toBeInstanceOf(type);
+      }
+    })
+
+    itif(!!type.now)(`${type.name}.now()`, () => {
       const wrapper = type.now();
       expect(wrapper).toBeInstanceOf(type);
+    });
+
+    itif(!!type.nowLocal)(`${type.name}.nowLocal()`, () => {
+        const local = type.nowLocal();
+        expect(local).toBeInstanceOf(type);
+    });
+    
+    itif(!!type.nowUtc)(`${type.name}.nowUtc()`, () => {
+      const utc = type.nowUtc();
+      expect(utc).toBeInstanceOf(type);
     })
   });
 
@@ -114,7 +138,19 @@ describe('Vluxon', () => {
     test('local time of date', () =>
       expect(new LocalDateLuxon(DateTime.local(2019, 1, 1, 12, 13, 14)).dateTime).toEqual(DateTime.fromISO('2019-01-01T00:00:00Z', {setZone: true})));
 
-    test('any DateLuxon is valid', () => expectValid(new LocalDateLuxon(DateTime.now()), Vluxon.localDate()));
+    test('any LocalDateLuxon is valid', () => expectValid(new LocalDateLuxon(DateTime.now()), Vluxon.localDate()));
+
+    test('nowLocal', () => {
+      const weeHoursEast = DateTime.fromISO('2022-08-16T01:00:00+03');
+      Settings.now = () => weeHoursEast.toMillis();
+      expect(LocalDateLuxon.nowLocal().toJSON()).toEqual('2022-08-16');
+    })
+
+    test('nowUtc', () => {
+      const weeHoursEast = DateTime.fromISO('2022-08-16T01:00:00+03');
+      Settings.now = () => weeHoursEast.toMillis();
+      expect(LocalDateLuxon.nowUtc().toJSON()).toEqual('2022-08-15');
+    })
 
     describe('only local date counts when comparing', () => {
       test('different time', () => {
