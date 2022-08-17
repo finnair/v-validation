@@ -1,6 +1,6 @@
 {
   "name": "@finnair/v-validation",
-  "version": "1.1.0-alpha.5",
+  "version": "1.1.0-alpha.6",
   "private": false,
   "description": "V-validation core package",
   "main": "dist/index.js",
@@ -24,7 +24,7 @@
     "build": "tsc -b ."
   },
   "dependencies": {
-    "@finnair/path": "^1.1.0-alpha.5",
+    "@finnair/path": "^1.1.0-alpha.6",
     "@types/deep-equal": "1.0.1",
     "@types/uuid-validate": "0.0.1",
     "deep-equal": "2.0.5",
