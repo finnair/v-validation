@@ -1,6 +1,6 @@
 import { ValidationContext, isNullOrUndefined, defaultViolations, isString, V, Validator, ValidationResult, TypeMismatch } from '@finnair/v-validation';
 import { Path } from '@finnair/path';
-import { DateTime, DateTimeOptions, Duration, FixedOffsetZone } from 'luxon';
+import { DateTime, Duration, FixedOffsetZone } from 'luxon';
 import { LocalDateLuxon, DateTimeLuxon, DateTimeMillisLuxon, DateTimeMillisUtcLuxon, DateTimeUtcLuxon, LuxonDateTime, LocalTimeLuxon } from './luxon';
 
 export type LuxonInput = string | DateTime | LuxonDateTime
@@ -12,10 +12,10 @@ export interface ValidateLuxonParams {
   type: string;
   proto: any;
   pattern: RegExp;
-  options: DateTimeOptions;
+  parser: (value: string) => DateTime;
 }
 
-export function validateLuxon({value, path, ctx, type, proto, pattern, options}: ValidateLuxonParams) {
+export function validateLuxon({value, path, ctx, type, proto, pattern, parser}: ValidateLuxonParams) {
   if (isNullOrUndefined(value)) {
     return ctx.failure(defaultViolations.notNull(path), value);
   }
@@ -29,7 +29,7 @@ export function validateLuxon({value, path, ctx, type, proto, pattern, options}:
   }
   else if (isString(value)) {
     if (pattern.test(value)) {
-      const dateTime = DateTime.fromISO(value, options);
+      const dateTime = parser(value);
       if (dateTime.isValid) {
         return ctx.success(new proto(dateTime));
       }
@@ -48,7 +48,7 @@ async function localDateValidator(value: any, path: Path, ctx: ValidationContext
     type: 'Date', 
     proto: LocalDateLuxon, 
     pattern: datePattern,
-    options: { zone: FixedOffsetZone.utcInstance },
+    parser: (value: string) => DateTime.fromISO(value, { zone: FixedOffsetZone.utcInstance }),
   });
 }
 
@@ -62,7 +62,7 @@ async function localTimeValidator(value: any, path: Path, ctx: ValidationContext
     type: 'Time', 
     proto: LocalTimeLuxon, 
     pattern: timePattern,
-    options: { zone: FixedOffsetZone.utcInstance },
+    parser: (value: string) => DateTime.fromISO(value, { zone: FixedOffsetZone.utcInstance }),
   });
 }
 
@@ -76,7 +76,7 @@ async function dateTimeValidator(value: any, path: Path, ctx: ValidationContext)
     type: 'DateTime', 
     proto: DateTimeLuxon, 
     pattern: dateTimePattern,
-    options: { setZone: true },
+    parser: (value: string) => DateTime.fromISO(value, { setZone: true }),
   });
 }
 
@@ -88,7 +88,7 @@ async function dateTimeUtcValidator(value: any, path: Path, ctx: ValidationConte
     type: 'DateTime', 
     proto: DateTimeUtcLuxon, 
     pattern: dateTimePattern,
-    options: { zone: FixedOffsetZone.utcInstance },
+    parser: (value: string) => DateTime.fromISO(value, { zone: FixedOffsetZone.utcInstance }),
   });
 }
 
@@ -102,7 +102,7 @@ async function dateTimeMillisValidator(value: any, path: Path, ctx: ValidationCo
     type: 'DateTimeMillis', 
     proto: DateTimeMillisLuxon, 
     pattern: dateTimeMillisPattern,
-    options: { setZone: true },
+    parser: (value: string) => DateTime.fromISO(value, { setZone: true }),
   });
 }
 
@@ -114,7 +114,7 @@ async function dateTimeMillisUtcValidator(value: any, path: Path, ctx: Validatio
     type: 'DateTimeMillis', 
     proto: DateTimeMillisUtcLuxon, 
     pattern: dateTimeMillisPattern,
-    options: { zone: FixedOffsetZone.utcInstance },
+    parser: (value: string) => DateTime.fromISO(value, { zone: FixedOffsetZone.utcInstance }),
   });
 }
 
