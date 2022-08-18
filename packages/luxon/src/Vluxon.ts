@@ -15,7 +15,7 @@ export interface ValidateLuxonParams {
   parser: (value: string) => DateTime;
 }
 
-export function validateLuxon({value, path, ctx, type, proto, pattern, parser}: ValidateLuxonParams) {
+export async function validateLuxon({value, path, ctx, type, proto, pattern, parser}: ValidateLuxonParams): Promise<ValidationResult> {
   if (isNullOrUndefined(value)) {
     return ctx.failure(defaultViolations.notNull(path), value);
   }
@@ -40,7 +40,7 @@ export function validateLuxon({value, path, ctx, type, proto, pattern, parser}: 
 
 const datePattern = /^\d{4}-\d{2}-\d{2}$/
 
-async function localDateValidator(value: any, path: Path, ctx: ValidationContext) {
+function localDateValidator(value: any, path: Path, ctx: ValidationContext) {
   return validateLuxon({
     value, 
     path, 
@@ -54,7 +54,7 @@ async function localDateValidator(value: any, path: Path, ctx: ValidationContext
 
 const timePattern = /^\d{2}:\d{2}:\d{2}$/
 
-async function localTimeValidator(value: any, path: Path, ctx: ValidationContext) {
+function localTimeValidator(value: any, path: Path, ctx: ValidationContext) {
   return validateLuxon({
     value, 
     path, 
@@ -68,7 +68,7 @@ async function localTimeValidator(value: any, path: Path, ctx: ValidationContext
 
 const dateTimePattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:Z|[+-]\d{2}(?::?\d{2})?)$/
 
-async function dateTimeValidator(value: any, path: Path, ctx: ValidationContext) {
+function dateTimeValidator(value: any, path: Path, ctx: ValidationContext) {
   return validateLuxon({
     value, 
     path, 
@@ -80,7 +80,7 @@ async function dateTimeValidator(value: any, path: Path, ctx: ValidationContext)
   });
 }
 
-async function dateTimeUtcValidator(value: any, path: Path, ctx: ValidationContext) {
+function dateTimeUtcValidator(value: any, path: Path, ctx: ValidationContext) {
   return validateLuxon({
     value, 
     path, 
@@ -94,7 +94,7 @@ async function dateTimeUtcValidator(value: any, path: Path, ctx: ValidationConte
 
 const dateTimeMillisPattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}(?:Z|[+-]\d{2}(?::?\d{2})?)$/
 
-async function dateTimeMillisValidator(value: any, path: Path, ctx: ValidationContext) {
+function dateTimeMillisValidator(value: any, path: Path, ctx: ValidationContext) {
   return validateLuxon({
     value, 
     path, 
@@ -106,7 +106,7 @@ async function dateTimeMillisValidator(value: any, path: Path, ctx: ValidationCo
   });
 }
 
-async function dateTimeMillisUtcValidator(value: any, path: Path, ctx: ValidationContext) {
+function dateTimeMillisUtcValidator(value: any, path: Path, ctx: ValidationContext) {
   return validateLuxon({
     value, 
     path, 
