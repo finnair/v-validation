@@ -84,11 +84,12 @@ describe('Vluxon', () => {
       expect(wrapper).toBeInstanceOf(type);
     })
 
-    test(`${type.name}.now()`, () => {
-      if (type.now) {
-        const wrapper = type.now();
-        expect(wrapper).toBeInstanceOf(type);
-      }
+    test(`${type.name}.fromFormat`, () => {
+      const wrapper = type.fromFormat('20220819095432+0', 'yyyyMMddHHmmssZ');
+      expect(wrapper).toBeInstanceOf(type);
+      const date = wrapper.dateTime.toFormat('yyyy-MM-dd');
+      const time = wrapper.dateTime.toFormat('HH:mm:ss');
+      expect(date === '2022-08-19' || time === '09:54:32').toBe(true);
     })
 
     itif(!!type.now)(`${type.name}.now()`, () => {
