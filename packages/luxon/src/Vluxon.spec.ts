@@ -1,8 +1,9 @@
 import { Validator, ValidatorOptions, ValidationResult, V, Violation, defaultViolations, TypeMismatch } from '@finnair/v-validation';
-import { Vluxon } from './Vluxon';
+import { validateLuxon, Vluxon } from './Vluxon';
 import { LocalDateLuxon, DateTimeLuxon, DateTimeMillisLuxon, DateTimeMillisUtcLuxon, DateTimeUtcLuxon, LuxonDateTime, LocalTimeLuxon } from './luxon';
 import { DateTime, Duration, FixedOffsetZone, IANAZone, Settings } from 'luxon';
 import { Path } from '@finnair/path';
+import { ValidationContext } from '@finnair/v-validation';
 
 const itif = (condition: boolean) => condition ? it : it.skip;
 
@@ -554,5 +555,28 @@ describe('Vluxon', () => {
     test('parse serialize roundtrip', () => expectValid('P23DT23H', Vluxon.duration().next(toJSON), 'P23DT23H'));
 
     test('any valid Duration is valid', () => expectValid(Duration.fromMillis(12345), Vluxon.duration()));
+  });
+
+  describe('custom format', () => {
+    const validator = V.fn((value: any, path: Path, ctx: ValidationContext) => {
+      return validateLuxon({
+        value, 
+        path, 
+        ctx, 
+        type: 'Date', 
+        proto: DateTimeUtcLuxon, 
+        pattern: /^\d{4}-\d{2}-\d{2}(?<zone>[+-]\d{2})?$/,
+        parser: (value: string, match: RegExpExecArray) => {
+          if (match.groups?.zone) {
+            return DateTime.fromFormat(value, 'yyyy-MM-ddZZ');
+          }
+          return DateTime.fromISO(value, { zone: FixedOffsetZone.utcInstance })
+        },
+      });
+    });
+    
+    test('date with timezone', () => expectValid('2022-08-19+03', validator.next(toJSON), '2022-08-18T21:00:00Z'));
+    
+    test('date without timezone', () => expectValid('2022-08-19', validator.next(toJSON), '2022-08-19T00:00:00Z'));
   });
 });

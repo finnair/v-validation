@@ -12,7 +12,7 @@ export interface ValidateLuxonParams {
   type: string;
   proto: any;
   pattern: RegExp;
-  parser: (value: string) => DateTime;
+  parser: (value: string, match: RegExpExecArray) => DateTime;
 }
 
 export async function validateLuxon({value, path, ctx, type, proto, pattern, parser}: ValidateLuxonParams): Promise<ValidationResult> {
@@ -28,8 +28,9 @@ export async function validateLuxon({value, path, ctx, type, proto, pattern, par
     }
   }
   else if (isString(value)) {
-    if (pattern.test(value)) {
-      const dateTime = parser(value);
+    const match = pattern.exec(value);
+    if (match) {
+      const dateTime = parser(value, match);
       if (dateTime.isValid) {
         return ctx.success(new proto(dateTime));
       }
