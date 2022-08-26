@@ -5,7 +5,7 @@ import { DateTime, Duration, FixedOffsetZone, IANAZone, Settings } from 'luxon';
 import { Path } from '@finnair/path';
 import { ValidationContext } from '@finnair/v-validation';
 
-const itif = (condition: boolean) => condition ? it : it.skip;
+const itif = (condition: boolean) => (condition ? it : it.skip);
 
 async function expectViolations(value: any, validator: Validator, ...violations: Violation[]) {
   const result = await validator.validate(value);
@@ -66,24 +66,24 @@ describe('Vluxon', () => {
     ${DateTimeMillisLuxon}
     ${DateTimeMillisUtcLuxon}
     ${LocalTimeLuxon}
-  `('constructors', ({type}) => {
+  `('constructors', ({ type }) => {
     test(`${type.name}.fromJSDate`, () => {
       const value = new Date();
       const wrapper = type.fromJSDate(value);
       expect(wrapper).toBeInstanceOf(type);
-    })
+    });
 
     test(`${type.name}.fromISO`, () => {
       const value = '2019-03-07T00:00:00Z';
       const wrapper = type.fromISO(value);
       expect(wrapper).toBeInstanceOf(type);
-    })
+    });
 
     test(`${type.name}.fromMillis`, () => {
       const value = 1660549128159;
       const wrapper = type.fromMillis(value);
       expect(wrapper).toBeInstanceOf(type);
-    })
+    });
 
     test(`${type.name}.fromFormat`, () => {
       const wrapper = type.fromFormat('20220819095432+0', 'yyyyMMddHHmmssZ');
@@ -91,7 +91,7 @@ describe('Vluxon', () => {
       const date = wrapper.dateTime.toFormat('yyyy-MM-dd');
       const time = wrapper.dateTime.toFormat('HH:mm:ss');
       expect(date === '2022-08-19' || time === '09:54:32').toBe(true);
-    })
+    });
 
     itif(!!type.now)(`${type.name}.now()`, () => {
       const wrapper = type.now();
@@ -99,14 +99,14 @@ describe('Vluxon', () => {
     });
 
     itif(!!type.nowLocal)(`${type.name}.nowLocal()`, () => {
-        const local = type.nowLocal();
-        expect(local).toBeInstanceOf(type);
+      const local = type.nowLocal();
+      expect(local).toBeInstanceOf(type);
     });
-    
+
     itif(!!type.nowUtc)(`${type.name}.nowUtc()`, () => {
       const utc = type.nowUtc();
       expect(utc).toBeInstanceOf(type);
-    })
+    });
   });
 
   describe('comparisons', () => {
@@ -124,7 +124,7 @@ describe('Vluxon', () => {
       const dateTime = DateTimeUtcLuxon.fromMillis(1660563253000);
       const converted = dateTimeMillis.as(DateTimeUtcLuxon);
       expect(converted).toBeInstanceOf(DateTimeUtcLuxon);
-      expect(converted).toEqual(dateTime)
+      expect(converted).toEqual(dateTime);
     });
 
     test("returns this in case it's of correct type", () => {
@@ -136,14 +136,14 @@ describe('Vluxon', () => {
   describe('localDate', () => {
     // NOTE: These tests rely on default zone Europe/Helsinki which is set in beforeAll
 
-    test('valid date value', () => expectValid('2019-03-07', Vluxon.localDate().next(toLuxon), DateTime.fromISO('2019-03-07T00:00:00Z', {setZone: true})));
+    test('valid date value', () => expectValid('2019-03-07', Vluxon.localDate().next(toLuxon), DateTime.fromISO('2019-03-07T00:00:00Z', { setZone: true })));
 
     test('valid date converted', () => expectValid('2019-03-07', Vluxon.localDate().next(toJSON), '2019-03-07'));
 
     test('direct constructor', () => expect(new LocalDateLuxon(DateTime.local(2019, 1, 1)).toJSON()).toEqual('2019-01-01'));
 
     test('local time of date', () =>
-      expect(new LocalDateLuxon(DateTime.local(2019, 1, 1, 12, 13, 14)).dateTime).toEqual(DateTime.fromISO('2019-01-01T00:00:00Z', {setZone: true})));
+      expect(new LocalDateLuxon(DateTime.local(2019, 1, 1, 12, 13, 14)).dateTime).toEqual(DateTime.fromISO('2019-01-01T00:00:00Z', { setZone: true })));
 
     test('any LocalDateLuxon is valid', () => expectValid(new LocalDateLuxon(DateTime.now()), Vluxon.localDate()));
 
@@ -151,22 +151,22 @@ describe('Vluxon', () => {
       const weeHoursEast = DateTime.fromISO('2022-08-16T01:00:00+03');
       Settings.now = () => weeHoursEast.toMillis();
       expect(LocalDateLuxon.nowLocal().toJSON()).toEqual('2022-08-16');
-    })
+    });
 
     test('nowUtc', () => {
       const weeHoursEast = DateTime.fromISO('2022-08-16T01:00:00+03');
       Settings.now = () => weeHoursEast.toMillis();
       expect(LocalDateLuxon.nowUtc().toJSON()).toEqual('2022-08-15');
-    })
+    });
 
     describe('only local date counts when comparing', () => {
       test('different time', () => {
         const a = new LocalDateLuxon(DateTime.local(2022, 1, 1, 16));
         expect(+a == +new LocalDateLuxon(DateTime.local(2022, 1, 1, 12))).toBe(true);
       });
-  
+
       test('same time, different timezone', () => {
-        const east = DateTime.local(2022, 2, 15, 2, { zone: FixedOffsetZone.instance(180)});
+        const east = DateTime.local(2022, 2, 15, 2, { zone: FixedOffsetZone.instance(180) });
         const utc = east.toUTC(); // Previous date, same millisecond
         expect(+east == +utc).toBe(true);
         const a = new LocalDateLuxon(east);
@@ -175,7 +175,7 @@ describe('Vluxon', () => {
         expect(b.toJSON()).toEqual('2022-02-14');
         expect(a > b).toBe(true);
       });
-    })
+    });
 
     test('any valid DateTime is valid and wrapped', () => {
       const now = DateTime.now();
@@ -212,26 +212,26 @@ describe('Vluxon', () => {
   describe('localTime', () => {
     // NOTE: These tests rely on default zone Europe/Helsinki which is set in beforeAll
 
-    test('valid time value', () => expectValid('12:00:00', Vluxon.localTime().next(toLuxon), DateTime.fromISO('1970-01-01T12:00:00Z', {setZone: true})));
+    test('valid time value', () => expectValid('12:00:00', Vluxon.localTime().next(toLuxon), DateTime.fromISO('1970-01-01T12:00:00Z', { setZone: true })));
 
     test('24:00:00 is normalized to 00:00:00', () =>
-      expectValid('24:00:00', Vluxon.localTime().next(toLuxon), DateTime.fromISO('1970-01-01T00:00:00Z', {setZone: true})));
+      expectValid('24:00:00', Vluxon.localTime().next(toLuxon), DateTime.fromISO('1970-01-01T00:00:00Z', { setZone: true })));
 
     test('valid time toJSON', () => expectValid('12:13:14', Vluxon.localTime().next(toJSON), '12:13:14'));
 
     test('direct constructor', () => expect(new LocalTimeLuxon(DateTime.local(2019, 1, 1, 1, 2, 3)).toJSON()).toEqual('01:02:03'));
 
     test('local date of time', () =>
-      expect(new LocalTimeLuxon(DateTime.local(2019, 1, 1, 12, 13, 14)).dateTime).toEqual(DateTime.fromISO('1970-01-01T12:13:14Z', {setZone: true})));
+      expect(new LocalTimeLuxon(DateTime.local(2019, 1, 1, 12, 13, 14)).dateTime).toEqual(DateTime.fromISO('1970-01-01T12:13:14Z', { setZone: true })));
 
     describe('only local time counts when comparing', () => {
       test('past year, later time', () => {
         const a = new LocalTimeLuxon(DateTime.local(2022, 1, 1, 12));
-        expect(a < new LocalTimeLuxon(DateTime.local(2000, 1, 1, 16))).toBe(true)
+        expect(a < new LocalTimeLuxon(DateTime.local(2000, 1, 1, 16))).toBe(true);
       });
 
       test('same millis, different timezone', () => {
-        const east = DateTime.local(2022, 2, 15, 2, { zone: FixedOffsetZone.instance(180)});
+        const east = DateTime.local(2022, 2, 15, 2, { zone: FixedOffsetZone.instance(180) });
         const utc = east.toUTC(); // Previous date, same millisecond
         expect(+east == +utc).toBe(true);
         const a = new LocalTimeLuxon(east);
@@ -560,23 +560,80 @@ describe('Vluxon', () => {
   describe('custom format', () => {
     const validator = V.fn((value: any, path: Path, ctx: ValidationContext) => {
       return validateLuxon({
-        value, 
-        path, 
-        ctx, 
-        type: 'Date', 
-        proto: DateTimeUtcLuxon, 
+        value,
+        path,
+        ctx,
+        type: 'Date',
+        proto: DateTimeUtcLuxon,
         pattern: /^\d{4}-\d{2}-\d{2}(?<zone>[+-]\d{2})?$/,
         parser: (value: string, match: RegExpExecArray) => {
           if (match.groups?.zone) {
             return DateTime.fromFormat(value, 'yyyy-MM-ddZZ');
           }
-          return DateTime.fromISO(value, { zone: FixedOffsetZone.utcInstance })
+          return DateTime.fromISO(value, { zone: FixedOffsetZone.utcInstance });
         },
       });
     });
-    
+
     test('date with timezone', () => expectValid('2022-08-19+03', validator.next(toJSON), '2022-08-18T21:00:00Z'));
-    
+
     test('date without timezone', () => expectValid('2022-08-19', validator.next(toJSON), '2022-08-19T00:00:00Z'));
+  });
+
+  describe('Plain Luxon DateTime Validators', () => {
+    describe('dateTimeFromISO', () => {
+      test('valid string input', async () =>
+        expectValid('2022-08-26', Vluxon.dateTimeFromISO({ zone: FixedOffsetZone.utcInstance }), DateTime.utc(2022, 8, 26)));
+      test('invalid string input', async () =>
+        expectViolations('22 08 26', Vluxon.dateTimeFromISO(), defaultViolations.date('22 08 26', Path.ROOT, 'ISODateTime')));
+    });
+    describe('dateTimeFromRFC2822', () => {
+      test('valid string input', async () =>
+        expectValid(
+          'Tue, 01 Nov 2016 13:23:12 +0630',
+          Vluxon.dateTimeFromRFC2822({ zone: FixedOffsetZone.utcInstance }),
+          DateTime.fromRFC2822('Tue, 01 Nov 2016 13:23:12 +0630', { zone: FixedOffsetZone.utcInstance }),
+        ));
+      test('invalid string input', async () =>
+        expectViolations(
+          'Foo, 01 Nov 2016 13:23:12 +0630',
+          Vluxon.dateTimeFromRFC2822(),
+          defaultViolations.date('Foo, 01 Nov 2016 13:23:12 +0630', Path.ROOT, 'RFC2822DateTime'),
+        ));
+    });
+    describe('dateTimeFromHTTP', () => {
+      test('valid input', async () =>
+        expectValid('Sunday, 06-Nov-94 08:49:37 GMT', Vluxon.dateTimeFromHTTP(), DateTime.fromHTTP('Sunday, 06-Nov-94 08:49:37 GMT', { setZone: true })));
+      test('invalid input', async () => expectViolations('foo', Vluxon.dateTimeFromHTTP(), new TypeMismatch(Path.ROOT, 'HTTPDateTime', 'foo')));
+    });
+    describe('dateTimeFromSQL', () => {
+      test('valid input', async () =>
+        expectValid('2017-05-15 09:24:15', Vluxon.dateTimeFromSQL(), DateTime.fromSQL('2017-05-15 09:24:15', { zone: FixedOffsetZone.utcInstance })));
+      test('invalid input', async () => expectViolations('foo', Vluxon.dateTimeFromSQL(), new TypeMismatch(Path.ROOT, 'SQLDateTime', 'foo')));
+    });
+    describe('dateTimeFromMillis', () => {
+      test('null', async () => expectViolations(null, Vluxon.dateTimeFromMillis(), defaultViolations.notNull(Path.ROOT)));
+      test('valid DateTime', async () => expectValid(DateTime.now(), Vluxon.dateTimeFromMillis()));
+      test('invalid DateTime', async () => {
+        const dt = DateTime.utc(2021, 2, 29);
+        await expectViolations(dt, Vluxon.dateTimeFromMillis(), defaultViolations.date(dt, Path.ROOT, 'MillisDateTime'));
+      });
+      test('valid input', async () =>
+        expectValid(
+          1661509616811,
+          Vluxon.dateTimeFromMillis({ zone: FixedOffsetZone.instance(180) }),
+          DateTime.fromMillis(1661509616811, { zone: FixedOffsetZone.instance(180) }),
+        ));
+      test('invalid input', async () => expectViolations('foo', Vluxon.dateTimeFromMillis(), new TypeMismatch(Path.ROOT, 'MillisDateTime', 'foo')));
+    });
+    describe('dateTimeFromSeconds', () => {
+      test('valid input', async () =>
+        expectValid(
+          1661509616,
+          Vluxon.dateTimeFromSeconds({ zone: FixedOffsetZone.instance(180) }),
+          DateTime.fromSeconds(1661509616, { zone: FixedOffsetZone.instance(180) }),
+        ));
+      test('invalid input', async () => expectViolations('foo', Vluxon.dateTimeFromSeconds(), new TypeMismatch(Path.ROOT, 'SecondsDateTime', 'foo')));
+    });
   });
 });
