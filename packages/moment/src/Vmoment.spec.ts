@@ -127,8 +127,7 @@ describe('moment', () => {
 
     test('clone', () => expectCloneToMatch(dateTimeMillisMoment()));
 
-    test('show 0 offset as Z', () =>
-      expect(dateTimeMillisMoment('2019-05-21T12:13:14.123Z').toJSON()).toEqual('2019-05-21T12:13:14.123Z');
+    test('show 0 offset as Z', () => expect(dateTimeMillisMoment('2019-05-21T12:13:14.123Z').toJSON()).toEqual('2019-05-21T12:13:14.123Z'));
   });
 
   describe('normalize Moment', () => {
