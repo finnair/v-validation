@@ -149,6 +149,8 @@ describe('moment', () => {
       expect(timeMoment('10:00:00').toJSON()).toEqual('10:00:00');
     });
 
+    test('V.time()', () => expectValid('10:00:00', Vmoment.time(), timeMoment('10:00:00')));
+
     test('clone', () => expectCloneToMatch(timeMoment()));
   });
 
