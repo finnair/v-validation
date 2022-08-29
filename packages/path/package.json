@@ -1,6 +1,6 @@
 {
   "name": "@finnair/path",
-  "version": "1.1.0-alpha.6",
+  "version": "1.1.0",
   "private": false,
   "description": "Simple object path as array of strings and numbers",
   "main": "dist/index.js",

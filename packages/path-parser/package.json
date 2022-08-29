@@ -1,6 +1,6 @@
 {
   "name": "@finnair/path-parser",
-  "version": "1.1.0-alpha.6",
+  "version": "1.1.0",
   "private": false,
   "description": "Simple object path as array of strings and numbers",
   "main": "dist/index.js",
@@ -23,7 +23,7 @@
     "build": "tsc -b ."
   },
   "dependencies": {
-    "@finnair/path": "^1.1.0-alpha.6",
+    "@finnair/path": "^1.1.0",
     "@types/nearley": "2.11.1",
     "nearley": "2.19.5"
   }
