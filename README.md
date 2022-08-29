@@ -13,7 +13,15 @@ conform to the expected model.
 
 [`@finnair/v-validation` README](./packages/core/README.md)
 
+## Vluxon
+
+`Vluxon` contains `v-validation` extensions for [Luxon](https://moment.github.io/luxon/).
+
+[`@finnair/v-validation-luxon` README](./packages/luxon/README.md)
+
 ## Vmoment
+
+NOTE: [Moment is a legacy project in maintenance mode](https://momentjs.com/docs/#/-project-status/).
 
 `Vmoment` contains `v-validation` extensions for [Moment.js](https://momentjs.com/).
 

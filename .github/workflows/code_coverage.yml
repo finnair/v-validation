@@ -4,13 +4,14 @@ name: Code Coverage
 # events but only for the master branch
 on:
   push:
-    branches: [ master ]
+    branches: [master]
   pull_request:
-    branches: [ master ]
+    branches: [master]
 
 jobs:
   build:
     runs-on: [ubuntu-latest]
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@master
       - run: yarn

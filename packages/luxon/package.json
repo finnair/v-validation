@@ -1,33 +1,35 @@
 {
-  "name": "@finnair/v-validation",
-  "version": "1.1.0-alpha.6",
+  "name": "@finnair/v-validation-luxon",
+  "version": "1.1.0-alpha.9",
   "private": false,
-  "description": "V-validation core package",
+  "description": "Luxon validators",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "license": "MIT",
-  "homepage": "https://github.com/finnair/v-validation/tree/master/packages/core#readme",
+  "homepage": "https://github.com/finnair/v-validation/tree/master/packages/luxon#readme",
   "bugs": "https://github.com/finnair/v-validation/issues",
   "repository": {
     "type": "git",
     "url": "https://github.com/finnair/v-validation.git",
-    "directory": "packages/core"
+    "directory": "packages/luxon"
   },
   "keywords": [
     "validation",
     "validate",
     "convert",
     "normalize",
-    "typescript"
+    "typescript",
+    "luxon"
   ],
   "scripts": {
     "build": "tsc -b ."
   },
   "dependencies": {
     "@finnair/path": "^1.1.0-alpha.6",
-    "@types/deep-equal": "1.0.1",
-    "@types/uuid-validate": "0.0.1",
-    "deep-equal": "2.0.5",
-    "uuid-validate": "0.0.3"
+    "@finnair/v-validation": "^1.1.0-alpha.6",
+    "luxon": "3.0.1"
+  },
+  "devDependencies": {
+    "@types/luxon": "3.0.0"
   }
 }

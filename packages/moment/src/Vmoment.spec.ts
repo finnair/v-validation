@@ -78,12 +78,7 @@ describe('moment', () => {
 
     test('convert dateTimeUtcMoment to local time', () => {
       const d: moment.Moment = dateTimeUtcMoment('2019-05-21T12:13:14Z');
-      expect(
-        d
-          .clone()
-          .utcOffset(3)
-          .toJSON(),
-      ).toEqual('2019-05-21T15:13:14+03:00');
+      expect(d.clone().utcOffset(3).toJSON()).toEqual('2019-05-21T15:13:14+03:00');
     });
 
     test('utcOffset of dateTimeUtcMoment', () => {
@@ -105,14 +100,15 @@ describe('moment', () => {
 
     test('array constructor', () => expect(dateTimeMillisUtcMoment([2019, 0, 1, 1, 1, 1, 123]).toJSON()).toEqual('2019-01-01T01:01:01.123Z'));
 
+    test('millis required', () =>
+      expectViolations('2019-03-07T12:13:14Z', Vmoment.dateTimeMillis(), defaultViolations.date('2019-03-07T12:13:14Z', Path.ROOT, 'DateTimeMillis')));
+
+    test('two digit millis is not allowed', () =>
+      expectViolations('2019-03-07T12:13:14.1Z', Vmoment.dateTimeMillis(), defaultViolations.date('2019-03-07T12:13:14.1Z', Path.ROOT, 'DateTimeMillis')));
+
     test('convert dateTimeMillisUtcMoment to local time', () => {
       const d: moment.Moment = dateTimeMillisUtcMoment('2019-05-21T12:13:14.123Z');
-      expect(
-        d
-          .clone()
-          .utcOffset(3)
-          .toJSON(),
-      ).toEqual('2019-05-21T15:13:14.123+03:00');
+      expect(d.clone().utcOffset(3).toJSON()).toEqual('2019-05-21T15:13:14.123+03:00');
     });
 
     test('utcOffset of dateTimeMillisUtcMoment', () => {
@@ -130,6 +126,8 @@ describe('moment', () => {
       expectValid('2019-03-07T14:13:14.123+02:00', Vmoment.dateTimeMillis().next(toJSON), '2019-03-07T14:13:14.123+02:00'));
 
     test('clone', () => expectCloneToMatch(dateTimeMillisMoment()));
+
+    test('show 0 offset as Z', () => expect(dateTimeMillisMoment('2019-05-21T12:13:14.123Z').toJSON()).toEqual('2019-05-21T12:13:14.123Z'));
   });
 
   describe('normalize Moment', () => {
@@ -151,18 +149,19 @@ describe('moment', () => {
       expect(timeMoment('10:00:00').toJSON()).toEqual('10:00:00');
     });
 
+    test('V.time()', () => expectValid('10:00:00', Vmoment.time(), timeMoment('10:00:00')));
+
     test('clone', () => expectCloneToMatch(timeMoment()));
   });
 
   describe('local time', () => {
     test('convert dateTimeMoment to local time', () => {
       const d: moment.Moment = dateTimeMoment('2019-05-21T12:13:14Z');
-      expect(
-        d
-          .clone()
-          .utcOffset(3)
-          .toJSON(),
-      ).toEqual('2019-05-21T15:13:14+03:00');
+      expect(d.clone().utcOffset(3).toJSON()).toEqual('2019-05-21T15:13:14+03:00');
+    });
+
+    test('show 0 offset as Z', () => {
+      expect(dateTimeMoment('2019-05-21T12:13:14Z').toJSON()).toEqual('2019-05-21T12:13:14Z');
     });
 
     test('clone', () => expectCloneToMatch(dateTimeMoment()));

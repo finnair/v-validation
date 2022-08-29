@@ -80,6 +80,12 @@ describe('ValidationResult', () => {
   });
 });
 
+test('assertTrue', () =>
+  expectValid(
+    true,
+    V.assertTrue(value => value === true),
+  ));
+
 describe('strings', () => {
   test('valid value', () => {
     expectValid('str', V.string());
@@ -359,9 +365,9 @@ describe('objects', () => {
   test('disallow all properties', () =>
     expectViolations({ property: 'value' }, V.object({ additionalProperties: false }), defaultViolations.unknownPropertyDenied(ROOT.property('property'))));
 
-  test('non-object not allowed', () => {
-    expectViolations('string', V.object({}), defaultViolations.object(ROOT));
-  });
+  test('string not allowed', () => expectViolations('string', V.object({}), defaultViolations.object(ROOT)));
+
+  test('number not allowed', () => expectViolations(123, V.object({}), defaultViolations.object()));
 
   test('parent may disallow additional properties for child models', async () => {
     const validator = V.object({ extends: { additionalProperties: false }, additionalProperties: true });

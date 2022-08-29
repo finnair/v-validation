@@ -271,9 +271,9 @@ export const defaultViolations = {
   oneOf: (matches: number, path: Path = ROOT) => new OneOfMismatch(path, matches),
   pattern: (pattern: RegExp, invalidValue: any, path: Path = ROOT) => new PatternViolation(path, '' + pattern, invalidValue),
   enum: (name: string, invalidValue: any, path: Path = ROOT) => new EnumMismatch(path, name, invalidValue),
-  unknownProperty: (path: Path = ROOT) => new Violation(path, ValidatorType.UnknownProperty),
-  unknownPropertyDenied: (path: Path = ROOT) => new Violation(path, ValidatorType.UnknownPropertyDenied),
-  cycle: (path: Path = ROOT) => new Violation(path, 'Cycle'),
+  unknownProperty: (path: Path) => new Violation(path, ValidatorType.UnknownProperty),
+  unknownPropertyDenied: (path: Path) => new Violation(path, ValidatorType.UnknownPropertyDenied),
+  cycle: (path: Path) => new Violation(path, 'Cycle'),
 };
 
 export interface AssertTrue {
@@ -1181,7 +1181,7 @@ export class EnumValidator extends Validator {
 export class AssertTrueValidator extends Validator {
   private fn: AssertTrue;
 
-  constructor(fn: AssertTrue, public readonly type: string = 'AssertTrue', public readonly path?: Path) {
+  constructor(fn: AssertTrue, public readonly type: string, public readonly path?: Path) {
     super();
     this.fn = fn;
   }
