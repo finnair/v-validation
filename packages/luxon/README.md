@@ -39,8 +39,8 @@ by supplying a RegExp pattern and a parser function.
 | LuxonDateTime          | Abstract base class for the wrappers.                                                                       |
 | LocalDateLuxon         | Input and JSON output in `yyyy-MM-dd` format. Time normalized to midnight UTC.                              |
 | LocalTimeLuxon         | Input and JSON output in `HH:mm:ss` format. Date normalized to 1970-01-01 UTC (Unix Epoch).                 |
-| DateTimeLuxon          | Input and JSON output in `yyyy-MM-ddTHH:mm:ssZ` format in local/given/parsed zone with milliseconcs zeroed. |
-| DateTimeUtcLuxon       | Input and JSON output in `yyyy-MM-ddTHH:mm:ssZ` format in UTC zone with milliseconcs zeroed.                |
+| DateTimeLuxon          | Input and JSON output in `yyyy-MM-ddTHH:mm:ssZ` format in local/given/parsed zone with milliseconds zeroed. |
+| DateTimeUtcLuxon       | Input and JSON output in `yyyy-MM-ddTHH:mm:ssZ` format in UTC zone with milliseconds zeroed.                |
 | DateTimeMillisLuxon    | Input and JSON output in `yyyy-MM-ddTHH:mm:ss.SSSZ` format in local/given/parsed zone.                      |
 | DateTimeMillisUtcLuxon | Input and JSON output in `yyyy-MM-ddTHH:mm:ss.SSSZ` format in UTC zone.                                     |
 
@@ -50,8 +50,8 @@ Wrapper types may be constructed with `new` from DateTime instance, but there ar
 
 | Static Method                                                          | Description                                                     |
 | ---------------------------------------------------------------------- | --------------------------------------------------------------- |
-| `now()`                                                                | Current time in `DateTime*` types                               |
-| `nowUtc()`                                                             | Current UTC time in `Local*` types                              |
+| `now()`                                                                | Current time in `DateTime*` types.                              |
+| `nowUtc()`                                                             | Current UTC time in `Local*` types.                             |
 | `nowLocal(options?: DateTimeJSOptions)`                                | Current local time in `Local*` types (defaults to system zone). |
 | `fromISO(value: string, options?: DateTimeOptions)`                    | Parse from ISO format (see Luxon `DateTime.fromISO`).           |
 | `fromFormat(value: string, format: string, options?: DateTimeOptions)` | Parse from custom format (see Luxon `DateTime.fromFormat`).     |
