@@ -98,18 +98,15 @@ describe('Vluxon', () => {
 
     if (type.now) {
       test(`${type.name}.now()`, () => {
-        const wrapper = type.now();
-        expect(wrapper).toBeInstanceOf(type);
+        expect(type.now()).toBeInstanceOf(type);
       });
     }
     if (type.nowLocal) {
       test(`${type.name}.nowLocal()`, () => {
-        const local = type.nowLocal();
-        expect(local).toBeInstanceOf(type);
+        expect(type.nowLocal()).toBeInstanceOf(type);
       });
       test(`${type.name}.nowUtc()`, () => {
-        const utc = type.nowUtc();
-        expect(utc).toBeInstanceOf(type);
+        expect(type.nowUtc()).toBeInstanceOf(type);
       });
     }
   });
