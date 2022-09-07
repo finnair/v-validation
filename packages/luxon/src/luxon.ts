@@ -40,6 +40,10 @@ export abstract class LuxonDateTime {
     return false;
   }
 
+  toString() {
+    return this.toJSON();
+  }
+
   abstract wrap(fn: (dateTime: DateTime) => DateTime): LuxonDateTime;
 
   abstract toJSON(): string;

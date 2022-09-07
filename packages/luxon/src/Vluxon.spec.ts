@@ -5,8 +5,6 @@ import { DateTime, Duration, FixedOffsetZone, IANAZone, Settings } from 'luxon';
 import { Path } from '@finnair/path';
 import { ValidationContext } from '@finnair/v-validation';
 
-const itif = (condition: boolean) => (condition ? it : it.skip);
-
 async function expectViolations(value: any, validator: Validator, ...violations: Violation[]) {
   const result = await validator.validate(value);
   expect(result).toEqual(new ValidationResult(violations));
@@ -93,20 +91,24 @@ describe('Vluxon', () => {
       expect(date === '2022-08-19' || time === '09:54:32').toBe(true);
     });
 
-    itif(!!type.now)(`${type.name}.now()`, () => {
-      const wrapper = type.now();
-      expect(wrapper).toBeInstanceOf(type);
+    test(`${type.name}.toString() equals toJSON()`, () => {
+      const wrapper = new type(DateTime.now());
+      expect(wrapper.toString()).toBe(wrapper.toJSON());
     });
 
-    itif(!!type.nowLocal)(`${type.name}.nowLocal()`, () => {
-      const local = type.nowLocal();
-      expect(local).toBeInstanceOf(type);
-    });
-
-    itif(!!type.nowUtc)(`${type.name}.nowUtc()`, () => {
-      const utc = type.nowUtc();
-      expect(utc).toBeInstanceOf(type);
-    });
+    if (type.now) {
+      test(`${type.name}.now()`, () => {
+        expect(type.now()).toBeInstanceOf(type);
+      });
+    }
+    if (type.nowLocal) {
+      test(`${type.name}.nowLocal()`, () => {
+        expect(type.nowLocal()).toBeInstanceOf(type);
+      });
+      test(`${type.name}.nowUtc()`, () => {
+        expect(type.nowUtc()).toBeInstanceOf(type);
+      });
+    }
   });
 
   describe('comparisons', () => {
