@@ -24,7 +24,7 @@
   },
   "dependencies": {
     "@finnair/path": "^1.1.0",
-    "@types/nearley": "2.11.1",
-    "nearley": "2.19.5"
+    "@types/nearley": "2.11.2",
+    "nearley": "2.20.1"
   }
 }

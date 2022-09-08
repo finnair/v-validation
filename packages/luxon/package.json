@@ -27,9 +27,9 @@
   "dependencies": {
     "@finnair/path": "^1.1.0",
     "@finnair/v-validation": "^1.1.0",
-    "luxon": "3.0.1"
+    "luxon": "3.0.3"
   },
   "devDependencies": {
-    "@types/luxon": "3.0.0"
+    "@types/luxon": "3.0.1"
   }
 }
