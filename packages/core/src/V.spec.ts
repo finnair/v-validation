@@ -437,7 +437,7 @@ describe('objects', () => {
       constructor(model: ObjectModel) {
         super(model);
       }
-      validatePath(value: any, path: Path, ctx: ValidationContext): Promise<ValidationResult> {
+      validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult> {
         return this.validateFilteredPath(value, path, ctx, _ => false);
       }
     }
@@ -572,9 +572,9 @@ describe('inheritance', () => {
     expectViolations(
       { additionalProperty: 123 },
       multiParentChild,
+      defaultViolations.notNull(property('id')),
       defaultViolations.notEmpty(property('name')),
       defaultViolations.notNull(property('anything')),
-      defaultViolations.notNull(property('id')),
     ));
 
   test("child's extended property validators are only run after successful parent property validation", async () => {
@@ -812,12 +812,12 @@ describe('anyOf', () => {
     const matchingArray = ['2019-01-24T09:10:00Z', validDate, 'ABC'];
     const arrayValidator = V.array(validator);
 
-    test('valid items in array', () =>
+    test('valid items in array', async () =>
       arrayValidator.validate(matchingArray).then(result => {
         expect(result.getValue().length).toBe(3);
         expect(result.getViolations()).toEqual([]);
       }));
-    test('fails due to invalid item added', () =>
+    test('fails due to invalid item added', async () =>
       arrayValidator.validate([...matchingArray, 'ABD']).then(result => {
         expect(result.getViolations().length).toBe(3);
       }));
