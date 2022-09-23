@@ -40,7 +40,7 @@ export class ModelRef extends Validator {
   constructor(private schema: SchemaValidator, public readonly name: string) {
     super();
   }
-  validatePath(value: any, path: Path, ctx: ValidationContext): Promise<ValidationResult> {
+  validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult> {
     return this.schema.validateClass(value, path, ctx, this.name);
   }
 }
@@ -70,13 +70,13 @@ export class SchemaValidator extends Validator {
     this.compileSchema(schema.models, new Set<string>());
   }
 
-  async validatePath(value: any, path: Path, ctx: ValidationContext): Promise<ValidationResult> {
+  validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult> {
     return this.validateClass(value, path, ctx);
   }
 
-  async validateClass(value: any, path: Path, ctx: ValidationContext, expectedType?: string): Promise<ValidationResult> {
+  validateClass(value: any, path: Path, ctx: ValidationContext, expectedType?: string): PromiseLike<ValidationResult> {
     if (isNullOrUndefined(value)) {
-      return ctx.failure(defaultViolations.notNull(path), value);
+      return ctx.failurePromise(defaultViolations.notNull(path), value);
     }
     // 1) Validate discriminator
     let type: string;
@@ -89,14 +89,14 @@ export class SchemaValidator extends Validator {
     }
     const validator = this.validators[type];
     if (!validator) {
-      return ctx.failure(new DiscriminatorViolation(typePath, type, Object.keys(this.validators)), type);
+      return ctx.failurePromise(new DiscriminatorViolation(typePath, type, Object.keys(this.validators)), type);
     }
 
     // 2) Validate that the type is assignable to the expected type (polymorphism)
     if (expectedType) {
       const expectedParent = this.validators[expectedType];
       if (!this.isSubtypeOf(validator, expectedParent)) {
-        return ctx.failure(new TypeMismatch(path, expectedType, type), type);
+        return ctx.failurePromise(new TypeMismatch(path, expectedType, type), type);
       }
     }
 

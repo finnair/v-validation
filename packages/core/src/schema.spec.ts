@@ -291,8 +291,8 @@ describe('Recursive object', () => {
       first,
       schema,
       defaultViolations.cycle(property('tail')),
-      defaultViolations.cycle(property('head').property('tail')),
       defaultViolations.cycle(property('head').property('head')),
+      defaultViolations.cycle(property('head').property('tail')),
     );
   });
 });
