@@ -91,7 +91,7 @@ class SynchPromise<T> implements PromiseLike<T> {
       }
       return new SynchPromise(result);
     }
-    return (this as unknown) as PromiseLike<TResult1>;
+    return this as unknown as PromiseLike<TResult1>;
   }
 }
 
@@ -227,13 +227,16 @@ export class Group {
   constructor(public readonly name: string, includes: GroupOrName[]) {
     this.allIncluded = {};
     this.allIncluded[name] = true;
-    includes.forEach(includedGroup => {
+    for (let i = 0; i < includes.length; i++) {
+      const includedGroup = includes[i];
       if (isString(includedGroup)) {
         this.allIncluded[includedGroup as string] = true;
       } else {
-        Object.keys((includedGroup as Group).allIncluded).forEach(includedName => (this.allIncluded[includedName] = true));
+        for (const name in (includedGroup as Group).allIncluded) {
+          this.allIncluded[name] = true;
+        }
       }
-    });
+    }
   }
 
   includes(groupOrName: GroupOrName): boolean {
@@ -253,15 +256,16 @@ export class Groups {
     if (this.groups[name]) {
       throw new Error(`Group already defined: ${name}`);
     }
-    this.groups[name] = new Group(
-      name,
-      includes.map(groupOrName => {
-        if (isString(groupOrName)) {
-          return this.get(groupOrName as string);
-        }
-        return groupOrName as Group;
-      }),
-    );
+    const includeGroups: Group[] = [];
+    for (let i = 0; i < includes.length; i++) {
+      const groupOrName = includes[i];
+      if (isString(groupOrName)) {
+        includeGroups[i] = this.get(groupOrName as string);
+      } else {
+        includeGroups[i] = groupOrName as Group;
+      }
+    }
+    this.groups[name] = new Group(name, includeGroups);
     return this.groups[name];
   }
 
@@ -350,16 +354,20 @@ function getPropertyValidators(properties?: PropertyModel): Properties {
 }
 
 function getParentValidators(parents: undefined | ParentModel): ObjectValidator[] {
+  let validators: ObjectValidator[] = [];
   let parentValidators: any = [];
   if (parents) {
     parentValidators = parentValidators.concat(parents);
   }
-  return parentValidators.map((modelOrValidator: any) => {
+  for (let i = 0; i < parentValidators.length; i++) {
+    const modelOrValidator = parentValidators[i];
     if (modelOrValidator instanceof ObjectValidator) {
-      return modelOrValidator as ObjectValidator;
+      validators[i] = modelOrValidator as ObjectValidator;
+    } else {
+      validators[i] = new ObjectValidator(modelOrValidator as ObjectModel);
     }
-    return new ObjectValidator(modelOrValidator as ObjectModel);
-  });
+  }
+  return validators;
 }
 
 function getMapEntryValidators(additionalProperties?: boolean | MapEntryModel | MapEntryModel[]): MapEntryValidator[] {
@@ -372,8 +380,12 @@ function getMapEntryValidators(additionalProperties?: boolean | MapEntryModel | 
     }
     return [allowNoneMapEntries];
   }
-  const validators: MapEntryModel[] = [];
-  return validators.concat(additionalProperties as MapEntryModel | MapEntryModel[]).map(entryModel => new MapEntryValidator(entryModel));
+  const models: MapEntryModel[] = ([] as MapEntryModel[]).concat(additionalProperties as MapEntryModel | MapEntryModel[]);
+  const validators: MapEntryValidator[] = [];
+  for (let i = 0; i < models.length; i++) {
+    validators[i] = new MapEntryValidator(models[i]);
+  }
+  return validators;
 }
 
 export class ValidatorFnWrapper extends Validator {
@@ -434,13 +446,14 @@ export class ObjectValidator extends Validator {
     let inheritedThenValidators: Validator[] = [];
 
     this.parentValidators = getParentValidators(model.extends);
-    this.parentValidators.forEach((parent: ObjectValidator) => {
+    for (let i = 0; i < this.parentValidators.length; i++) {
+      const parent = this.parentValidators[i];
       additionalProperties = additionalProperties.concat(parent.additionalProperties);
       properties = mergeProperties(parent.properties, properties);
       if (parent.nextValidator) {
         inheritedThenValidators = inheritedThenValidators.concat(parent.nextValidator);
       }
-    });
+    }
     let nextValidator = inheritedThenValidators.length ? maybeAllOfValidator(inheritedThenValidators) : undefined;
     if (model.next) {
       if (nextValidator) {
@@ -615,17 +628,19 @@ export class ArrayValidator extends Validator {
     }
 
     const array = value as Array<any>;
+    const promises: PromiseLike<ValidationResult>[] = [];
     let violations: Violation[] = [];
-    const promises = array.map((value: any, i: number) =>
-      this.items.validatePath(value, path.index(i), ctx).then(result => {
+    for (let i = 0; i < array.length; i++) {
+      const value = array[i];
+      promises[i] = this.items.validatePath(value, path.index(i), ctx).then(result => {
         if (result.isSuccess()) {
           convertedArray[i] = result.getValue();
         } else {
           violations = violations.concat(result.getViolations());
         }
         return result;
-      }),
-    );
+      });
+    }
 
     return Promise.all(promises).then(_ => {
       if (violations.length == 0) {
@@ -718,27 +733,24 @@ export class OneOfValidator extends Validator {
     super();
   }
 
-  validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult> {
+  async validatePath(value: any, path: Path, ctx: ValidationContext): Promise<ValidationResult> {
     let matches = 0;
     let newValue: any = null;
-    return Promise.all(validateAll(this.validators)).then(_ => {
-      if (matches === 1) {
-        return ctx.successPromise(newValue);
-      }
-      return ctx.failurePromise(defaultViolations.oneOf(matches, path), value);
-    });
-
-    function validateAll(validators: Validator[]) {
-      return validators.map(validator => {
-        return validator.validatePath(value, path, ctx).then(result => {
-          if (result.isSuccess()) {
-            matches++;
-            newValue = result.getValue();
-          }
-          return result;
-        });
+    const promises: PromiseLike<ValidationResult>[] = [];
+    for (let i = 0; i < this.validators.length; i++) {
+      promises[i] = this.validators[i].validatePath(value, path, ctx).then(result => {
+        if (result.isSuccess()) {
+          matches++;
+          newValue = result.getValue();
+        }
+        return result;
       });
     }
+    await Promise.all(promises);
+    if (matches === 1) {
+      return ctx.successPromise(newValue);
+    }
+    return ctx.failurePromise(defaultViolations.oneOf(matches, path), value);
   }
 }
 
@@ -863,24 +875,21 @@ export class MapValidator extends Validator {
     const promises: Promise<void>[] = [];
     let violations: Violation[] = [];
     let i = 0;
-    map.forEach((value: any, key: any) => {
-      const entryPath = path.index(i++);
-      // TODO: Refactor key path as index(0)
-      const keyPromise = this.keys.validatePath(key, entryPath.property('key'), ctx);
-      // TODO: Refactor value path as index(1)
-      const valuePromise = this.values.validatePath(value, entryPath.property('value'), ctx);
-      promises.push(
-        Promise.all([keyPromise, valuePromise]).then(results => {
-          const keyResult = results[0] as ValidationResult;
-          const valueResult = results[1] as ValidationResult;
-          const keySuccess = handleResult(keyResult);
-          const valueSuccess = handleResult(valueResult);
-          if (keySuccess && valueSuccess) {
-            convertedMap.set(keyResult.getValue(), valueResult.getValue());
-          }
-        }),
-      );
-    });
+    for (const [key, value] of map) {
+      const entryPath = path.index(i);
+      const keyPromise = this.keys.validatePath(key, entryPath.index(0), ctx);
+      const valuePromise = this.values.validatePath(value, entryPath.index(1), ctx);
+      promises[i] = Promise.all([keyPromise, valuePromise]).then(results => {
+        const keyResult = results[0] as ValidationResult;
+        const valueResult = results[1] as ValidationResult;
+        const keySuccess = handleResult(keyResult);
+        const valueSuccess = handleResult(valueResult);
+        if (keySuccess && valueSuccess) {
+          convertedMap.set(keyResult.getValue(), valueResult.getValue());
+        }
+      });
+      ++i;
+    }
 
     return Promise.all(promises).then(_ => {
       if (violations.length > 0) {
@@ -1260,37 +1269,35 @@ export class AllOfValidator extends Validator {
 
   constructor(validators: Validator[]) {
     super();
-    this.validators = [];
-    this.validators = this.validators.concat(validators);
+    this.validators = ([] as Validator[]).concat(validators);
   }
 
   validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult> {
     let violations: Violation[] = [];
     let convertedValue: any;
-    return Promise.all(validateAll(this.validators)).then(_ => {
+    const promises: PromiseLike<any>[] = [];
+    for (let i = 0; i < this.validators.length; i++) {
+      const validator = this.validators[i];
+      promises[i] = validator.validatePath(value, path, ctx).then(result => {
+        if (!result.isSuccess()) {
+          violations = violations.concat(result.getViolations());
+        } else {
+          const resultValue = result.getValue();
+          if (resultValue !== value) {
+            if (convertedValue !== undefined && !deepEqual(resultValue, convertedValue)) {
+              throw new Error('Conflicting conversions');
+            }
+            convertedValue = resultValue;
+          }
+        }
+      });
+    }
+    return Promise.all(promises).then(_ => {
       if (violations.length == 0) {
         return ctx.successPromise(convertedValue !== undefined ? convertedValue : value);
       }
       return ctx.failurePromise(violations, value);
     });
-
-    function validateAll(validators: Validator[]) {
-      return validators.map(validator => {
-        return validator.validatePath(value, path, ctx).then(result => {
-          if (!result.isSuccess()) {
-            violations = violations.concat(result.getViolations());
-          } else {
-            const resultValue = result.getValue();
-            if (resultValue !== value) {
-              if (convertedValue !== undefined && !deepEqual(resultValue, convertedValue)) {
-                throw new Error('Conflicting conversions');
-              }
-              convertedValue = resultValue;
-            }
-          }
-        });
-      });
-    }
   }
 }
 
