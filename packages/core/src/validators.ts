@@ -49,7 +49,7 @@ export class ValidationContext {
     return this.promise(this.success(value));
   }
   promise<T>(result: ValidationResult) {
-    return new SynchPromise(result);
+    return new SyncPromise(result);
   }
   registerObject(value: any, path: Path, convertedValue: any): undefined | ValidationResult {
     if (this.objects.has(value)) {
@@ -69,7 +69,7 @@ export class ValidationContext {
   }
 }
 
-class SynchPromise<T> implements PromiseLike<T> {
+class SyncPromise<T> implements PromiseLike<T> {
   constructor(private readonly value: T) {}
   then<TResult1 = T, TResult2 = never>(
     onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null,
@@ -89,7 +89,7 @@ class SynchPromise<T> implements PromiseLike<T> {
       if (result && result.then) {
         return result;
       }
-      return new SynchPromise(result);
+      return new SyncPromise(result);
     }
     return this as unknown as PromiseLike<TResult1>;
   }
