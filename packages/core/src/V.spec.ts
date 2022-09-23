@@ -1333,9 +1333,9 @@ describe('Map', () => {
 
     test('object is not valid', () => expectViolations({}, validator, new TypeMismatch(ROOT, 'Map')));
 
-    test('Map has invalid value', () => expectViolations(new Map([['foo', 0]]), validator, new TypeMismatch(Path.of(0, 'value'), 'string', 0)));
+    test('Map has invalid value', () => expectViolations(new Map([['foo', 0]]), validator, new TypeMismatch(Path.of(0, 1), 'string', 0)));
 
-    test('Map has invalid key', () => expectViolations(new Map([[0, 'foo']]), validator, new TypeMismatch(Path.of(0, 'key'), 'string', 0)));
+    test('Map has invalid key', () => expectViolations(new Map([[0, 'foo']]), validator, new TypeMismatch(Path.of(0, 0), 'string', 0)));
   });
 });
 
