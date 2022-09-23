@@ -15,12 +15,12 @@ export interface ValidateLuxonParams {
   parser: (value: string, match: RegExpExecArray) => DateTime;
 }
 
-export async function validateLuxon({ value, path, ctx, type, proto, pattern, parser }: ValidateLuxonParams): Promise<ValidationResult> {
+export function validateLuxon({ value, path, ctx, type, proto, pattern, parser }: ValidateLuxonParams): PromiseLike<ValidationResult> {
   if (isNullOrUndefined(value)) {
-    return ctx.failure(defaultViolations.notNull(path), value);
+    return ctx.failurePromise(defaultViolations.notNull(path), value);
   }
   if (proto && value instanceof proto) {
-    return ctx.success(value);
+    return ctx.successPromise(value);
   } else if (DateTime.isDateTime(value)) {
     if (value.isValid) {
       return success(value);
@@ -34,10 +34,10 @@ export async function validateLuxon({ value, path, ctx, type, proto, pattern, pa
       }
     }
   }
-  return ctx.failure(defaultViolations.date(value, path, type), value);
+  return ctx.failurePromise(defaultViolations.date(value, path, type), value);
 
   function success(dateTime: DateTime) {
-    return ctx.success(proto ? new proto(dateTime) : dateTime);
+    return ctx.successPromise(proto ? new proto(dateTime) : dateTime);
   }
 }
 
@@ -233,7 +233,8 @@ function dateTimeFromSeconds(options: DateTimeJSOptions = { zone: FixedOffsetZon
   );
 }
 
-const durationPattern = /^P(?!$)(\d+(?:\.\d+)?Y)?(\d+(?:\.\d+)?M)?(\d+(?:\.\d+)?W)?(\d+(?:\.\d+)?D)?(T(?=\d)(\d+(?:\.\d+)?H)?(\d+(?:\.\d+)?M)?(\d+(?:\.\d+)?S)?)?$/;
+const durationPattern =
+  /^P(?!$)(\d+(?:\.\d+)?Y)?(\d+(?:\.\d+)?M)?(\d+(?:\.\d+)?W)?(\d+(?:\.\d+)?D)?(T(?=\d)(\d+(?:\.\d+)?H)?(\d+(?:\.\d+)?M)?(\d+(?:\.\d+)?S)?)?$/;
 
 export class DurationValidator extends Validator {
   async validatePath(value: any, path: Path, ctx: ValidationContext): Promise<ValidationResult> {
