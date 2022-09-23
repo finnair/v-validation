@@ -619,12 +619,11 @@ export class ArrayValidator extends Validator {
       return ctx.promise(cycleResult);
     }
 
-    const array = value as Array<any>;
     const promises: PromiseLike<ValidationResult>[] = [];
     let violations: Violation[] = [];
-    for (let i = 0; i < array.length; i++) {
-      const value = array[i];
-      promises[i] = this.items.validatePath(value, path.index(i), ctx).then(result => {
+    for (let i = 0; i < value.length; i++) {
+      const item = value[i];
+      promises[i] = this.items.validatePath(item, path.index(i), ctx).then(result => {
         if (result.isSuccess()) {
           convertedArray[i] = result.getValue();
         } else {
