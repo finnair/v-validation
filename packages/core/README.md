@@ -69,7 +69,7 @@ JSON.stringify(dateMoment);
 // "2020-03-05"
 ```
 
-Validators are essentially immutable functions that can be combined to form more complex models.
+Validators are immutable objects/functions that can be combined to form more complex models.
 
 ```typescript
 const personValidator = V.object({
@@ -173,6 +173,7 @@ const UserRegistrationValidator = V.object({
   - Errors serialize to JSON nicely for easy interoperability
 - Asynchronous processing allows I/O based validators
   - E.g. check if a code or an ID exists
+  - Basic validators are internally synchronous for better performance
 - Fluent syntax
 - Composability
 - Supports object oriented inheritance and polymorphism where as
@@ -182,10 +183,10 @@ const UserRegistrationValidator = V.object({
   - All non-trivial use cases require some custom validation logic
   - Custom validators can be defined as simple functions
   - No need to register custom validators
-- Effectively Immutable
-  - Everything that can be immutable, is immutable - or as immutable as practically possible in TypeScript/JavaScript
-  - Only defining recursive models requires mutations when defining the rules - a rule must first be defined so that it can be referenced
-- TypeScript
+- All the validators are immutable
+- Supports recursive types/validators (e.g. linked list)
+- Supports cyclic data: allow or disallow by configuration
+- TypeScript native implementation
 
 ## Pure Validation?
 
@@ -411,18 +412,21 @@ const schema = V.schema((schema: SchemaValidator) => ({
 
 ## Recursive Models
 
-Recursive models have a cyclic reference(s) to itself. This is only case that `V` allows for mutability:
+Recursive model has a cyclic reference to itself. While a model cannot reference itself
+before it's declared, we can wrap the call within a validator function:
 
 ```typescript
 // { head: 'first value', tail: { head: 'second value', tail: { head: 'last value' } } }
 const list = V.object({
   properties: {
-    head: V.any(),
-    // Cannot reference itself here
+    first: V.any(),
+    // Instead of recursive model, we have recursive call
+    next: V.optional(V.fn((value: any, path: Path, ctx: ValidationContext) => list.validatePath(value, path, ctx))),
   },
 });
-list.withProperty('tail', V.optional(list));
 ```
+
+Another option is to use [`V.schema`](#schema).
 
 ### Cyclic Data
 
