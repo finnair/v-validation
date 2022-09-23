@@ -469,14 +469,6 @@ export class ObjectValidator extends Validator {
     this.localNextValidator = model.localNext;
   }
 
-  withProperty(name: string, ...validator: Validator[]) {
-    if (this.properties[name]) {
-      throw new Error(`${name} is already defined`);
-    }
-    this.properties[name] = maybeAllOfValidator(validator);
-    return this;
-  }
-
   validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult> {
     return this.validateFilteredPath(value, path, ctx, _ => true);
   }
