@@ -439,7 +439,7 @@ export class ObjectValidator extends Validator {
 
   private readonly localNextValidator: undefined | Validator;
 
-  constructor(public readonly model: ObjectModel) {
+  constructor(model: ObjectModel) {
     super();
     let properties: Properties = {};
     let additionalProperties: MapEntryValidator[] = [];
@@ -591,9 +591,9 @@ export class ObjectNormalizer extends Validator {
 }
 
 export class MapEntryValidator {
-  public readonly keyValidator: Validator;
+  readonly keyValidator: Validator;
 
-  public readonly valueValidator: Validator;
+  readonly valueValidator: Validator;
 
   constructor(entryModel: MapEntryModel) {
     this.keyValidator = maybeAllOfValidator(entryModel.keys);
@@ -602,7 +602,7 @@ export class MapEntryValidator {
 }
 
 export class ArrayValidator extends Validator {
-  constructor(public readonly items: Validator) {
+  constructor(private readonly items: Validator) {
     super();
   }
 
@@ -658,7 +658,7 @@ export class ArrayNormalizer extends ArrayValidator {
 }
 
 export class NextValidator extends Validator {
-  constructor(public readonly firstValidator: Validator, public readonly nextValidator: Validator) {
+  constructor(private readonly firstValidator: Validator, private readonly nextValidator: Validator) {
     super();
   }
 
@@ -678,7 +678,7 @@ export class NextValidator extends Validator {
 }
 
 export class CheckValidator extends Validator {
-  constructor(public readonly validator: Validator) {
+  constructor(private readonly validator: Validator) {
     super();
   }
 
@@ -693,7 +693,7 @@ export class CheckValidator extends Validator {
 }
 
 export class CompositionValidator extends Validator {
-  public readonly validators: Validator[];
+  private readonly validators: Validator[];
 
   constructor(validators: Validator[]) {
     super();
@@ -720,7 +720,7 @@ export class CompositionValidator extends Validator {
 }
 
 export class OneOfValidator extends Validator {
-  constructor(public readonly validators: Validator[]) {
+  constructor(private readonly validators: Validator[]) {
     super();
   }
 
@@ -746,7 +746,7 @@ export class OneOfValidator extends Validator {
 }
 
 export class AnyOfValidator extends Validator {
-  constructor(public readonly validators: Validator[]) {
+  constructor(private readonly validators: Validator[]) {
     super();
   }
   async validatePath(value: any, path: Path, ctx: ValidationContext): Promise<ValidationResult> {
@@ -763,7 +763,7 @@ export class AnyOfValidator extends Validator {
 }
 
 export class IfValidator extends Validator {
-  constructor(public readonly conditionals: Conditional[], public readonly elseValidator?: Validator) {
+  constructor(private readonly conditionals: Conditional[], private readonly elseValidator?: Validator) {
     super();
   }
 
@@ -796,8 +796,8 @@ export class IfValidator extends Validator {
 }
 
 export class Conditional {
-  public readonly fn: AssertTrue;
-  public readonly validator: Validator;
+  readonly fn: AssertTrue;
+  readonly validator: Validator;
 
   constructor(fn: AssertTrue, allOf: Validator[]) {
     this.fn = fn;
@@ -806,7 +806,7 @@ export class Conditional {
 }
 
 export class WhenGroupValidator extends Validator {
-  constructor(public readonly whenGroups: WhenGroup[], public readonly otherwiseValidator?: Validator) {
+  constructor(private readonly whenGroups: WhenGroup[], private readonly otherwiseValidator?: Validator) {
     super();
   }
 
@@ -851,7 +851,7 @@ export class WhenGroup {
 }
 
 export class MapValidator extends Validator {
-  constructor(public readonly keys: Validator, public readonly values: Validator, public readonly jsonSafeMap: boolean) {
+  constructor(private readonly keys: Validator, private readonly values: Validator, private readonly jsonSafeMap: boolean) {
     super();
   }
   validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult> {
@@ -900,7 +900,7 @@ export class MapValidator extends Validator {
 }
 
 export class MapNormalizer extends MapValidator {
-  constructor(public readonly keys: Validator, public readonly values: Validator) {
+  constructor(keys: Validator, values: Validator) {
     super(keys, values, true);
   }
   validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult> {
@@ -1007,7 +1007,7 @@ export class NotEmptyValidator extends Validator {
 }
 
 export class SizeValidator extends Validator {
-  constructor(public readonly min: number, public readonly max: number) {
+  constructor(private readonly min: number, private readonly max: number) {
     super();
     if (max < min) {
       throw new Error('Size: max should be >= than min');
@@ -1061,7 +1061,7 @@ export class BooleanValidator extends Validator {
 }
 
 export class BooleanNormalizer extends Validator {
-  constructor(public readonly truePattern: RegExp, public readonly falsePattern: RegExp) {
+  constructor(private readonly truePattern: RegExp, private readonly falsePattern: RegExp) {
     super();
   }
 
@@ -1100,7 +1100,7 @@ export function isNumber(value: any) {
 }
 
 export class NumberValidator extends Validator {
-  constructor(public readonly format: NumberFormat) {
+  constructor(protected readonly format: NumberFormat) {
     super();
   }
 
@@ -1152,7 +1152,7 @@ export class NumberNormalizer extends NumberValidator {
 }
 
 export class MinValidator extends Validator {
-  constructor(public readonly min: number, public readonly inclusive: boolean) {
+  constructor(private readonly min: number, private readonly inclusive: boolean) {
     super();
   }
 
@@ -1175,7 +1175,7 @@ export class MinValidator extends Validator {
 }
 
 export class MaxValidator extends Validator {
-  constructor(public readonly max: number, public readonly inclusive: boolean) {
+  constructor(private readonly max: number, private readonly inclusive: boolean) {
     super();
   }
 
@@ -1198,7 +1198,7 @@ export class MaxValidator extends Validator {
 }
 
 export class EnumValidator extends Validator {
-  constructor(public readonly enumType: object, public readonly name: string) {
+  constructor(private readonly enumType: object, private readonly name: string) {
     super();
   }
 
@@ -1217,7 +1217,7 @@ export class EnumValidator extends Validator {
 export class AssertTrueValidator extends Validator {
   private fn: AssertTrue;
 
-  constructor(fn: AssertTrue, public readonly type: string, public readonly path?: Path) {
+  constructor(fn: AssertTrue, private readonly type: string, private readonly path?: Path) {
     super();
     this.fn = fn;
   }
@@ -1231,7 +1231,7 @@ export class AssertTrueValidator extends Validator {
 }
 
 export class HasValueValidator extends Validator {
-  constructor(public readonly expectedValue: any) {
+  constructor(private readonly expectedValue: any) {
     super();
   }
   validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult> {
@@ -1256,7 +1256,7 @@ export function maybeAllOfValidator(validatorOrArray: Validator | Validator[]): 
 }
 
 export class AllOfValidator extends Validator {
-  public readonly validators: Validator[];
+  private readonly validators: Validator[];
 
   constructor(validators: Validator[]) {
     super();
@@ -1293,7 +1293,7 @@ export class AllOfValidator extends Validator {
 }
 
 export class DateValidator extends Validator {
-  constructor(public readonly dateType: string) {
+  constructor(private readonly dateType: string) {
     super();
   }
 
@@ -1364,7 +1364,7 @@ export class PatternNormalizer extends PatternValidator {
 }
 
 export class OptionalValidator extends Validator {
-  public readonly validator: Validator;
+  private readonly validator: Validator;
 
   constructor(type: Validator, allOf: Validator[]) {
     super();
@@ -1384,7 +1384,7 @@ export class OptionalValidator extends Validator {
 }
 
 export class ValueMapper extends Validator {
-  constructor(public readonly fn: MappingFn, public readonly error?: any) {
+  constructor(private readonly fn: MappingFn, private readonly error?: any) {
     super();
   }
 
@@ -1440,7 +1440,7 @@ const allowNoneMapEntries: MapEntryValidator = new MapEntryValidator({
 });
 
 export class JsonValidator extends Validator {
-  public readonly validator: Validator;
+  private readonly validator: Validator;
 
   constructor(allOf: Validator[]) {
     super();
