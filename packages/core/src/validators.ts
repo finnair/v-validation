@@ -69,7 +69,7 @@ export class ValidationContext {
   }
 }
 
-class SyncPromise<T> implements PromiseLike<T> {
+export class SyncPromise<T> implements PromiseLike<T> {
   constructor(private readonly value: T) {}
   then<TResult1 = T, TResult2 = never>(
     onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null,

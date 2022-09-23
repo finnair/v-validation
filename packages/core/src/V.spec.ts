@@ -19,6 +19,7 @@ import {
   HasValueViolation,
   SizeViolation,
   EnumMismatch,
+  SyncPromise,
 } from './validators';
 import { default as V } from './V';
 import { Path } from '@finnair/path';
@@ -1349,4 +1350,51 @@ describe('json', () => {
   test('Invalid JSON', () => expectViolations('["foo", "bar"', validator, new TypeMismatch(Path.of(), 'JSON', '["foo", "bar"')));
 
   test('Non-string input is invalid', () => expectViolations(123, validator, new TypeMismatch(Path.of(), 'string', 123)));
+});
+
+describe('SyncPromise', () => {
+  test('onfullfilled is wrapped in a new SyncPromise', () => {
+    const promise = new SyncPromise('result').then(_ => 'new result');
+    expect(promise).toBeInstanceOf(SyncPromise);
+    promise.then(value => expect(value).toBe('new result'));
+  });
+
+  test('promise returned by onfulfilled is retuned as such', async () => {
+    const promise = Promise.resolve('promised result');
+    const result = await new SyncPromise('result').then(_ => promise);
+    expect(result).toBe('promised result');
+  });
+
+  test('call onrejected on error', async () => {
+    let thrownError: undefined | any;
+    // Awaiting for SyncPromise is optional
+    const result = await new SyncPromise('result').then(
+      () => {
+        throw 'error';
+      },
+      error => {
+        thrownError = error;
+        return 'handled';
+      },
+    );
+    expect(result).toBe('handled');
+    expect(thrownError).toBe('error');
+  });
+
+  test('throw error if onrejected is missing', () => {
+    try {
+      new SyncPromise('result').then(() => {
+        throw 'error';
+      });
+      fail('expected an error');
+    } catch (thrownError) {
+      expect(thrownError).toBe('error');
+      // as expected
+    }
+  });
+
+  test('return this if both callbacks are missing', () => {
+    const promise = new SyncPromise('result');
+    expect(promise.then()).toBe(promise);
+  });
 });
