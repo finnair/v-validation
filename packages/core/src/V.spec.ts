@@ -414,15 +414,11 @@ describe('objects', () => {
     const validator = V.object({
       properties: {
         first: V.string(),
+        next: V.optional(V.fn((value: any, path: Path, ctx: ValidationContext) => validator.validatePath(value, path, ctx))),
       },
     });
-    validator.withProperty('next', V.optional(validator));
 
     test('recursive type', () => expectValid({ first: 'first', next: { first: 'second', next: { first: 'third' } } }, validator));
-
-    test('recursive type: redefining a property not allowed', () => {
-      expect(() => V.object({ properties: { property: V.string() } }).withProperty('property', V.number())).toThrow();
-    });
 
     test('cyclic data', async () => {
       const first: any = { first: 'first' };
