@@ -20,6 +20,7 @@
     "paths": {
       "@finnair/v-validation": ["packages/core/*"],
       "@finnair/v-validation-moment": ["packages/moment/*"],
+      "@finnair/v-validation-luxon": ["packages/luxon/*"],
       "@finnair/path": ["packages/path/*"],
       "@finnair/path-parser": ["packages/path-parser/*"]
     }
