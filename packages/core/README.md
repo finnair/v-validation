@@ -69,7 +69,7 @@ JSON.stringify(dateMoment);
 // "2020-03-05"
 ```
 
-Validators are immutable objects/functions that can be combined to form more complex models.
+Validators are effectively immutable objects/functions that can be combined to form more complex models.
 
 ```typescript
 const personValidator = V.object({

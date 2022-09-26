@@ -132,6 +132,7 @@ export class ValidationResult {
   constructor(violations?: Violation[], value?: any) {
     this.violations = violations;
     this.value = value;
+    Object.freeze(this.violations);
   }
 
   isSuccess() {
@@ -237,6 +238,7 @@ export class Group {
         }
       }
     }
+    Object.freeze(this.allIncluded);
   }
 
   includes(groupOrName: GroupOrName): boolean {
@@ -394,6 +396,7 @@ export class ValidatorFnWrapper extends Validator {
   constructor(fn: ValidatorFn, public readonly type?: string) {
     super();
     this.fn = fn;
+    Object.freeze(this);
   }
 
   validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult> {
@@ -427,19 +430,19 @@ export function mergeProperties(from: Properties, to: Properties): Properties {
 }
 
 export class ObjectValidator extends Validator {
-  private readonly properties: Properties;
+  public readonly properties: Properties;
 
-  private readonly localProperties: Properties;
+  public readonly localProperties: Properties;
 
-  private readonly additionalProperties: MapEntryValidator[];
+  public readonly additionalProperties: MapEntryValidator[];
 
   public readonly parentValidators: ObjectValidator[];
 
   public readonly nextValidator: undefined | Validator;
 
-  private readonly localNextValidator: undefined | Validator;
+  public readonly localNextValidator: undefined | Validator;
 
-  constructor(model: ObjectModel) {
+  constructor(public readonly model: ObjectModel) {
     super();
     let properties: Properties = {};
     let additionalProperties: MapEntryValidator[] = [];
@@ -467,6 +470,12 @@ export class ObjectValidator extends Validator {
     this.localProperties = getPropertyValidators(model.localProperties);
     this.nextValidator = nextValidator;
     this.localNextValidator = model.localNext;
+
+    Object.freeze(this.properties);
+    Object.freeze(this.localProperties);
+    Object.freeze(this.additionalProperties);
+    Object.freeze(this.parentValidators);
+    Object.freeze(this);
   }
 
   validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult> {
@@ -577,6 +586,7 @@ export class ObjectValidator extends Validator {
 export class ObjectNormalizer extends Validator {
   constructor(public readonly property: string) {
     super();
+    Object.freeze(this);
   }
   validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult> {
     if (value === undefined) {
@@ -592,19 +602,21 @@ export class ObjectNormalizer extends Validator {
 }
 
 export class MapEntryValidator {
-  readonly keyValidator: Validator;
+  public readonly keyValidator: Validator;
 
-  readonly valueValidator: Validator;
+  public readonly valueValidator: Validator;
 
   constructor(entryModel: MapEntryModel) {
     this.keyValidator = maybeAllOfValidator(entryModel.keys);
     this.valueValidator = maybeAllOfValidator(entryModel.values);
+    Object.freeze(this);
   }
 }
 
 export class ArrayValidator extends Validator {
-  constructor(private readonly items: Validator) {
+  constructor(public readonly itemsValidator: Validator) {
     super();
+    Object.freeze(this);
   }
 
   validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult> {
@@ -624,7 +636,7 @@ export class ArrayValidator extends Validator {
     let violations: Violation[] = [];
     for (let i = 0; i < value.length; i++) {
       const item = value[i];
-      promises[i] = this.items.validatePath(item, path.index(i), ctx).then(result => {
+      promises[i] = this.itemsValidator.validatePath(item, path.index(i), ctx).then(result => {
         if (result.isSuccess()) {
           convertedArray[i] = result.getValue();
         } else {
@@ -644,8 +656,8 @@ export class ArrayValidator extends Validator {
 }
 
 export class ArrayNormalizer extends ArrayValidator {
-  constructor(items: Validator) {
-    super(items);
+  constructor(itemsValidator: Validator) {
+    super(itemsValidator);
   }
   validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult> {
     if (value === undefined) {
@@ -659,8 +671,9 @@ export class ArrayNormalizer extends ArrayValidator {
 }
 
 export class NextValidator extends Validator {
-  constructor(private readonly firstValidator: Validator, private readonly nextValidator: Validator) {
+  constructor(public readonly firstValidator: Validator, public readonly nextValidator: Validator) {
     super();
+    Object.freeze(this);
   }
 
   validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult> {
@@ -679,8 +692,9 @@ export class NextValidator extends Validator {
 }
 
 export class CheckValidator extends Validator {
-  constructor(private readonly validator: Validator) {
+  constructor(public readonly validator: Validator) {
     super();
+    Object.freeze(this);
   }
 
   validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult> {
@@ -694,12 +708,13 @@ export class CheckValidator extends Validator {
 }
 
 export class CompositionValidator extends Validator {
-  private readonly validators: Validator[];
+  public readonly validators: Validator[];
 
-  constructor(validators: Validator[]) {
+  constructor(validators: Validator | Validator[]) {
     super();
-    this.validators = [];
-    this.validators = this.validators.concat(validators);
+    this.validators = ([] as Validator[]).concat(validators);
+    Object.freeze(this.validators);
+    Object.freeze(this);
   }
 
   validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult> {
@@ -721,8 +736,10 @@ export class CompositionValidator extends Validator {
 }
 
 export class OneOfValidator extends Validator {
-  constructor(private readonly validators: Validator[]) {
+  constructor(public readonly validators: Validator[]) {
     super();
+    Object.freeze(this.validators);
+    Object.freeze(this);
   }
 
   async validatePath(value: any, path: Path, ctx: ValidationContext): Promise<ValidationResult> {
@@ -747,8 +764,10 @@ export class OneOfValidator extends Validator {
 }
 
 export class AnyOfValidator extends Validator {
-  constructor(private readonly validators: Validator[]) {
+  constructor(public readonly validators: Validator[]) {
     super();
+    Object.freeze(this.validators);
+    Object.freeze(this);
   }
   async validatePath(value: any, path: Path, ctx: ValidationContext): Promise<ValidationResult> {
     const passes: ValidationResult[] = [];
@@ -765,8 +784,10 @@ export class AnyOfValidator extends Validator {
 }
 
 export class IfValidator extends Validator {
-  constructor(private readonly conditionals: Conditional[], private readonly elseValidator?: Validator) {
+  constructor(public readonly conditionals: Conditional[], public readonly elseValidator?: Validator) {
     super();
+    Object.freeze(this.conditionals);
+    Object.freeze(this);
   }
 
   validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult> {
@@ -798,18 +819,22 @@ export class IfValidator extends Validator {
 }
 
 export class Conditional {
-  readonly fn: AssertTrue;
-  readonly validator: Validator;
+  public readonly fn: AssertTrue;
+  public readonly validator: Validator;
 
   constructor(fn: AssertTrue, allOf: Validator[]) {
     this.fn = fn;
     this.validator = maybeAllOfValidator(allOf);
+    Object.freeze(this.validator);
+    Object.freeze(this);
   }
 }
 
 export class WhenGroupValidator extends Validator {
-  constructor(private readonly whenGroups: WhenGroup[], private readonly otherwiseValidator?: Validator) {
+  constructor(public readonly whenGroups: WhenGroup[], public readonly otherwiseValidator?: Validator) {
     super();
+    Object.freeze(this.whenGroups);
+    Object.freeze(this);
   }
 
   validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult> {
@@ -849,12 +874,14 @@ export class WhenGroup {
   constructor(group: GroupOrName, allOf: Validator[]) {
     this.group = isString(group) ? (group as string) : (group as Group).name;
     this.validator = maybeAllOfValidator(allOf);
+    Object.freeze(this);
   }
 }
 
 export class MapValidator extends Validator {
-  constructor(private readonly keys: Validator, private readonly values: Validator, private readonly jsonSafeMap: boolean) {
+  constructor(public readonly keys: Validator, public readonly values: Validator, public readonly jsonSafeMap: boolean) {
     super();
+    Object.freeze(this);
   }
   validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult> {
     if (isNullOrUndefined(value)) {
@@ -1014,6 +1041,7 @@ export class SizeValidator extends Validator {
     if (max < min) {
       throw new Error('Size: max should be >= than min');
     }
+    Object.freeze(this);
   }
 
   validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult> {
@@ -1063,8 +1091,9 @@ export class BooleanValidator extends Validator {
 }
 
 export class BooleanNormalizer extends Validator {
-  constructor(private readonly truePattern: RegExp, private readonly falsePattern: RegExp) {
+  constructor(public readonly truePattern: RegExp, public readonly falsePattern: RegExp) {
     super();
+    Object.freeze(this);
   }
 
   validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult> {
@@ -1102,8 +1131,9 @@ export function isNumber(value: any) {
 }
 
 export class NumberValidator extends Validator {
-  constructor(protected readonly format: NumberFormat) {
+  constructor(public readonly format: NumberFormat) {
     super();
+    Object.freeze(this);
   }
 
   validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult> {
@@ -1154,8 +1184,9 @@ export class NumberNormalizer extends NumberValidator {
 }
 
 export class MinValidator extends Validator {
-  constructor(private readonly min: number, private readonly inclusive: boolean) {
+  constructor(public readonly min: number, public readonly inclusive: boolean) {
     super();
+    Object.freeze(this);
   }
 
   validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult> {
@@ -1177,8 +1208,9 @@ export class MinValidator extends Validator {
 }
 
 export class MaxValidator extends Validator {
-  constructor(private readonly max: number, private readonly inclusive: boolean) {
+  constructor(public readonly max: number, public readonly inclusive: boolean) {
     super();
+    Object.freeze(this);
   }
 
   validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult> {
@@ -1200,8 +1232,9 @@ export class MaxValidator extends Validator {
 }
 
 export class EnumValidator extends Validator {
-  constructor(private readonly enumType: object, private readonly name: string) {
+  constructor(public readonly enumType: object, public readonly name: string) {
     super();
+    Object.freeze(this);
   }
 
   validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult> {
@@ -1217,11 +1250,12 @@ export class EnumValidator extends Validator {
 }
 
 export class AssertTrueValidator extends Validator {
-  private fn: AssertTrue;
+  public fn: AssertTrue;
 
-  constructor(fn: AssertTrue, private readonly type: string, private readonly path?: Path) {
+  constructor(fn: AssertTrue, public readonly type: string, public readonly path?: Path) {
     super();
     this.fn = fn;
+    Object.freeze(this);
   }
 
   validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult> {
@@ -1233,8 +1267,9 @@ export class AssertTrueValidator extends Validator {
 }
 
 export class HasValueValidator extends Validator {
-  constructor(private readonly expectedValue: any) {
+  constructor(public readonly expectedValue: any) {
     super();
+    Object.freeze(this);
   }
   validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult> {
     if (deepEqual(value, this.expectedValue)) {
@@ -1258,11 +1293,13 @@ export function maybeAllOfValidator(validatorOrArray: Validator | Validator[]): 
 }
 
 export class AllOfValidator extends Validator {
-  private readonly validators: Validator[];
+  public readonly validators: Validator[];
 
   constructor(validators: Validator[]) {
     super();
     this.validators = ([] as Validator[]).concat(validators);
+    Object.freeze(this.validators);
+    Object.freeze(this);
   }
 
   validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult> {

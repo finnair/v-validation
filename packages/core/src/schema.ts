@@ -39,6 +39,7 @@ export interface ClassModel {
 export class ModelRef extends Validator {
   constructor(private schema: SchemaValidator, public readonly name: string) {
     super();
+    Object.freeze(this);
   }
   validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult> {
     return this.schema.validateClass(value, path, ctx, this.name);
@@ -52,7 +53,7 @@ export class DiscriminatorViolation extends Violation {
 }
 
 export class SchemaValidator extends Validator {
-  private readonly discriminator: Discriminator;
+  public readonly discriminator: Discriminator;
 
   private readonly proxies = new Map<string, Validator>();
 
@@ -68,6 +69,9 @@ export class SchemaValidator extends Validator {
     }
     this.discriminator = schema.discriminator;
     this.compileSchema(schema.models, new Set<string>());
+
+    Object.freeze(this.validators);
+    Object.freeze(this);
   }
 
   validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult> {

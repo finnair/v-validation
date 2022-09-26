@@ -14,6 +14,7 @@ export abstract class LuxonDateTime {
       }
       this.dateTime = this.normalize(input);
     }
+    Object.freeze(this);
   }
 
   protected abstract normalize(dateTime: DateTime): DateTime;
@@ -26,7 +27,7 @@ export abstract class LuxonDateTime {
     return this.dateTime.valueOf();
   }
 
-  as<T extends LuxonDateTime>(type: { new(...args: any[]): T }): T {
+  as<T extends LuxonDateTime>(type: { new (...args: any[]): T }): T {
     if (this instanceof type) {
       return this;
     }
@@ -65,31 +66,39 @@ export class LocalDateLuxon extends LuxonDateTime {
   }
 
   public static fromISO(value: string, options?: DateTimeOptions) {
-    return new LocalDateLuxon(DateTime.fromISO(value, {
-      zone: FixedOffsetZone.utcInstance,
-      ...options
-    }));
+    return new LocalDateLuxon(
+      DateTime.fromISO(value, {
+        zone: FixedOffsetZone.utcInstance,
+        ...options,
+      }),
+    );
   }
 
   public static fromFormat(value: string, format: string, options?: DateTimeOptions) {
-    return new LocalDateLuxon(DateTime.fromFormat(value, format, {
-      zone: FixedOffsetZone.utcInstance,
-      ...options
-    }));
+    return new LocalDateLuxon(
+      DateTime.fromFormat(value, format, {
+        zone: FixedOffsetZone.utcInstance,
+        ...options,
+      }),
+    );
   }
 
   public static fromJSDate(date: Date, options?: { zone?: string | Zone }) {
-    return new LocalDateLuxon(DateTime.fromJSDate(date, {
-      zone: FixedOffsetZone.utcInstance,
-      ...options
-    }));
+    return new LocalDateLuxon(
+      DateTime.fromJSDate(date, {
+        zone: FixedOffsetZone.utcInstance,
+        ...options,
+      }),
+    );
   }
 
   public static fromMillis(millis: number, options?: DateTimeJSOptions) {
-    return new LocalDateLuxon(DateTime.fromMillis(millis, {
-      zone: FixedOffsetZone.utcInstance,
-      ...options
-    }));
+    return new LocalDateLuxon(
+      DateTime.fromMillis(millis, {
+        zone: FixedOffsetZone.utcInstance,
+        ...options,
+      }),
+    );
   }
 
   protected normalize(dateTime: DateTime): DateTime {
@@ -121,31 +130,39 @@ export class LocalTimeLuxon extends LuxonDateTime {
   }
 
   public static fromISO(value: string, options?: DateTimeOptions) {
-    return new LocalTimeLuxon(DateTime.fromISO(value, {
-      zone: FixedOffsetZone.utcInstance,
-      ...options
-    }));
+    return new LocalTimeLuxon(
+      DateTime.fromISO(value, {
+        zone: FixedOffsetZone.utcInstance,
+        ...options,
+      }),
+    );
   }
 
   public static fromFormat(value: string, format: string, options?: DateTimeOptions) {
-    return new LocalTimeLuxon(DateTime.fromFormat(value, format, {
-      zone: FixedOffsetZone.utcInstance,
-      ...options
-    }));
+    return new LocalTimeLuxon(
+      DateTime.fromFormat(value, format, {
+        zone: FixedOffsetZone.utcInstance,
+        ...options,
+      }),
+    );
   }
 
   public static fromJSDate(date: Date, options?: { zone?: string | Zone }) {
-    return new LocalTimeLuxon(DateTime.fromJSDate(date, {
-      zone: FixedOffsetZone.utcInstance,
-      ...options
-    }));
+    return new LocalTimeLuxon(
+      DateTime.fromJSDate(date, {
+        zone: FixedOffsetZone.utcInstance,
+        ...options,
+      }),
+    );
   }
 
   public static fromMillis(millis: number, options?: DateTimeJSOptions) {
-    return new LocalTimeLuxon(DateTime.fromMillis(millis, {
-      zone: FixedOffsetZone.utcInstance,
-      ...options
-    }));
+    return new LocalTimeLuxon(
+      DateTime.fromMillis(millis, {
+        zone: FixedOffsetZone.utcInstance,
+        ...options,
+      }),
+    );
   }
 
   protected normalize(dateTime: DateTime): DateTime {
@@ -175,17 +192,21 @@ export class DateTimeLuxon extends LuxonDateTime {
   }
 
   public static fromISO(value: string, options?: DateTimeOptions) {
-    return new DateTimeLuxon(DateTime.fromISO(value, {
-      setZone: true,
-      ...options
-    }));
+    return new DateTimeLuxon(
+      DateTime.fromISO(value, {
+        setZone: true,
+        ...options,
+      }),
+    );
   }
 
   public static fromFormat(value: string, format: string, options?: DateTimeOptions) {
-    return new DateTimeLuxon(DateTime.fromFormat(value, format, {
-      setZone: true,
-      ...options
-    }));
+    return new DateTimeLuxon(
+      DateTime.fromFormat(value, format, {
+        setZone: true,
+        ...options,
+      }),
+    );
   }
 
   public static fromJSDate(date: Date, options?: { zone?: string | Zone }) {
@@ -222,31 +243,39 @@ export class DateTimeUtcLuxon extends LuxonDateTime {
   }
 
   public static fromISO(value: string, options?: DateTimeOptions) {
-    return new DateTimeUtcLuxon(DateTime.fromISO(value, {
-      zone: FixedOffsetZone.utcInstance,
-      ...options
-    }));
+    return new DateTimeUtcLuxon(
+      DateTime.fromISO(value, {
+        zone: FixedOffsetZone.utcInstance,
+        ...options,
+      }),
+    );
   }
 
   public static fromFormat(value: string, format: string, options?: DateTimeOptions) {
-    return new DateTimeUtcLuxon(DateTime.fromFormat(value, format, {
-      zone: FixedOffsetZone.utcInstance,
-      ...options
-    }));
+    return new DateTimeUtcLuxon(
+      DateTime.fromFormat(value, format, {
+        zone: FixedOffsetZone.utcInstance,
+        ...options,
+      }),
+    );
   }
 
   public static fromJSDate(date: Date, options?: { zone?: string | Zone }) {
-    return new DateTimeUtcLuxon(DateTime.fromJSDate(date, {
-      zone: FixedOffsetZone.utcInstance,
-      ...options
-    }));
+    return new DateTimeUtcLuxon(
+      DateTime.fromJSDate(date, {
+        zone: FixedOffsetZone.utcInstance,
+        ...options,
+      }),
+    );
   }
 
   public static fromMillis(millis: number, options?: DateTimeJSOptions) {
-    return new DateTimeUtcLuxon(DateTime.fromMillis(millis, {
-      zone: FixedOffsetZone.utcInstance,
-      ...options
-    }));
+    return new DateTimeUtcLuxon(
+      DateTime.fromMillis(millis, {
+        zone: FixedOffsetZone.utcInstance,
+        ...options,
+      }),
+    );
   }
 
   protected normalize(dateTime: DateTime): DateTime {
@@ -276,17 +305,21 @@ export class DateTimeMillisLuxon extends LuxonDateTime {
   }
 
   public static fromISO(value: string, options?: DateTimeOptions) {
-    return new DateTimeMillisLuxon(DateTime.fromISO(value, {
-      setZone: true,
-      ...options
-    }));
+    return new DateTimeMillisLuxon(
+      DateTime.fromISO(value, {
+        setZone: true,
+        ...options,
+      }),
+    );
   }
 
   public static fromFormat(value: string, format: string, options?: DateTimeOptions) {
-    return new DateTimeMillisLuxon(DateTime.fromFormat(value, format, {
-      setZone: true,
-      ...options
-    }));
+    return new DateTimeMillisLuxon(
+      DateTime.fromFormat(value, format, {
+        setZone: true,
+        ...options,
+      }),
+    );
   }
 
   public static fromJSDate(date: Date, options?: { zone?: string | Zone }) {
@@ -323,31 +356,39 @@ export class DateTimeMillisUtcLuxon extends LuxonDateTime {
   }
 
   public static fromISO(value: string, options?: DateTimeOptions) {
-    return new DateTimeMillisUtcLuxon(DateTime.fromISO(value, {
-      zone: FixedOffsetZone.utcInstance,
-      ...options
-    }));
+    return new DateTimeMillisUtcLuxon(
+      DateTime.fromISO(value, {
+        zone: FixedOffsetZone.utcInstance,
+        ...options,
+      }),
+    );
   }
 
   public static fromFormat(value: string, format: string, options?: DateTimeOptions) {
-    return new DateTimeMillisUtcLuxon(DateTime.fromFormat(value, format, {
-      zone: FixedOffsetZone.utcInstance,
-      ...options
-    }));
+    return new DateTimeMillisUtcLuxon(
+      DateTime.fromFormat(value, format, {
+        zone: FixedOffsetZone.utcInstance,
+        ...options,
+      }),
+    );
   }
 
   public static fromJSDate(date: Date, options?: { zone?: string | Zone }) {
-    return new DateTimeMillisUtcLuxon(DateTime.fromJSDate(date, {
-      zone: FixedOffsetZone.utcInstance,
-      ...options
-    }));
+    return new DateTimeMillisUtcLuxon(
+      DateTime.fromJSDate(date, {
+        zone: FixedOffsetZone.utcInstance,
+        ...options,
+      }),
+    );
   }
 
   public static fromMillis(millis: number, options?: DateTimeJSOptions) {
-    return new DateTimeMillisUtcLuxon(DateTime.fromMillis(millis, {
-      zone: FixedOffsetZone.utcInstance,
-      ...options
-    }));
+    return new DateTimeMillisUtcLuxon(
+      DateTime.fromMillis(millis, {
+        zone: FixedOffsetZone.utcInstance,
+        ...options,
+      }),
+    );
   }
 
   protected normalize(dateTime: DateTime): DateTime {

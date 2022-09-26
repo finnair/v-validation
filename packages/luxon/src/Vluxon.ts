@@ -269,3 +269,4 @@ export const Vluxon = {
   dateTimeFromMillis,
   duration: () => new DurationValidator(),
 };
+Object.freeze(Vluxon);

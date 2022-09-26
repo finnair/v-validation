@@ -173,5 +173,6 @@ const V = {
 
   json: (...validators: Validator[]) => new JsonValidator(validators),
 };
+Object.freeze(V);
 
 export default V;
