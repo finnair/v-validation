@@ -1,6 +1,6 @@
 {
   "name": "@finnair/v-validation-luxon",
-  "version": "2.0.0",
+  "version": "3.0.0-alpha.0",
   "private": false,
   "description": "Luxon validators",
   "main": "dist/index.js",
@@ -26,7 +26,7 @@
   },
   "dependencies": {
     "@finnair/path": "^2.0.0",
-    "@finnair/v-validation": "^2.0.0",
+    "@finnair/v-validation": "^3.0.0-alpha.0",
     "luxon": "3.0.3"
   },
   "devDependencies": {

@@ -1,0 +1,14 @@
+{
+  "name": "@finnair/perf-test",
+  "version": "3.0.0-alpha.0",
+  "private": false,
+  "description": "Performance tests",
+  "scripts": {
+    "build": "tsc -b ."
+  },
+  "dependencies": {
+    "@finnair/path": "^2.0.0",
+    "@finnair/v-validation": "^3.0.0-alpha.0",
+    "@finnair/v-validation-luxon": "^3.0.0-alpha.0"
+  }
+}

@@ -3,6 +3,17 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [3.0.0-alpha.0](https://github.com/finnair/v-validation/compare/v2.0.0...v3.0.0-alpha.0) (2022-09-26)
+
+
+### Features
+
+* Use SyncPromise also in schema and luxon ([e8590b8](https://github.com/finnair/v-validation/commit/e8590b8c2a44ad28fde88f8682f53628ecf74a0f))
+
+
+
+
+
 # [2.0.0](https://github.com/finnair/v-validation/compare/v1.1.0...v2.0.0) (2022-09-08)
 
 
