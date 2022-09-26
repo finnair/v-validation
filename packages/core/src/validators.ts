@@ -985,10 +985,6 @@ export function isSimplePrimitive(value: any) {
 }
 
 export class StringValidator extends Validator {
-  constructor() {
-    super();
-  }
-
   validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult> {
     if (isNullOrUndefined(value)) {
       return ctx.failurePromise(defaultViolations.notNull(path), value);
@@ -1059,10 +1055,6 @@ export class SizeValidator extends Validator {
 }
 
 export class NotBlankValidator extends Validator {
-  constructor() {
-    super();
-  }
-
   validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult> {
     if (isNullOrUndefined(value)) {
       return ctx.failurePromise(defaultViolations.notBlank(path), value);
@@ -1093,6 +1085,8 @@ export class BooleanValidator extends Validator {
 export class BooleanNormalizer extends Validator {
   constructor(public readonly truePattern: RegExp, public readonly falsePattern: RegExp) {
     super();
+    Object.freeze(this.truePattern);
+    Object.freeze(this.falsePattern);
     Object.freeze(this);
   }
 
@@ -1332,8 +1326,9 @@ export class AllOfValidator extends Validator {
 }
 
 export class DateValidator extends Validator {
-  constructor(private readonly dateType: string) {
+  constructor(public readonly dateType: string) {
     super();
+    Object.freeze(this);
   }
 
   validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult> {
@@ -1357,11 +1352,13 @@ export class DateValidator extends Validator {
 }
 
 export class PatternValidator extends Validator {
-  private readonly regExp: RegExp;
+  public readonly regExp: RegExp;
 
   constructor(pattern: string | RegExp, flags?: string) {
     super();
     this.regExp = pattern instanceof RegExp ? pattern : new RegExp(pattern, flags);
+    Object.freeze(this.regExp);
+    Object.freeze(this);
   }
 
   validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult> {
@@ -1412,6 +1409,7 @@ export class OptionalValidator extends Validator {
     } else {
       this.validator = type;
     }
+    Object.freeze(this);
   }
 
   validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult> {
@@ -1423,8 +1421,9 @@ export class OptionalValidator extends Validator {
 }
 
 export class ValueMapper extends Validator {
-  constructor(private readonly fn: MappingFn, private readonly error?: any) {
+  constructor(public readonly fn: MappingFn, public readonly error?: any) {
     super();
+    Object.freeze(this);
   }
 
   validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult> {
@@ -1484,6 +1483,7 @@ export class JsonValidator extends Validator {
   constructor(allOf: Validator[]) {
     super();
     this.validator = maybeAllOfValidator(allOf);
+    Object.freeze(this);
   }
 
   validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult> {
