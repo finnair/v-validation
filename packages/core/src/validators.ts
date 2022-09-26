@@ -544,7 +544,8 @@ export class ObjectValidator extends Validator {
       let currentValue = originalValue;
       let validKey = false;
       let result: undefined | ValidationResult;
-      for (const entryValidator of additionalProperties) {
+      for (let i = 0; i < additionalProperties.length; i++) {
+        const entryValidator = additionalProperties[i];
         result = await entryValidator.keyValidator.validatePath(key, keyPath, ctx);
         if (result.isSuccess()) {
           validKey = true;
@@ -753,7 +754,8 @@ export class AnyOfValidator extends Validator {
     const passes: ValidationResult[] = [];
     const failures: Violation[] = [];
 
-    for (const validator of this.validators) {
+    for (let i = 0; i < this.validators.length; i++) {
+      const validator = this.validators[i];
       const result = await validator.validatePath(value, path, ctx);
       result.isSuccess() ? passes.push(result.getValue()) : failures.push(...result.getViolations());
     }
