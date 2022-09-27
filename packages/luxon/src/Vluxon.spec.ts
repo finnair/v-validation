@@ -56,6 +56,12 @@ describe('Vluxon', () => {
     });
   });
 
+  describe('constructor checks', () => {
+    test.each([null, undefined, new Date(), '2022-09-27T12:36:19.598Z', Date.now()])('%s is invalid', (invalidValue: any) => {
+      expect(() => new DateTimeLuxon(invalidValue as unknown as DateTime)).toThrowError('invalid input');
+    });
+  });
+
   describe.each`
     type
     ${LocalDateLuxon}

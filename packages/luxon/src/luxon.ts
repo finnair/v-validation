@@ -6,13 +6,17 @@ export abstract class LuxonDateTime {
   public readonly dateTime: DateTime;
 
   constructor(input: LuxonDateTimeInput) {
-    if (input instanceof LuxonDateTime) {
+    if (input === null || input === undefined) {
+      throw new Error('invalid input (null or undefined), expected DateTime or LuxonDateTime');
+    } else if (input instanceof LuxonDateTime) {
       this.dateTime = this.normalize(input.dateTime);
-    } else {
+    } else if (input instanceof DateTime) {
       if (!input.isValid) {
         throw new Error('Invalid DateTime: ' + input.invalidExplanation);
       }
       this.dateTime = this.normalize(input);
+    } else {
+      throw new Error('invalid input, expected DateTime or LuxonDateTime');
     }
     Object.freeze(this);
   }
