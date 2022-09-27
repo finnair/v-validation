@@ -429,7 +429,7 @@ describe('objects', () => {
     });
   });
 
-  test('custom property filtering extension', () => {
+  describe('custom property filtering ObjectValidator extension', () => {
     class DropAllPropertiesValidator extends ObjectValidator {
       constructor(model: ObjectModel) {
         super(model);
@@ -438,13 +438,27 @@ describe('objects', () => {
         return this.validateFilteredPath(value, path, ctx, _ => false);
       }
     }
-    expectValid(
-      { property: 'to-be-dropped' },
-      new DropAllPropertiesValidator({
-        properties: { requiredProperty: V.string() }, // Not reported
-      }),
-      {},
-    );
+
+    test('required property validation skipped', async () =>
+      expectValid(
+        { property: 'to-be-dropped' },
+        new DropAllPropertiesValidator({
+          properties: { requiredProperty: V.string() }, // Not reported
+        }),
+        {},
+      ));
+
+    test('additional property validation skipped', async () =>
+      expectValid(
+        { foo: 'NaN' },
+        new DropAllPropertiesValidator({
+          additionalProperties: {
+            keys: V.hasValue('bar'),
+            values: V.integer(),
+          },
+        }),
+        {},
+      ));
   });
 
   describe('localProperties', () => {

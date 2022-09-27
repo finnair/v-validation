@@ -549,6 +549,9 @@ export class ObjectValidator extends Validator {
     }
 
     async function validateAdditionalProperty(key: string, originalValue: any, additionalProperties: MapEntryValidator[]): Promise<any> {
+      if (!filter(key)) {
+        return Promise.resolve(ctx.success(undefined));
+      }
       const keyPath = path.property(key);
       let currentValue = originalValue;
       let validKey = false;
