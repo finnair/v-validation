@@ -489,32 +489,36 @@ export class ObjectValidator extends Validator {
     if (typeof value !== 'object') {
       return ctx.failurePromise(defaultViolations.object(path), value);
     }
-    const convertedObject: any = {};
-    const cycleResult = ctx.registerObject(value, path, convertedObject);
+    const context: ObjectValidationContext = {
+      path,
+      ctx,
+      filter,
+      convertedObject: {},
+      violations: [],
+    };
+    const cycleResult = ctx.registerObject(value, path, context.convertedObject);
     if (cycleResult) {
       return ctx.promise(cycleResult);
     }
-
-    let violations: Violation[] = [];
     const propertyResults: PromiseLike<ValidationResult>[] = [];
 
     for (const key in this.properties) {
-      propertyResults.push(validateProperty(key, value[key], this.properties[key]));
+      propertyResults.push(validateProperty(key, value[key], this.properties[key], context));
     }
     for (const key in this.localProperties) {
-      propertyResults.push(validateProperty(key, value[key], this.localProperties[key]));
+      propertyResults.push(validateProperty(key, value[key], this.localProperties[key], context));
     }
     for (const key in value) {
       if (!this.properties[key] && !this.localProperties[key]) {
-        propertyResults.push(validateAdditionalProperty(key, value[key], this.additionalProperties));
+        propertyResults.push(validateAdditionalProperty(key, value[key], this.additionalProperties, context));
       }
     }
 
     let validationChain = Promise.all(propertyResults).then(_ => {
-      if (violations.length === 0) {
-        return ctx.successPromise(convertedObject);
+      if (context.violations.length === 0) {
+        return ctx.successPromise(context.convertedObject);
       }
-      return ctx.failurePromise(violations, convertedObject);
+      return ctx.failurePromise(context.violations, context.convertedObject);
     });
     if (this.nextValidator) {
       const validator = this.nextValidator;
@@ -525,58 +529,71 @@ export class ObjectValidator extends Validator {
       validationChain = validationChain.then(result => (result.isSuccess() ? validator.validatePath(result.getValue(), path, ctx) : result));
     }
     return validationChain;
+  }
+}
 
-    function validateProperty(key: string, currentValue: any, validator: Validator) {
-      if (!filter(key)) {
-        return Promise.resolve(ctx.success(undefined));
+interface ObjectValidationContext {
+  readonly path: Path;
+  readonly ctx: ValidationContext;
+  readonly filter: PropertyFilter;
+  readonly convertedObject: any;
+  violations: Violation[];
+}
+
+function validateProperty(key: string, currentValue: any, validator: Validator, context: ObjectValidationContext) {
+  if (!context.filter(key)) {
+    return Promise.resolve(context.ctx.success(undefined));
+  }
+  // Assign for property order
+  context.convertedObject[key] = undefined;
+  return validator.validatePath(currentValue, context.path.property(key), context.ctx).then(result => {
+    if (result.isSuccess()) {
+      const newValue = result.getValue();
+      if (newValue !== undefined) {
+        context.convertedObject[key] = newValue;
+      } else {
+        delete context.convertedObject[key];
       }
-      // Assign for property order
-      convertedObject[key] = undefined;
-      return validator.validatePath(currentValue, path.property(key), ctx).then(result => {
-        if (result.isSuccess()) {
-          const newValue = result.getValue();
-          if (newValue !== undefined) {
-            convertedObject[key] = newValue;
-          } else {
-            delete convertedObject[key];
-          }
-        } else {
-          delete convertedObject[key];
-          violations = violations.concat(result.getViolations());
-        }
-        return result;
-      });
+    } else {
+      delete context.convertedObject[key];
+      context.violations = context.violations.concat(result.getViolations());
     }
+    return result;
+  });
+}
 
-    async function validateAdditionalProperty(key: string, originalValue: any, additionalProperties: MapEntryValidator[]): Promise<any> {
-      if (!filter(key)) {
-        return Promise.resolve(ctx.success(undefined));
+async function validateAdditionalProperty(
+  key: string,
+  originalValue: any,
+  additionalProperties: MapEntryValidator[],
+  context: ObjectValidationContext,
+): Promise<any> {
+  if (!context.filter(key)) {
+    return Promise.resolve(context.ctx.success(undefined));
+  }
+  const keyPath = context.path.property(key);
+  let currentValue = originalValue;
+  let validKey = false;
+  let result: undefined | ValidationResult;
+  for (let i = 0; i < additionalProperties.length; i++) {
+    const entryValidator = additionalProperties[i];
+    result = await entryValidator.keyValidator.validatePath(key, keyPath, context.ctx);
+    if (result.isSuccess()) {
+      validKey = true;
+      result = await validateProperty(key, currentValue, entryValidator.valueValidator, context);
+      if (result.isSuccess()) {
+        currentValue = result.getValue();
+      } else {
+        return result;
       }
-      const keyPath = path.property(key);
-      let currentValue = originalValue;
-      let validKey = false;
-      let result: undefined | ValidationResult;
-      for (let i = 0; i < additionalProperties.length; i++) {
-        const entryValidator = additionalProperties[i];
-        result = await entryValidator.keyValidator.validatePath(key, keyPath, ctx);
-        if (result.isSuccess()) {
-          validKey = true;
-          result = await validateProperty(key, currentValue, entryValidator.valueValidator);
-          if (result.isSuccess()) {
-            currentValue = result.getValue();
-          } else {
-            return result;
-          }
-        }
-      }
-      if (!validKey) {
-        if (additionalProperties.length == 1 && result) {
-          // Only one kind of key accepted -> give out violations related to that
-          violations = violations.concat(result!.getViolations());
-        } else {
-          return validateProperty(key, originalValue, lenientUnknownPropertyValidator);
-        }
-      }
+    }
+  }
+  if (!validKey) {
+    if (additionalProperties.length == 1 && result) {
+      // Only one kind of key accepted -> give out violations related to that
+      context.violations = context.violations.concat(result!.getViolations());
+    } else {
+      return validateProperty(key, originalValue, lenientUnknownPropertyValidator, context);
     }
   }
 }
