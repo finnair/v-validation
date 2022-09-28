@@ -88,9 +88,7 @@ test('assertTrue', () =>
   ));
 
 describe('strings', () => {
-  test('valid value', () => {
-    expectValid('str', V.string());
-  });
+  test('valid value', () => expectValid('str', V.string()));
 
   test('number is not accepted', () => expectViolations(123, V.string(), defaultViolations.string(123)));
 
@@ -207,7 +205,7 @@ describe('boolean', () => {
 
   test('Boolean is invalid', () => {
     var bool = new Boolean(true);
-    expectViolations(bool, V.boolean(), new TypeMismatch(ROOT, 'boolean', bool));
+    return expectViolations(bool, V.boolean(), new TypeMismatch(ROOT, 'boolean', bool));
   });
 
   describe('toBoolean', () => {
@@ -292,7 +290,7 @@ describe('objects', () => {
   describe('ignoreUnknownProperties', () => {
     test('ignore unknown properties by default', () => {
       const object = { unknownProperty: true };
-      expectValid(object, V.object({}), object, { ignoreUnknownProperties: true });
+      return expectValid(object, V.object({}), object, { ignoreUnknownProperties: true });
     });
 
     test('log warning using warnLogger', async () => {
@@ -333,7 +331,7 @@ describe('objects', () => {
       properties: {},
       additionalProperties: true,
     });
-    expectValid(
+    return expectValid(
       {
         additionalProperty: 'additionalProperty',
       },
@@ -425,7 +423,7 @@ describe('objects', () => {
       const first: any = { first: 'first' };
       const second: any = { first: 'second', next: first };
       first.next = second;
-      expectValid(first, validator, first, { allowCycles: true });
+      return expectValid(first, validator, first, { allowCycles: true });
     });
   });
 
@@ -736,7 +734,7 @@ describe('Date', () => {
     const object = {
       date: validDateString,
     };
-    expectViolations(object, validator, new Violation(property('date'), 'NotInstanceOfDate'));
+    return expectViolations(object, validator, new Violation(property('date'), 'NotInstanceOfDate'));
   });
 });
 
