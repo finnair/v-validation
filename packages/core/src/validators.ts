@@ -542,7 +542,7 @@ interface ObjectValidationContext {
 
 function validateProperty(key: string, currentValue: any, validator: Validator, context: ObjectValidationContext) {
   if (!context.filter(key)) {
-    return Promise.resolve(context.ctx.success(undefined));
+    return context.ctx.successPromise(undefined);
   }
   // Assign for property order
   context.convertedObject[key] = undefined;
@@ -699,12 +699,7 @@ export class NextValidator extends Validator {
   validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult> {
     return this.firstValidator.validatePath(value, path, ctx).then(firstResult => {
       if (firstResult.isSuccess()) {
-        return this.nextValidator.validatePath(firstResult.getValue(), path, ctx).then(nextResult => {
-          if (nextResult.isSuccess()) {
-            return nextResult;
-          }
-          return nextResult;
-        });
+        return this.nextValidator.validatePath(firstResult.getValue(), path, ctx);
       }
       return firstResult;
     });
