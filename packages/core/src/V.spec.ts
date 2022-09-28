@@ -457,6 +457,12 @@ describe('objects', () => {
         }),
         {},
       ));
+
+    test('filtered-out properties are dropped', async () => {
+      const result = await new DropAllPropertiesValidator({}).validate({ foo: 'foo', bar: 'bar' });
+      expect(result.isSuccess()).toBe(true);
+      expect(Object.keys(result.getValue()).length).toBe(0);
+    });
   });
 
   describe('localProperties', () => {
