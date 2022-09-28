@@ -26,7 +26,9 @@
   },
   "dependencies": {
     "@finnair/path": "^3.0.0-alpha.2",
-    "@finnair/v-validation": "^3.0.0-alpha.2",
-    "moment": "2.29.4"
+    "@finnair/v-validation": "^3.0.0-alpha.2"
+  },
+  "peerDependencies": {
+    "moment": "^2.29.1"
   }
 }

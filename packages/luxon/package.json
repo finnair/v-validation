@@ -26,10 +26,9 @@
   },
   "dependencies": {
     "@finnair/path": "^3.0.0-alpha.2",
-    "@finnair/v-validation": "^3.0.0-alpha.2",
-    "luxon": "3.0.3"
+    "@finnair/v-validation": "^3.0.0-alpha.2"
   },
-  "devDependencies": {
-    "@types/luxon": "3.0.1"
+  "peerDependencies": {
+    "luxon": "^3.0.0"
   }
 }
