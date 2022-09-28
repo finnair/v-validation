@@ -732,21 +732,17 @@ export class CompositionValidator extends Validator {
     Object.freeze(this);
   }
 
-  validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult> {
-    const validators = this.validators;
-    return validateNext(value, 0);
-
-    function validateNext(currentValue: any, i: number): PromiseLike<ValidationResult> {
-      if (i < validators.length) {
-        return validators[i].validatePath(currentValue, path, ctx).then(result => {
-          if (result.isSuccess()) {
-            return validateNext(result.getValue(), i + 1);
-          }
-          return result;
-        });
+  async validatePath(value: any, path: Path, ctx: ValidationContext): Promise<ValidationResult> {
+    let currentValue = value;
+    for (let i = 0; i < this.validators.length; i++) {
+      const result = await this.validators[i].validatePath(currentValue, path, ctx);
+      if (result.isSuccess()) {
+        currentValue = result.getValue();
+      } else {
+        return result;
       }
-      return ctx.successPromise(currentValue);
     }
+    return ctx.success(currentValue);
   }
 }
 
