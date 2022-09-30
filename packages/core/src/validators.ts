@@ -1431,6 +1431,27 @@ export class OptionalValidator extends Validator {
   }
 }
 
+export class RequiredValidator extends Validator {
+  private readonly validator: Validator;
+
+  constructor(type: Validator, allOf: Validator[]) {
+    super();
+    if (allOf && allOf.length > 0) {
+      this.validator = new NextValidator(type, maybeAllOfValidator(allOf));
+    } else {
+      this.validator = type;
+    }
+    Object.freeze(this);
+  }
+
+  validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult> {
+    if (isNullOrUndefined(value)) {
+      return ctx.failurePromise(defaultViolations.notNull(path), value);
+    }
+    return this.validator.validatePath(value, path, ctx);
+  }
+}
+
 export class ValueMapper extends Validator {
   constructor(public readonly fn: MappingFn, public readonly error?: any) {
     super();

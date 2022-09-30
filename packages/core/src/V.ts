@@ -52,6 +52,7 @@ import {
   EnumValidator,
   HasValueValidator,
   JsonValidator,
+  RequiredValidator,
 } from './validators';
 
 const ignoreValidator = new IgnoreValidator(),
@@ -85,7 +86,7 @@ const V = {
 
   optional: (type: Validator, ...allOf: Validator[]) => new OptionalValidator(type, allOf),
 
-  required: (type: Validator, ...allOf: Validator[]) => new NotNullOrUndefinedValidator().next(type).next(...allOf),
+  required: (type: Validator, ...allOf: Validator[]) => new RequiredValidator(type, allOf),
 
   if: (fn: AssertTrue, ...allOf: Validator[]) => new IfValidator([new Conditional(fn, allOf)]),
 
