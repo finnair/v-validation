@@ -6,183 +6,139 @@ import { LocalDateLuxon, DateTimeLuxon, DateTimeMillisLuxon, DateTimeMillisUtcLu
 export type LuxonInput = string | DateTime | LuxonDateTime;
 
 export interface ValidateLuxonParams {
-  value: any;
-  path: Path;
-  ctx: ValidationContext;
   type: string;
   pattern: RegExp;
   proto?: any;
   parser: (value: string, match: RegExpExecArray) => DateTime;
 }
 
-export function validateLuxon({ value, path, ctx, type, proto, pattern, parser }: ValidateLuxonParams): PromiseLike<ValidationResult> {
-  if (isNullOrUndefined(value)) {
-    return ctx.failurePromise(defaultViolations.notNull(path), value);
+export class LuxonValidator extends Validator {
+  constructor(public params: ValidateLuxonParams) {
+    super();
+    Object.freeze(params);
+    Object.freeze(this);
   }
-  if (proto && value instanceof proto) {
-    return ctx.successPromise(value);
-  } else if (DateTime.isDateTime(value)) {
-    if (value.isValid) {
-      return success(value);
+
+  validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult> {
+    const params = this.params;
+    if (isNullOrUndefined(value)) {
+      return ctx.failurePromise(defaultViolations.notNull(path), value);
     }
-  } else if (isString(value)) {
-    const match = pattern.exec(value);
-    if (match) {
-      const dateTime = parser(value, match);
-      if (dateTime.isValid) {
-        return success(dateTime);
+    if (params.proto && value instanceof params.proto) {
+      return ctx.successPromise(value);
+    } else if (DateTime.isDateTime(value)) {
+      if (value.isValid) {
+        return success(value);
+      }
+    } else if (isString(value)) {
+      const match = params.pattern.exec(value);
+      if (match) {
+        const dateTime = params.parser(value, match);
+        if (dateTime.isValid) {
+          return success(dateTime);
+        }
       }
     }
-  }
-  return ctx.failurePromise(defaultViolations.date(value, path, type), value);
+    return ctx.failurePromise(defaultViolations.date(value, path, params.type), value);
 
-  function success(dateTime: DateTime) {
-    return ctx.successPromise(proto ? new proto(dateTime) : dateTime);
+    function success(dateTime: DateTime) {
+      return ctx.successPromise(params.proto ? new params.proto(dateTime) : dateTime);
+    }
   }
 }
 
 const datePattern = /^\d{4}-\d{2}-\d{2}$/;
 
 function localDate(options: DateTimeOptions = { setZone: true }) {
-  return V.fn((value: any, path: Path, ctx: ValidationContext) =>
-    validateLuxon({
-      value,
-      path,
-      ctx,
-      type: 'Date',
-      proto: LocalDateLuxon,
-      pattern: datePattern,
-      parser: (value: string) => DateTime.fromISO(value, { zone: FixedOffsetZone.utcInstance }),
-    }),
-  );
+  return new LuxonValidator({
+    type: 'Date',
+    proto: LocalDateLuxon,
+    pattern: datePattern,
+    parser: (value: string) => DateTime.fromISO(value, { zone: FixedOffsetZone.utcInstance }),
+  });
 }
 
 const timePattern = /^\d{2}:\d{2}:\d{2}$/;
 
 function localTime(options: DateTimeOptions = { zone: FixedOffsetZone.utcInstance }) {
-  return V.fn((value: any, path: Path, ctx: ValidationContext) =>
-    validateLuxon({
-      value,
-      path,
-      ctx,
-      type: 'Time',
-      proto: LocalTimeLuxon,
-      pattern: timePattern,
-      parser: (value: string) => DateTime.fromISO(value, options),
-    }),
-  );
+  return new LuxonValidator({
+    type: 'Time',
+    proto: LocalTimeLuxon,
+    pattern: timePattern,
+    parser: (value: string) => DateTime.fromISO(value, options),
+  });
 }
 
 const dateTimePattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:Z|[+-]\d{2}(?::?\d{2})?)$/;
 
 function dateTime(options: DateTimeOptions = { setZone: true }) {
-  return V.fn((value: any, path: Path, ctx: ValidationContext) =>
-    validateLuxon({
-      value,
-      path,
-      ctx,
-      type: 'DateTime',
-      proto: DateTimeLuxon,
-      pattern: dateTimePattern,
-      parser: (value: string) => DateTime.fromISO(value, options),
-    }),
-  );
+  return new LuxonValidator({
+    type: 'DateTime',
+    proto: DateTimeLuxon,
+    pattern: dateTimePattern,
+    parser: (value: string) => DateTime.fromISO(value, options),
+  });
 }
 
 function dateTimeUtc(options: DateTimeOptions = { zone: FixedOffsetZone.utcInstance }) {
-  return V.fn((value: any, path: Path, ctx: ValidationContext) =>
-    validateLuxon({
-      value,
-      path,
-      ctx,
-      type: 'DateTime',
-      proto: DateTimeUtcLuxon,
-      pattern: dateTimePattern,
-      parser: (value: string) => DateTime.fromISO(value, options),
-    }),
-  );
+  return new LuxonValidator({
+    type: 'DateTime',
+    proto: DateTimeUtcLuxon,
+    pattern: dateTimePattern,
+    parser: (value: string) => DateTime.fromISO(value, options),
+  });
 }
 
 const dateTimeMillisPattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}(?:Z|[+-]\d{2}(?::?\d{2})?)$/;
 
 function dateTimeMillis(options: DateTimeOptions = { setZone: true }) {
-  return V.fn((value: any, path: Path, ctx: ValidationContext) =>
-    validateLuxon({
-      value,
-      path,
-      ctx,
-      type: 'DateTimeMillis',
-      proto: DateTimeMillisLuxon,
-      pattern: dateTimeMillisPattern,
-      parser: (value: string) => DateTime.fromISO(value, options),
-    }),
-  );
+  return new LuxonValidator({
+    type: 'DateTimeMillis',
+    proto: DateTimeMillisLuxon,
+    pattern: dateTimeMillisPattern,
+    parser: (value: string) => DateTime.fromISO(value, options),
+  });
 }
 
 function dateTimeMillisUtc(options: DateTimeOptions = { zone: FixedOffsetZone.utcInstance }) {
-  return V.fn((value: any, path: Path, ctx: ValidationContext) =>
-    validateLuxon({
-      value,
-      path,
-      ctx,
-      type: 'DateTimeMillis',
-      proto: DateTimeMillisUtcLuxon,
-      pattern: dateTimeMillisPattern,
-      parser: (value: string) => DateTime.fromISO(value, options),
-    }),
-  );
+  return new LuxonValidator({
+    type: 'DateTimeMillis',
+    proto: DateTimeMillisUtcLuxon,
+    pattern: dateTimeMillisPattern,
+    parser: (value: string) => DateTime.fromISO(value, options),
+  });
 }
 
 function dateTimeFromISO(options: DateTimeOptions = { setZone: true }) {
-  return V.fn((value: any, path: Path, ctx: ValidationContext) =>
-    validateLuxon({
-      value,
-      path,
-      ctx,
-      type: 'ISODateTime',
-      pattern: /./,
-      parser: (value: string) => DateTime.fromISO(value, options),
-    }),
-  );
+  return new LuxonValidator({
+    type: 'ISODateTime',
+    pattern: /./,
+    parser: (value: string) => DateTime.fromISO(value, options),
+  });
 }
 
 function dateTimeFromRFC2822(options: DateTimeOptions = { setZone: true }) {
-  return V.fn((value: any, path: Path, ctx: ValidationContext) =>
-    validateLuxon({
-      value,
-      path,
-      ctx,
-      type: 'RFC2822DateTime',
-      pattern: /./,
-      parser: (value: string) => DateTime.fromRFC2822(value, options),
-    }),
-  );
+  return new LuxonValidator({
+    type: 'RFC2822DateTime',
+    pattern: /./,
+    parser: (value: string) => DateTime.fromRFC2822(value, options),
+  });
 }
 
 function dateTimeFromHTTP(options: DateTimeOptions = { setZone: true }) {
-  return V.fn((value: any, path: Path, ctx: ValidationContext) =>
-    validateLuxon({
-      value,
-      path,
-      ctx,
-      type: 'HTTPDateTime',
-      pattern: /./,
-      parser: (value: string) => DateTime.fromHTTP(value, options),
-    }),
-  );
+  return new LuxonValidator({
+    type: 'HTTPDateTime',
+    pattern: /./,
+    parser: (value: string) => DateTime.fromHTTP(value, options),
+  });
 }
 
 function dateTimeFromSQL(options: DateTimeOptions = { zone: FixedOffsetZone.utcInstance }) {
-  return V.fn((value: any, path: Path, ctx: ValidationContext) =>
-    validateLuxon({
-      value,
-      path,
-      ctx,
-      type: 'SQLDateTime',
-      pattern: /./,
-      parser: (value: string) => DateTime.fromSQL(value, options),
-    }),
-  );
+  return new LuxonValidator({
+    type: 'SQLDateTime',
+    pattern: /./,
+    parser: (value: string) => DateTime.fromSQL(value, options),
+  });
 }
 
 export interface ValidateLuxonNumberParams {
