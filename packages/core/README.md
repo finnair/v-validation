@@ -183,7 +183,7 @@ const UserRegistrationValidator = V.object({
   - All non-trivial use cases require some custom validation logic
   - Custom validators can be defined as simple functions
   - No need to register custom validators
-- All the validators are immutable
+- All the validators are effectively immutable
 - Supports recursive types/validators (e.g. linked list)
 - Supports cyclic data: allow or disallow by configuration
 - TypeScript native implementation
