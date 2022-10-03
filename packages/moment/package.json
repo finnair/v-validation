@@ -1,6 +1,6 @@
 {
   "name": "@finnair/v-validation-moment",
-  "version": "3.0.0-alpha.2",
+  "version": "3.0.0",
   "private": false,
   "description": "Moment validators",
   "main": "dist/index.js",
@@ -25,8 +25,8 @@
     "build": "tsc -b ."
   },
   "dependencies": {
-    "@finnair/path": "^3.0.0-alpha.2",
-    "@finnair/v-validation": "^3.0.0-alpha.2"
+    "@finnair/path": "^3.0.0",
+    "@finnair/v-validation": "^3.0.0"
   },
   "peerDependencies": {
     "moment": "^2.29.1"
