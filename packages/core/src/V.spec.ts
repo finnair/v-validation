@@ -19,6 +19,7 @@ import {
   HasValueViolation,
   SizeViolation,
   EnumMismatch,
+  SyncPromise,
 } from './validators';
 import { default as V } from './V';
 import { Path } from '@finnair/path';
@@ -87,9 +88,7 @@ test('assertTrue', () =>
   ));
 
 describe('strings', () => {
-  test('valid value', () => {
-    expectValid('str', V.string());
-  });
+  test('valid value', () => expectValid('str', V.string()));
 
   test('number is not accepted', () => expectViolations(123, V.string(), defaultViolations.string(123)));
 
@@ -206,7 +205,7 @@ describe('boolean', () => {
 
   test('Boolean is invalid', () => {
     var bool = new Boolean(true);
-    expectViolations(bool, V.boolean(), new TypeMismatch(ROOT, 'boolean', bool));
+    return expectViolations(bool, V.boolean(), new TypeMismatch(ROOT, 'boolean', bool));
   });
 
   describe('toBoolean', () => {
@@ -233,6 +232,8 @@ describe('boolean', () => {
     test('Boolean is converted to boolean', () => expectValid(new Boolean(true), V.toBoolean(), true));
   });
 });
+
+test('empty next', () => expectValid(1, V.number().next()));
 
 describe('uuid', () => {
   test('null is not valid', () => expectViolations(null, V.uuid(), new Violation(ROOT, 'UUID')));
@@ -291,7 +292,7 @@ describe('objects', () => {
   describe('ignoreUnknownProperties', () => {
     test('ignore unknown properties by default', () => {
       const object = { unknownProperty: true };
-      expectValid(object, V.object({}), object, { ignoreUnknownProperties: true });
+      return expectValid(object, V.object({}), object, { ignoreUnknownProperties: true });
     });
 
     test('log warning using warnLogger', async () => {
@@ -332,7 +333,7 @@ describe('objects', () => {
       properties: {},
       additionalProperties: true,
     });
-    expectValid(
+    return expectValid(
       {
         additionalProperty: 'additionalProperty',
       },
@@ -414,40 +415,56 @@ describe('objects', () => {
     const validator = V.object({
       properties: {
         first: V.string(),
+        next: V.optional(V.fn((value: any, path: Path, ctx: ValidationContext) => validator.validatePath(value, path, ctx))),
       },
     });
-    validator.withProperty('next', V.optional(validator));
 
     test('recursive type', () => expectValid({ first: 'first', next: { first: 'second', next: { first: 'third' } } }, validator));
-
-    test('recursive type: redefining a property not allowed', () => {
-      expect(() => V.object({ properties: { property: V.string() } }).withProperty('property', V.number())).toThrow();
-    });
 
     test('cyclic data', async () => {
       const first: any = { first: 'first' };
       const second: any = { first: 'second', next: first };
       first.next = second;
-      expectValid(first, validator, first, { allowCycles: true });
+      return expectValid(first, validator, first, { allowCycles: true });
     });
   });
 
-  test('custom property filtering extension', () => {
+  describe('custom property filtering ObjectValidator extension', () => {
     class DropAllPropertiesValidator extends ObjectValidator {
       constructor(model: ObjectModel) {
         super(model);
       }
-      validatePath(value: any, path: Path, ctx: ValidationContext): Promise<ValidationResult> {
+      validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult> {
         return this.validateFilteredPath(value, path, ctx, _ => false);
       }
     }
-    expectValid(
-      { property: 'to-be-dropped' },
-      new DropAllPropertiesValidator({
-        properties: { requiredProperty: V.string() }, // Not reported
-      }),
-      {},
-    );
+
+    test('required property validation skipped', async () =>
+      expectValid(
+        { property: 'to-be-dropped' },
+        new DropAllPropertiesValidator({
+          properties: { requiredProperty: V.string() }, // Not reported
+        }),
+        {},
+      ));
+
+    test('additional property validation skipped', async () =>
+      expectValid(
+        { foo: 'NaN' },
+        new DropAllPropertiesValidator({
+          additionalProperties: {
+            keys: V.hasValue('bar'),
+            values: V.integer(),
+          },
+        }),
+        {},
+      ));
+
+    test('filtered-out properties are dropped', async () => {
+      const result = await new DropAllPropertiesValidator({}).validate({ foo: 'foo', bar: 'bar' });
+      expect(result.isSuccess()).toBe(true);
+      expect(Object.keys(result.getValue()).length).toBe(0);
+    });
   });
 
   describe('localProperties', () => {
@@ -572,9 +589,9 @@ describe('inheritance', () => {
     expectViolations(
       { additionalProperty: 123 },
       multiParentChild,
+      defaultViolations.notNull(property('id')),
       defaultViolations.notEmpty(property('name')),
       defaultViolations.notNull(property('anything')),
-      defaultViolations.notNull(property('id')),
     ));
 
   test("child's extended property validators are only run after successful parent property validation", async () => {
@@ -725,7 +742,7 @@ describe('Date', () => {
     const object = {
       date: validDateString,
     };
-    expectViolations(object, validator, new Violation(property('date'), 'NotInstanceOfDate'));
+    return expectViolations(object, validator, new Violation(property('date'), 'NotInstanceOfDate'));
   });
 });
 
@@ -812,12 +829,12 @@ describe('anyOf', () => {
     const matchingArray = ['2019-01-24T09:10:00Z', validDate, 'ABC'];
     const arrayValidator = V.array(validator);
 
-    test('valid items in array', () =>
+    test('valid items in array', async () =>
       arrayValidator.validate(matchingArray).then(result => {
         expect(result.getValue().length).toBe(3);
         expect(result.getViolations()).toEqual([]);
       }));
-    test('fails due to invalid item added', () =>
+    test('fails due to invalid item added', async () =>
       arrayValidator.validate([...matchingArray, 'ABD']).then(result => {
         expect(result.getViolations().length).toBe(3);
       }));
@@ -1333,9 +1350,9 @@ describe('Map', () => {
 
     test('object is not valid', () => expectViolations({}, validator, new TypeMismatch(ROOT, 'Map')));
 
-    test('Map has invalid value', () => expectViolations(new Map([['foo', 0]]), validator, new TypeMismatch(Path.of(0, 'value'), 'string', 0)));
+    test('Map has invalid value', () => expectViolations(new Map([['foo', 0]]), validator, new TypeMismatch(Path.of(0, 1), 'string', 0)));
 
-    test('Map has invalid key', () => expectViolations(new Map([[0, 'foo']]), validator, new TypeMismatch(Path.of(0, 'key'), 'string', 0)));
+    test('Map has invalid key', () => expectViolations(new Map([[0, 'foo']]), validator, new TypeMismatch(Path.of(0, 0), 'string', 0)));
   });
 });
 
@@ -1353,4 +1370,51 @@ describe('json', () => {
   test('Invalid JSON', () => expectViolations('["foo", "bar"', validator, new TypeMismatch(Path.of(), 'JSON', '["foo", "bar"')));
 
   test('Non-string input is invalid', () => expectViolations(123, validator, new TypeMismatch(Path.of(), 'string', 123)));
+});
+
+describe('SyncPromise', () => {
+  test('onfullfilled is wrapped in a new SyncPromise', () => {
+    const promise = new SyncPromise('result').then(_ => 'new result');
+    expect(promise).toBeInstanceOf(SyncPromise);
+    promise.then(value => expect(value).toBe('new result'));
+  });
+
+  test('promise returned by onfulfilled is retuned as such', async () => {
+    const promise = Promise.resolve('promised result');
+    const result = await new SyncPromise('result').then(_ => promise);
+    expect(result).toBe('promised result');
+  });
+
+  test('call onrejected on error', async () => {
+    let thrownError: undefined | any;
+    // Awaiting for SyncPromise is optional
+    const result = await new SyncPromise('result').then(
+      () => {
+        throw 'error';
+      },
+      error => {
+        thrownError = error;
+        return 'handled';
+      },
+    );
+    expect(result).toBe('handled');
+    expect(thrownError).toBe('error');
+  });
+
+  test('throw error if onrejected is missing', () => {
+    try {
+      new SyncPromise('result').then(() => {
+        throw 'error';
+      });
+      fail('expected an error');
+    } catch (thrownError) {
+      expect(thrownError).toBe('error');
+      // as expected
+    }
+  });
+
+  test('return this if both callbacks are missing', () => {
+    const promise = new SyncPromise('result');
+    expect(promise.then()).toBe(promise);
+  });
 });

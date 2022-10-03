@@ -1,9 +1,8 @@
 import { Validator, ValidatorOptions, ValidationResult, V, Violation, defaultViolations, TypeMismatch } from '@finnair/v-validation';
-import { validateLuxon, Vluxon } from './Vluxon';
+import { LuxonValidator, Vluxon } from './Vluxon';
 import { LocalDateLuxon, DateTimeLuxon, DateTimeMillisLuxon, DateTimeMillisUtcLuxon, DateTimeUtcLuxon, LuxonDateTime, LocalTimeLuxon } from './luxon';
 import { DateTime, Duration, FixedOffsetZone, IANAZone, Settings } from 'luxon';
 import { Path } from '@finnair/path';
-import { ValidationContext } from '@finnair/v-validation';
 
 async function expectViolations(value: any, validator: Validator, ...violations: Violation[]) {
   const result = await validator.validate(value);
@@ -53,6 +52,12 @@ describe('Vluxon', () => {
     test('not equal (class)', () => {
       const now = DateTime.now();
       expect(new DateTimeLuxon(now).equals(new DateTimeUtcLuxon(now))).toBe(false);
+    });
+  });
+
+  describe('constructor checks', () => {
+    test.each([null, undefined, new Date(), '2022-09-27T12:36:19.598Z', Date.now()])('%s is invalid', (invalidValue: any) => {
+      expect(() => new DateTimeLuxon(invalidValue as unknown as DateTime)).toThrowError('invalid input');
     });
   });
 
@@ -560,21 +565,16 @@ describe('Vluxon', () => {
   });
 
   describe('custom format', () => {
-    const validator = V.fn((value: any, path: Path, ctx: ValidationContext) => {
-      return validateLuxon({
-        value,
-        path,
-        ctx,
-        type: 'Date',
-        proto: DateTimeUtcLuxon,
-        pattern: /^\d{4}-\d{2}-\d{2}(?<zone>[+-]\d{2})?$/,
-        parser: (value: string, match: RegExpExecArray) => {
-          if (match.groups?.zone) {
-            return DateTime.fromFormat(value, 'yyyy-MM-ddZZ');
-          }
-          return DateTime.fromISO(value, { zone: FixedOffsetZone.utcInstance });
-        },
-      });
+    const validator = new LuxonValidator({
+      type: 'Date',
+      proto: DateTimeUtcLuxon,
+      pattern: /^\d{4}-\d{2}-\d{2}(?<zone>[+-]\d{2})?$/,
+      parser: (value: string, match: RegExpExecArray) => {
+        if (match.groups?.zone) {
+          return DateTime.fromFormat(value, 'yyyy-MM-ddZZ');
+        }
+        return DateTime.fromISO(value, { zone: FixedOffsetZone.utcInstance });
+      },
     });
 
     test('date with timezone', () => expectValid('2022-08-19+03', validator.next(toJSON), '2022-08-18T21:00:00Z'));

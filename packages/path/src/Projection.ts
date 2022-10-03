@@ -2,7 +2,11 @@ import { PathMatcher } from './PathMatcher';
 import { Path } from './Path';
 
 export class Projection {
-  private constructor(private readonly includes: PathMatcher[], private readonly excludes: PathMatcher[], private readonly allowGaps: boolean) {}
+  private constructor(private readonly includes: PathMatcher[], private readonly excludes: PathMatcher[], private readonly allowGaps: boolean) {
+    Object.freeze(this.includes);
+    Object.freeze(this.excludes);
+    Object.freeze(this);
+  }
 
   map<T>(input: T): Partial<T> {
     let output: any;

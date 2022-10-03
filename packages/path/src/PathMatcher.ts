@@ -7,6 +7,8 @@ export class PathMatcher {
     let allowGaps = false;
     expressions.forEach(expression => (allowGaps = allowGaps || expression.allowGaps));
     this.allowGaps = allowGaps;
+    Object.freeze(this.expressions);
+    Object.freeze(this);
   }
 
   find(root: any, first?: boolean): Node[] {
@@ -24,6 +26,7 @@ export class PathMatcher {
     }
     handlers[this.expressions.length - 1] = resultHandler();
     this.expressions[0].find(root, handlers[0]);
+
     return results;
 
     function intermediateHandler(index: number, expressions: PathExpression[]): MatchHandler {

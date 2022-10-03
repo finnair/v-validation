@@ -5,6 +5,7 @@ import moment, { Moment, MomentInput } from 'moment';
 export class MomentValidator extends Validator {
   constructor(public readonly type: string, public readonly parse: (value?: MomentInput) => Moment) {
     super();
+    Object.freeze(this);
   }
   async validatePath(value: any, path: Path, ctx: ValidationContext): Promise<ValidationResult> {
     if (isNullOrUndefined(value)) {
@@ -20,7 +21,8 @@ export class MomentValidator extends Validator {
   }
 }
 
-const durationPattern = /^P(?!$)(\d+(?:\.\d+)?Y)?(\d+(?:\.\d+)?M)?(\d+(?:\.\d+)?W)?(\d+(?:\.\d+)?D)?(T(?=\d)(\d+(?:\.\d+)?H)?(\d+(?:\.\d+)?M)?(\d+(?:\.\d+)?S)?)?$/;
+const durationPattern =
+  /^P(?!$)(\d+(?:\.\d+)?Y)?(\d+(?:\.\d+)?M)?(\d+(?:\.\d+)?W)?(\d+(?:\.\d+)?D)?(T(?=\d)(\d+(?:\.\d+)?H)?(\d+(?:\.\d+)?M)?(\d+(?:\.\d+)?S)?)?$/;
 export class DurationValidator extends Validator {
   async validatePath(value: any, path: Path, ctx: ValidationContext): Promise<ValidationResult> {
     if (isNullOrUndefined(value)) {
@@ -171,3 +173,4 @@ export const Vmoment = {
   time: () => timeValidator,
   duration: () => durationValidator,
 };
+Object.freeze(Vmoment);

@@ -9,6 +9,8 @@ export class Path {
 
   private constructor(path: PathComponent[]) {
     this.path = path;
+    Object.freeze(this.path);
+    Object.freeze(this);
   }
 
   index(index: number): Path {
