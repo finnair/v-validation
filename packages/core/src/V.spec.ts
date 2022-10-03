@@ -233,6 +233,8 @@ describe('boolean', () => {
   });
 });
 
+test('empty next', () => expectValid(1, V.number().next()));
+
 describe('uuid', () => {
   test('null is not valid', () => expectViolations(null, V.uuid(), new Violation(ROOT, 'UUID')));
 
