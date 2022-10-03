@@ -5,104 +5,46 @@ See [Conventional Commits](https://conventionalcommits.org) for commit guideline
 
 # [3.0.0](https://github.com/finnair/v-validation/compare/v2.0.0...v3.0.0) (2022-10-03)
 
-**Note:** Version bump only for package @finnair/v-validation
-
-
-
-
-
-# [3.0.0-alpha.2](https://github.com/finnair/v-validation/compare/v2.0.0...v3.0.0-alpha.2) (2022-09-28)
-
-
 ### Features
 
-* Use SyncPromise also in schema and luxon ([792fbb4](https://github.com/finnair/v-validation/commit/792fbb4c78d07ea085d669312fef5e44e7a397fd))
-
+- Optimized performance (~2-4 times faster) and memory usage (~2.5 times better).
+- Use Object.freeze to ensure Validator immutability.
+- Update dependencies.
+- Use peerDependencies for Moment and Luxon.
 
 ### Performance Improvements
 
-* Optimize CompositionValidator by using async/await instead of nested callbacks ([026f2c3](https://github.com/finnair/v-validation/commit/026f2c3d23d4dbb644338d3d127e83dfbee3bd9c))
-* Optimize loops ([8c5c915](https://github.com/finnair/v-validation/commit/8c5c915794fb39ab6fd41ec7d3ac4e4f028ed7fa))
-* Optimize NextValidator by removing unnecessary callback ([4599c04](https://github.com/finnair/v-validation/commit/4599c04c435871ec6eda5fdf3167267256fd5808))
+- Execute synchronous validators with effectively synchronous PromiseLike objects
+- Optimize CompositionValidator by using async/await instead of nested callbacks ([026f2c3](https://github.com/finnair/v-validation/commit/026f2c3d23d4dbb644338d3d127e83dfbee3bd9c))
+- Optimize loops ([8c5c915](https://github.com/finnair/v-validation/commit/8c5c915794fb39ab6fd41ec7d3ac4e4f028ed7fa))
+- Optimize NextValidator by removing unnecessary callback ([4599c04](https://github.com/finnair/v-validation/commit/4599c04c435871ec6eda5fdf3167267256fd5808))
 
+### BREAKING CHANGES
 
-
-
-
-# [3.0.0-alpha.1](https://github.com/finnair/v-validation/compare/v2.0.0...v3.0.0-alpha.1) (2022-09-26)
-
-
-### Features
-
-* Use SyncPromise also in schema and luxon ([792fbb4](https://github.com/finnair/v-validation/commit/792fbb4c78d07ea085d669312fef5e44e7a397fd))
-
-
-### Performance Improvements
-
-* Optimize loops ([8c5c915](https://github.com/finnair/v-validation/commit/8c5c915794fb39ab6fd41ec7d3ac4e4f028ed7fa))
-
-
-
-
-
-# [3.0.0-alpha.0](https://github.com/finnair/v-validation/compare/v2.0.0...v3.0.0-alpha.0) (2022-09-26)
-
-
-### Features
-
-* Use SyncPromise also in schema and luxon ([e8590b8](https://github.com/finnair/v-validation/commit/e8590b8c2a44ad28fde88f8682f53628ecf74a0f))
-
-
-### Performance Improvements
-
-* Optimize loops ([6bb3477](https://github.com/finnair/v-validation/commit/6bb34776bb39f0798cc1444fe224b752f9ba86d4))
-
-
-
-
+- Drop ObjectValidator.withProperty function - use deferred reference to self with `V.fn` instead.
+- Map validation error paths by entry indexes (index 0 for key and 1 for value) instead key and value properties.
 
 # [2.0.0](https://github.com/finnair/v-validation/compare/v1.1.0...v2.0.0) (2022-09-08)
 
 **Note:** Version bump only for package @finnair/v-validation
 
-
-
-
-
 # [1.1.0](https://github.com/finnair/v-validation/compare/v1.0.1...v1.1.0) (2022-08-29)
-
 
 ### Features
 
-* Support for Luxon ([94b3806](https://github.com/finnair/v-validation/commit/94b38060e07feeb0abb8c81659d8bda537a4d9aa))
-
-
-
-
+- Support for Luxon ([94b3806](https://github.com/finnair/v-validation/commit/94b38060e07feeb0abb8c81659d8bda537a4d9aa))
 
 # [1.1.0-alpha.6](https://github.com/finnair/v-validation/compare/v1.0.1...v1.1.0-alpha.6) (2022-08-17)
 
 **Note:** Version bump only for package @finnair/v-validation
 
-
-
-
-
 # [1.1.0-alpha.5](https://github.com/finnair/v-validation/compare/v1.0.1...v1.1.0-alpha.5) (2022-08-16)
 
 **Note:** Version bump only for package @finnair/v-validation
 
-
-
-
-
 # [1.1.0-alpha.0](https://github.com/finnair/v-validation/compare/v1.0.1...v1.1.0-alpha.0) (2022-08-12)
 
 **Note:** Version bump only for package @finnair/v-validation
-
-
-
-
 
 ## [1.0.1](https://github.com/finnair/v-validation/compare/v0.9.1...v1.0.1) (2022-01-20)
 

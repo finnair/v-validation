@@ -5,177 +5,88 @@ See [Conventional Commits](https://conventionalcommits.org) for commit guideline
 
 # [3.0.0](https://github.com/finnair/v-validation/compare/v2.0.0...v3.0.0) (2022-10-03)
 
-**Note:** Version bump only for package @finnair/v-validation-luxon
-
-
-
-
-
-# [3.0.0-alpha.2](https://github.com/finnair/v-validation/compare/v2.0.0...v3.0.0-alpha.2) (2022-09-28)
-
-
 ### Features
 
-* Use SyncPromise also in schema and luxon ([792fbb4](https://github.com/finnair/v-validation/commit/792fbb4c78d07ea085d669312fef5e44e7a397fd))
-
-
-
-
-
-# [3.0.0-alpha.1](https://github.com/finnair/v-validation/compare/v2.0.0...v3.0.0-alpha.1) (2022-09-26)
-
-
-### Features
-
-* Use SyncPromise also in schema and luxon ([792fbb4](https://github.com/finnair/v-validation/commit/792fbb4c78d07ea085d669312fef5e44e7a397fd))
-
-
-
-
-
-# [3.0.0-alpha.0](https://github.com/finnair/v-validation/compare/v2.0.0...v3.0.0-alpha.0) (2022-09-26)
-
-
-### Features
-
-* Use SyncPromise also in schema and luxon ([e8590b8](https://github.com/finnair/v-validation/commit/e8590b8c2a44ad28fde88f8682f53628ecf74a0f))
-
-
-
-
+- Optimize performance.
+- Use Object.freeze to ensure Validator immutability.
 
 # [2.0.0](https://github.com/finnair/v-validation/compare/v1.1.0...v2.0.0) (2022-09-08)
 
-
-* Upgrade All Dependencies (#80) ([fb6309c](https://github.com/finnair/v-validation/commit/fb6309cc1d9fd90f3e8c5ba79798fae1450b66a6)), closes [#80](https://github.com/finnair/v-validation/issues/80)
-
+- Upgrade All Dependencies (#80) ([fb6309c](https://github.com/finnair/v-validation/commit/fb6309cc1d9fd90f3e8c5ba79798fae1450b66a6)), closes [#80](https://github.com/finnair/v-validation/issues/80)
 
 ### Features
 
-* Implement toString in Luxon wrapper types ([#79](https://github.com/finnair/v-validation/issues/79)) ([3f3f3e8](https://github.com/finnair/v-validation/commit/3f3f3e8a4172c7803a7be4809f06aba554f7090f))
-
+- Implement toString in Luxon wrapper types ([#79](https://github.com/finnair/v-validation/issues/79)) ([3f3f3e8](https://github.com/finnair/v-validation/commit/3f3f3e8a4172c7803a7be4809f06aba554f7090f))
 
 ### BREAKING CHANGES
 
-* Drop Node 12 support
-* Add .nvmrc
-* Introduce CI build for Node 18
-* Upgrade All Dependencies
-
-
-
-
+- Drop Node 12 support
+- Add .nvmrc
+- Introduce CI build for Node 18
+- Upgrade All Dependencies
 
 # [1.1.0](https://github.com/finnair/v-validation/compare/v1.0.1...v1.1.0) (2022-08-29)
 
-
 ### Features
 
-* Support for Luxon ([94b3806](https://github.com/finnair/v-validation/commit/94b38060e07feeb0abb8c81659d8bda537a4d9aa))
-
-
-
-
+- Support for Luxon ([94b3806](https://github.com/finnair/v-validation/commit/94b38060e07feeb0abb8c81659d8bda537a4d9aa))
 
 # [1.1.0-alpha.9](https://github.com/finnair/v-validation/compare/v1.1.0-alpha.8...v1.1.0-alpha.9) (2022-08-19)
 
 **Note:** Version bump only for package @finnair/v-validation-luxon
 
-
-
-
-
 # [1.1.0-alpha.8](https://github.com/finnair/v-validation/compare/v1.1.0-alpha.7...v1.1.0-alpha.8) (2022-08-19)
 
 **Note:** Version bump only for package @finnair/v-validation-luxon
-
-
-
-
 
 # [1.1.0-alpha.7](https://github.com/finnair/v-validation/compare/v1.1.0-alpha.6...v1.1.0-alpha.7) (2022-08-18)
 
 **Note:** Version bump only for package @finnair/v-validation-luxon
 
-
-
-
-
 # [1.1.0-alpha.6](https://github.com/finnair/v-validation/compare/v1.0.1...v1.1.0-alpha.6) (2022-08-17)
-
 
 ### Bug Fixes
 
-* Fix exports ([b9eacb6](https://github.com/finnair/v-validation/commit/b9eacb6e98a05a07049eb0a8f97b7e6b4958973a))
-
+- Fix exports ([b9eacb6](https://github.com/finnair/v-validation/commit/b9eacb6e98a05a07049eb0a8f97b7e6b4958973a))
 
 ### Features
 
-* fromISO helper for Luxon wrapper construction ([e3b8f24](https://github.com/finnair/v-validation/commit/e3b8f247b3a9bfef8ad474688f995862fdd810e3))
-* Support for Luxon ([00d0a8e](https://github.com/finnair/v-validation/commit/00d0a8e8c8de46bfeb3502f51bb8cd5a3627070e))
-
-
-
-
+- fromISO helper for Luxon wrapper construction ([e3b8f24](https://github.com/finnair/v-validation/commit/e3b8f247b3a9bfef8ad474688f995862fdd810e3))
+- Support for Luxon ([00d0a8e](https://github.com/finnair/v-validation/commit/00d0a8e8c8de46bfeb3502f51bb8cd5a3627070e))
 
 # [1.1.0-alpha.5](https://github.com/finnair/v-validation/compare/v1.0.1...v1.1.0-alpha.5) (2022-08-16)
 
-
 ### Bug Fixes
 
-* Fix exports ([904e63c](https://github.com/finnair/v-validation/commit/904e63c4a40e65d274349ae0f5ea80c697c5c8ce))
-
+- Fix exports ([904e63c](https://github.com/finnair/v-validation/commit/904e63c4a40e65d274349ae0f5ea80c697c5c8ce))
 
 ### Features
 
-* fromISO helper for Luxon wrapper construction ([81d5b2e](https://github.com/finnair/v-validation/commit/81d5b2eb08f360ab56ec0c6caece392a0e6eb1a1))
-* Support for Luxon ([6a243f0](https://github.com/finnair/v-validation/commit/6a243f043db2ca6700180eb758a08d8edfe1e538))
-
-
-
-
+- fromISO helper for Luxon wrapper construction ([81d5b2e](https://github.com/finnair/v-validation/commit/81d5b2eb08f360ab56ec0c6caece392a0e6eb1a1))
+- Support for Luxon ([6a243f0](https://github.com/finnair/v-validation/commit/6a243f043db2ca6700180eb758a08d8edfe1e538))
 
 # [1.1.0-alpha.4](https://github.com/finnair/v-validation/compare/v1.1.0-alpha.3...v1.1.0-alpha.4) (2022-08-15)
 
 **Note:** Version bump only for package @finnair/v-validation-luxon
 
-
-
-
-
 # [1.1.0-alpha.3](https://github.com/finnair/v-validation/compare/v1.1.0-alpha.2...v1.1.0-alpha.3) (2022-08-15)
 
 **Note:** Version bump only for package @finnair/v-validation-luxon
 
-
-
-
-
 # [1.1.0-alpha.2](https://github.com/finnair/v-validation/compare/v1.1.0-alpha.1...v1.1.0-alpha.2) (2022-08-12)
-
 
 ### Bug Fixes
 
-* Fix exports ([c4c42f7](https://github.com/finnair/v-validation/commit/c4c42f715e8c52b29b76f7f07753f632528a69ab))
-
-
-
-
+- Fix exports ([c4c42f7](https://github.com/finnair/v-validation/commit/c4c42f715e8c52b29b76f7f07753f632528a69ab))
 
 # [1.1.0-alpha.1](https://github.com/finnair/v-validation/compare/v1.1.0-alpha.0...v1.1.0-alpha.1) (2022-08-12)
 
-
 ### Features
 
-* fromISO helper for Luxon wrapper construction ([187796e](https://github.com/finnair/v-validation/commit/187796e707f44033d94943ef64d48626317b4d80))
-
-
-
-
+- fromISO helper for Luxon wrapper construction ([187796e](https://github.com/finnair/v-validation/commit/187796e707f44033d94943ef64d48626317b4d80))
 
 # [1.1.0-alpha.0](https://github.com/finnair/v-validation/compare/v1.0.1...v1.1.0-alpha.0) (2022-08-12)
 
-
 ### Features
 
-* Support for Luxon ([6f982df](https://github.com/finnair/v-validation/commit/6f982df9b55395e953069914c93fef677dec171e))
+- Support for Luxon ([6f982df](https://github.com/finnair/v-validation/commit/6f982df9b55395e953069914c93fef677dec171e))

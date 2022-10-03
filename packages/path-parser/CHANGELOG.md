@@ -7,77 +7,34 @@ See [Conventional Commits](https://conventionalcommits.org) for commit guideline
 
 **Note:** Version bump only for package @finnair/path-parser
 
-
-
-
-
-# [3.0.0-alpha.2](https://github.com/finnair/v-validation/compare/v2.0.0...v3.0.0-alpha.2) (2022-09-28)
-
-**Note:** Version bump only for package @finnair/path-parser
-
-
-
-
-
-# [3.0.0-alpha.1](https://github.com/finnair/v-validation/compare/v2.0.0...v3.0.0-alpha.1) (2022-09-26)
-
-**Note:** Version bump only for package @finnair/path-parser
-
-
-
-
-
 # [2.0.0](https://github.com/finnair/v-validation/compare/v1.1.0...v2.0.0) (2022-09-08)
 
-
-* Upgrade All Dependencies (#80) ([fb6309c](https://github.com/finnair/v-validation/commit/fb6309cc1d9fd90f3e8c5ba79798fae1450b66a6)), closes [#80](https://github.com/finnair/v-validation/issues/80)
-
+- Upgrade All Dependencies (#80) ([fb6309c](https://github.com/finnair/v-validation/commit/fb6309cc1d9fd90f3e8c5ba79798fae1450b66a6)), closes [#80](https://github.com/finnair/v-validation/issues/80)
 
 ### BREAKING CHANGES
 
-* Drop Node 12 support
-* Add .nvmrc
-* Introduce CI build for Node 18
-* Upgrade All Dependencies
-
-
-
-
+- Drop Node 12 support
+- Add .nvmrc
+- Introduce CI build for Node 18
+- Upgrade All Dependencies
 
 # [1.1.0](https://github.com/finnair/v-validation/compare/v1.0.1...v1.1.0) (2022-08-29)
 
-
 ### Features
 
-* Support for Luxon ([94b3806](https://github.com/finnair/v-validation/commit/94b38060e07feeb0abb8c81659d8bda537a4d9aa))
-
-
-
-
+- Support for Luxon ([94b3806](https://github.com/finnair/v-validation/commit/94b38060e07feeb0abb8c81659d8bda537a4d9aa))
 
 # [1.1.0-alpha.6](https://github.com/finnair/v-validation/compare/v1.0.1...v1.1.0-alpha.6) (2022-08-17)
 
 **Note:** Version bump only for package @finnair/path-parser
 
-
-
-
-
 # [1.1.0-alpha.5](https://github.com/finnair/v-validation/compare/v1.0.1...v1.1.0-alpha.5) (2022-08-16)
 
 **Note:** Version bump only for package @finnair/path-parser
 
-
-
-
-
 # [1.1.0-alpha.0](https://github.com/finnair/v-validation/compare/v1.0.1...v1.1.0-alpha.0) (2022-08-12)
 
 **Note:** Version bump only for package @finnair/path-parser
-
-
-
-
 
 ## [1.0.1](https://github.com/finnair/v-validation/compare/v0.9.1...v1.0.1) (2022-01-20)
 
