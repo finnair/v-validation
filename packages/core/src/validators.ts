@@ -27,8 +27,7 @@ export class ValidationContext {
   private readonly objects = new Map<any, any>();
 
   failure(violation: Violation | Violation[], value: any) {
-    let violations: Violation[] = [];
-    violations = violations.concat(violation);
+    const violations: Violation[] = ([] as Violation[]).concat(violation);
     if (violations.length === 1) {
       if (this.ignoreViolation(violations[0])) {
         if (this.options.warnLogger) {
@@ -101,9 +100,7 @@ export abstract class Validator {
   }
 
   validate(value: any, options?: ValidatorOptions): Promise<ValidationResult> {
-    return new Promise((resolve, reject) => {
-      this.validatePath(value, ROOT, new ValidationContext(options || {})).then(resolve, reject);
-    });
+    return Promise.resolve(this.validatePath(value, ROOT, new ValidationContext(options || {})));
   }
 
   abstract validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult>;
