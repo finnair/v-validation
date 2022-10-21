@@ -1,6 +1,15 @@
 import { Validator, ValidatorOptions, ValidationResult, V, Violation, defaultViolations, TypeMismatch } from '@finnair/v-validation';
 import { LuxonValidator, Vluxon } from './Vluxon';
-import { LocalDateLuxon, DateTimeLuxon, DateTimeMillisLuxon, DateTimeMillisUtcLuxon, DateTimeUtcLuxon, LuxonDateTime, LocalTimeLuxon } from './luxon';
+import {
+  LocalDateLuxon,
+  DateTimeLuxon,
+  DateTimeMillisLuxon,
+  DateTimeMillisUtcLuxon,
+  DateTimeUtcLuxon,
+  LuxonDateTime,
+  LocalTimeLuxon,
+  LocalDateTimeLuxon,
+} from './luxon';
 import { DateTime, Duration, FixedOffsetZone, IANAZone, Settings } from 'luxon';
 import { Path } from '@finnair/path';
 
@@ -64,11 +73,12 @@ describe('Vluxon', () => {
   describe.each`
     type
     ${LocalDateLuxon}
+    ${LocalTimeLuxon}
+    ${LocalDateTimeLuxon}
     ${DateTimeLuxon}
     ${DateTimeUtcLuxon}
     ${DateTimeMillisLuxon}
     ${DateTimeMillisUtcLuxon}
-    ${LocalTimeLuxon}
   `('constructors', ({ type }) => {
     test(`${type.name}.fromJSDate`, () => {
       const value = new Date();
@@ -271,6 +281,68 @@ describe('Vluxon', () => {
 
     describe('valid values', () => {
       test.each([['00:00:00'], ['12:13:15']])('%s is valid', (value: string) => expectValid(value, Vluxon.localTime().next(toJSON), value));
+    });
+  });
+
+  describe('localDateTime', () => {
+    test('null', () => expectViolations(null, Vluxon.localDateTime(), defaultViolations.notNull()));
+
+    test('valid dateTime', () => expectValid('2019-03-07T12:13:14', Vluxon.localDateTime().next(toJSON), '2019-03-07T12:13:14'));
+
+    test('direct constructor', () => expect(new LocalDateTimeLuxon(DateTime.local(2019, 1, 1, 1, 1, 1)).toJSON()).toEqual('2019-01-01T01:01:01'));
+
+    test('UTC time zone is used internally', () => {
+      const dt = new LocalDateTimeLuxon(DateTime.fromISO('2019-05-21T12:13:14.123+02', { setZone: true }));
+      expect(new DateTimeUtcLuxon(dt).toJSON()).toEqual('2019-05-21T12:13:14Z');
+    });
+
+    test('utcOffset of dateTime', () => {
+      const dt = new LocalDateTimeLuxon(DateTime.fromISO('2019-05-21T12:13:14+03:00'));
+      expect(dt.dateTime.offset).toEqual(0);
+    });
+
+    test('millis are discarded', () => {
+      const dt = new LocalDateTimeLuxon(DateTime.fromISO('2019-05-21T12:13:14.123Z'));
+      expect(dt.dateTime.millisecond).toEqual(0);
+    });
+
+    test('invalid LocalDateTimeLuxon throws', () => {
+      expect(() => new LocalDateTimeLuxon(DateTime.fromISO('2021-02-29T12:00:00'))).toThrow();
+    });
+
+    test('any LocalDateTimeLuxon is valid', () => expectValid(new LocalDateTimeLuxon(DateTime.now()), Vluxon.localDateTime()));
+
+    test('any valid DateTime is valid and wrapped', () => {
+      const now = DateTime.now();
+      expectValid(now, Vluxon.localDateTime(), new LocalDateTimeLuxon(now));
+    });
+
+    test('wrap', () => {
+      const luxon = new LocalDateTimeLuxon(DateTime.utc(2022, 1, 15, 12, 30, 0));
+      const result = luxon.wrap(dt => dt.plus(Duration.fromObject({ month: 1 })));
+      expect(result).toBeInstanceOf(LocalDateTimeLuxon);
+      expect(result).toEqual(new LocalDateTimeLuxon(DateTime.utc(2022, 2, 15, 12, 30, 0)));
+    });
+
+    describe('invalid values', () => {
+      test.each([
+        ['2019-05-21'], // Date without time
+        ['2019-5-1T12:13:14'], // Date without zero padding
+        ['2021-02-29T12:00:00Z'], // invalid leap date
+        ['2019-05-21T12:13:14Z'], // zone not allowed
+        ['2019-05-21T12:13:14+03'], // offset not allowed
+        ['2019-05-21T12:13:14.123'], // milliseconds not allowed
+        ['20190521T12:13:14'], // abreviated date form not supported
+        ['2019-05-21T121314'], // abreviated time form not supported
+        [Date.now()],
+      ])('%s is invalid', (value: any) => expectViolations(value, Vluxon.localDateTime(), defaultViolations.date(value, Path.ROOT, 'DateTime')));
+    });
+
+    describe('valid values', () => {
+      test.each([
+        ['2020-02-29T12:00:00'],
+        ['2020-02-29T00:00:00'], // leap day
+      ])('%s is valid', (value: string) => expectValid(value, Vluxon.localDateTime().next(toJSON), value));
     });
   });
 

@@ -1,7 +1,16 @@
 import { ValidationContext, isNullOrUndefined, defaultViolations, isString, V, Validator, ValidationResult, TypeMismatch } from '@finnair/v-validation';
 import { Path } from '@finnair/path';
 import { DateTime, DateTimeJSOptions, DateTimeOptions, Duration, FixedOffsetZone } from 'luxon';
-import { LocalDateLuxon, DateTimeLuxon, DateTimeMillisLuxon, DateTimeMillisUtcLuxon, DateTimeUtcLuxon, LuxonDateTime, LocalTimeLuxon } from './luxon';
+import {
+  LocalDateLuxon,
+  DateTimeLuxon,
+  DateTimeMillisLuxon,
+  DateTimeMillisUtcLuxon,
+  DateTimeUtcLuxon,
+  LuxonDateTime,
+  LocalTimeLuxon,
+  LocalDateTimeLuxon,
+} from './luxon';
 
 export type LuxonInput = string | DateTime | LuxonDateTime;
 
@@ -69,13 +78,24 @@ function localTime(options: DateTimeOptions = { zone: FixedOffsetZone.utcInstanc
   });
 }
 
-const dateTimePattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:Z|[+-]\d{2}(?::?\d{2})?)$/;
+const localDateTimePattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/;
+
+function localDateTime(options: DateTimeOptions = { zone: FixedOffsetZone.utcInstance }) {
+  return new LuxonValidator({
+    type: 'DateTime',
+    proto: LocalDateTimeLuxon,
+    pattern: localDateTimePattern,
+    parser: (value: string) => DateTime.fromISO(value, options),
+  });
+}
+
+const dateTimeTzPattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:Z|[+-]\d{2}(?::?\d{2})?)$/;
 
 function dateTime(options: DateTimeOptions = { setZone: true }) {
   return new LuxonValidator({
     type: 'DateTime',
     proto: DateTimeLuxon,
-    pattern: dateTimePattern,
+    pattern: dateTimeTzPattern,
     parser: (value: string) => DateTime.fromISO(value, options),
   });
 }
@@ -84,7 +104,7 @@ function dateTimeUtc(options: DateTimeOptions = { zone: FixedOffsetZone.utcInsta
   return new LuxonValidator({
     type: 'DateTime',
     proto: DateTimeUtcLuxon,
-    pattern: dateTimePattern,
+    pattern: dateTimeTzPattern,
     parser: (value: string) => DateTime.fromISO(value, options),
   });
 }
@@ -212,6 +232,7 @@ export const Vluxon = {
   // DateTime wrapper validators
   localDate,
   localTime,
+  localDateTime,
   dateTime,
   dateTimeUtc,
   dateTimeMillis,
