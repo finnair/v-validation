@@ -18,7 +18,7 @@ jobs:
       - run: yarn boot
       - run: yarn build
       - run: yarn test --coverage
-      - uses: codecov/codecov-action@v1
+      - uses: codecov/codecov-action@v3
         with:
           name: v-validation # optional
           fail_ci_if_error: true # optional (default = false)
