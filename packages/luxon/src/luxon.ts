@@ -182,6 +182,70 @@ export class LocalTimeLuxon extends LuxonDateTime {
   }
 }
 
+export class LocalDateTimeLuxon extends LuxonDateTime {
+  public static readonly format = "yyyy-MM-dd'T'HH:mm:ss";
+
+  constructor(input: LuxonDateTimeInput) {
+    super(input);
+  }
+
+  public static nowLocal(options?: DateTimeJSOptions) {
+    return new LocalDateTimeLuxon(DateTime.local(options));
+  }
+
+  public static nowUtc() {
+    return new LocalDateTimeLuxon(DateTime.utc());
+  }
+
+  public static fromISO(value: string, options?: DateTimeOptions) {
+    return new LocalDateTimeLuxon(
+      DateTime.fromISO(value, {
+        zone: FixedOffsetZone.utcInstance,
+        ...options,
+      }),
+    );
+  }
+
+  public static fromFormat(value: string, format: string, options?: DateTimeOptions) {
+    return new LocalDateTimeLuxon(
+      DateTime.fromFormat(value, format, {
+        zone: FixedOffsetZone.utcInstance,
+        ...options,
+      }),
+    );
+  }
+
+  public static fromJSDate(date: Date, options?: { zone?: string | Zone }) {
+    return new LocalDateTimeLuxon(
+      DateTime.fromJSDate(date, {
+        zone: FixedOffsetZone.utcInstance,
+        ...options,
+      }),
+    );
+  }
+
+  public static fromMillis(millis: number, options?: DateTimeJSOptions) {
+    return new LocalDateTimeLuxon(
+      DateTime.fromMillis(millis, {
+        zone: FixedOffsetZone.utcInstance,
+        ...options,
+      }),
+    );
+  }
+
+  protected normalize(dateTime: DateTime): DateTime {
+    return DateTime.utc(dateTime.year, dateTime.month, dateTime.day, dateTime.hour, dateTime.minute, dateTime.second);
+  }
+
+  wrap(fn: (dateTime: DateTime) => DateTime): LocalDateTimeLuxon {
+    return new LocalDateTimeLuxon(fn(this.dateTime));
+  }
+
+  toJSON() {
+    return this.dateTime.toFormat(LocalDateTimeLuxon.format);
+  }
+}
+
 export class DateTimeLuxon extends LuxonDateTime {
   public static readonly format = "yyyy-MM-dd'T'HH:mm:ss";
 
