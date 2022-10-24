@@ -3,6 +3,17 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [3.1.0](https://github.com/finnair/v-validation/compare/v3.0.0...v3.1.0) (2022-10-24)
+
+
+### Features
+
+* LocalDateTimeLuxon (a date-time without timezone) ([#83](https://github.com/finnair/v-validation/issues/83)) ([1517c6e](https://github.com/finnair/v-validation/commit/1517c6ec8af835cb928cd6cf228b9bdc9f0cda3e))
+
+
+
+
+
 # [3.0.0](https://github.com/finnair/v-validation/compare/v2.0.0...v3.0.0) (2022-10-03)
 
 **Note:** Version bump only for package v-validation
