@@ -3,6 +3,17 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [3.2.0](https://github.com/finnair/v-validation/compare/v3.1.0...v3.2.0) (2022-10-25)
+
+
+### Features
+
+* setZone method for date-time types ([#84](https://github.com/finnair/v-validation/issues/84)) ([2c01855](https://github.com/finnair/v-validation/commit/2c01855c1541ecd7ad7ea5f8174b2d757400bd15))
+
+
+
+
+
 # [3.1.0](https://github.com/finnair/v-validation/compare/v3.0.0...v3.1.0) (2022-10-24)
 
 
