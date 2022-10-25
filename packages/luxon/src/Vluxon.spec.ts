@@ -296,6 +296,13 @@ describe('Vluxon', () => {
       expect(new DateTimeUtcLuxon(dt).toJSON()).toEqual('2019-05-21T12:13:14Z');
     });
 
+    test('setZone', () => {
+      const local = LocalDateTimeLuxon.fromISO('2022-10-24T02:00:00');
+      const zoned = local.setZone(FixedOffsetZone.utcInstance);
+      expect(zoned).toBeInstanceOf(DateTimeLuxon);
+      expect(zoned.toJSON()).toEqual('2022-10-24T02:00:00Z');
+    });
+
     test('utcOffset of dateTime', () => {
       const dt = new LocalDateTimeLuxon(DateTime.fromISO('2019-05-21T12:13:14+03:00'));
       expect(dt.dateTime.offset).toEqual(0);
@@ -368,6 +375,13 @@ describe('Vluxon', () => {
       expect(dt.dateTime.offset).toEqual(180);
     });
 
+    test('setZone', () => {
+      const local = DateTimeLuxon.fromISO('2022-10-24T02:00:00+03');
+      const zoned = local.setZone(FixedOffsetZone.utcInstance);
+      expect(zoned).toBeInstanceOf(DateTimeLuxon);
+      expect(zoned.toJSON()).toEqual('2022-10-23T23:00:00Z');
+    });
+
     test('invalid DateTime throws', () => {
       expect(() => new DateTimeLuxon(DateTime.fromISO('2021-02-29T12:00:00'))).toThrow();
     });
@@ -427,6 +441,13 @@ describe('Vluxon', () => {
     test('convert dateTimeUtc to local time', () => {
       const dt = new DateTimeUtcLuxon(DateTime.fromISO('2019-05-21T12:13:14Z'));
       expect(new DateTimeLuxon(dt.dateTime.setZone(FixedOffsetZone.instance(3 * 60))).toJSON()).toEqual('2019-05-21T15:13:14+03:00');
+    });
+
+    test('setZone', () => {
+      const utc = DateTimeUtcLuxon.fromISO('2022-10-23T23:00:00Z');
+      const zoned = utc.setZone(FixedOffsetZone.instance(180));
+      expect(zoned).toBeInstanceOf(DateTimeLuxon);
+      expect(zoned.toJSON()).toEqual('2022-10-24T02:00:00+03:00');
     });
 
     test('utcOffset of dateTimeUtc', () => {
@@ -506,6 +527,13 @@ describe('Vluxon', () => {
       expect(dt.dateTime.offset).toEqual(180);
     });
 
+    test('setZone', () => {
+      const local = DateTimeMillisLuxon.fromISO('2022-10-24T02:00:00.123+03');
+      const zoned = local.setZone(FixedOffsetZone.utcInstance);
+      expect(zoned).toBeInstanceOf(DateTimeMillisLuxon);
+      expect(zoned.toJSON()).toEqual('2022-10-23T23:00:00.123Z');
+    });
+
     test('invalid leap date throws', () => {
       expect(() => new DateTimeMillisLuxon(DateTime.fromISO('2021-02-29T12:00:00.000Z'))).toThrow();
     });
@@ -572,6 +600,13 @@ describe('Vluxon', () => {
     test('utcOffset of dateTimeMillisUtc', () => {
       const dt = new DateTimeMillisUtcLuxon(DateTime.fromISO('2019-05-21T12:13:14.123+03:00'));
       expect(dt.dateTime.offset).toEqual(0);
+    });
+
+    test('setZone', () => {
+      const utc = DateTimeMillisUtcLuxon.fromISO('2022-10-23T23:00:00.123Z');
+      const zoned = utc.setZone(FixedOffsetZone.instance(180));
+      expect(zoned).toBeInstanceOf(DateTimeMillisLuxon);
+      expect(zoned.toJSON()).toEqual('2022-10-24T02:00:00.123+03:00');
     });
 
     test('invalid leap date throws', () => {

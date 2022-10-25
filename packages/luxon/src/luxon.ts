@@ -189,6 +189,10 @@ export class LocalDateTimeLuxon extends LuxonDateTime {
     super(input);
   }
 
+  setZone(zone: Zone): DateTimeLuxon {
+    return new DateTimeLuxon(this.dateTime.setZone(zone, { keepLocalTime: true }));
+  }
+
   public static nowLocal(options?: DateTimeJSOptions) {
     return new LocalDateTimeLuxon(DateTime.local(options));
   }
@@ -255,6 +259,10 @@ export class DateTimeLuxon extends LuxonDateTime {
     super(input);
   }
 
+  setZone(zone: Zone): DateTimeLuxon {
+    return new DateTimeLuxon(this.dateTime.setZone(zone, { keepLocalTime: false }));
+  }
+
   public static now(options?: DateTimeJSOptions) {
     return new DateTimeLuxon(DateTime.local(options));
   }
@@ -304,6 +312,10 @@ export class DateTimeLuxon extends LuxonDateTime {
 export class DateTimeUtcLuxon extends LuxonDateTime {
   constructor(input: LuxonDateTimeInput) {
     super(input);
+  }
+
+  setZone(zone: Zone): DateTimeLuxon {
+    return new DateTimeLuxon(this.dateTime.setZone(zone, { keepLocalTime: false }));
   }
 
   public static now() {
@@ -368,6 +380,10 @@ export class DateTimeMillisLuxon extends LuxonDateTime {
     super(input);
   }
 
+  setZone(zone: Zone): DateTimeMillisLuxon {
+    return new DateTimeMillisLuxon(this.dateTime.setZone(zone, { keepLocalTime: false }));
+  }
+
   public static now(options?: DateTimeJSOptions) {
     return new DateTimeMillisLuxon(DateTime.local(options));
   }
@@ -417,6 +433,10 @@ export class DateTimeMillisLuxon extends LuxonDateTime {
 export class DateTimeMillisUtcLuxon extends LuxonDateTime {
   constructor(input: LuxonDateTimeInput) {
     super(input);
+  }
+
+  setZone(zone: Zone): DateTimeMillisLuxon {
+    return new DateTimeMillisLuxon(this.dateTime.setZone(zone, { keepLocalTime: false }));
   }
 
   public static now() {
