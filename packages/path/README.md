@@ -64,6 +64,9 @@ changes.forEach((newValue, path) => {
 updateResource(latestValue);
 ```
 
+NOTE: Updating an array with `Path.set` will truncate possible undefined values from the end of the array. This allows
+removing trailing elements without leaving undefined elements in place.
+
 ### Include/Exclude Projection
 
 While GraphQL is all about projections, something similar can also be implemented in a REST API with include/exclude parameters. `Projection` and `parsePathMatcher` function provides means to process results safely based on such a user input. This is, of course, very simplified projection compared to what GraphQL has to offer, but it's also... well, simpler.
@@ -92,9 +95,7 @@ Path.of(); // Root object $ - also Path.ROOT
 Path.of('array', 1, 'property'); // $.array[1].property
 
 // Constructing with fluent syntax
-Path.of()
-  .property('array')
-  .index(0); // $.array[0]
+Path.of().property('array').index(0); // $.array[0]
 
 // Concatenating Paths
 Path.of('parent').concat(Path.of('child', 'name')); // $.parent.child.name
@@ -118,6 +119,9 @@ Path.of('parent', 'child', 'name').set({}, 'child name'); // { parent: { child: 
 Path.of('array', 1).unset({ array: [1, 2, 3] }); // { array: [1, undefined, 3] }
 // ...but unsetting a value doesn't create intermediate objects
 Path.of('array', 1).unset({}); // {}
+
+// Trailing undefined elements will be removed from an array (i.e. array is resized)
+Path.of('array', 2).set({ array: [1, undefined, 3] }, undefined); // { array: [1] } where array.length === 1
 
 // toJSON() returns JsonPath compatible serialization
 Path.of('array', 0, 'property with spaces').toJSON(); // $.array[0]["property with spaces"]

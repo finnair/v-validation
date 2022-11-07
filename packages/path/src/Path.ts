@@ -71,21 +71,29 @@ export class Path {
     if (this.path.length === 0) {
       return value;
     }
-    let index = -1;
+    let pathIndex = -1;
     const _root = toObject(root, this.path);
     let current = _root;
-    for (index = 0; index < this.path.length - 1 && current; index++) {
-      const component = this.path[index];
+    for (pathIndex = 0; pathIndex < this.path.length - 1 && current; pathIndex++) {
+      const component = this.path[pathIndex];
       const child = toObject(current[component], this.path);
       current[component] = child;
       current = child;
     }
     if (value === undefined) {
       if (current !== undefined) {
-        delete current[this.path[index]];
+        delete current[this.path[pathIndex]];
+        // Truncate undefined tail of an array
+        if (Array.isArray(current)) {
+          let i = current.length - 1;
+          while (i >= 0 && current[i] === undefined) {
+            i--;
+          }
+          current.length = i + 1;
+        }
       }
     } else {
-      current[this.path[index]] = value;
+      current[this.path[pathIndex]] = value;
     }
     return _root;
 
@@ -93,7 +101,7 @@ export class Path {
       if (typeof current === 'object') {
         return current;
       } else if (value !== undefined) {
-        if (typeof path[index + 1] === 'number') {
+        if (typeof path[pathIndex + 1] === 'number') {
           return [];
         } else {
           return {};

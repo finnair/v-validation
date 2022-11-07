@@ -3,21 +3,10 @@ import { PathMatcher } from './PathMatcher';
 import { AnyProperty, AnyIndex } from './matchers';
 
 describe('path', () => {
-  test('toJSON', () =>
-    expect(
-      Path.property('s p a c e s')
-        .index(5)
-        .property('regular')
-        .toJSON(),
-    ).toEqual('$["s p a c e s"][5].regular'));
+  test('toJSON', () => expect(Path.property('s p a c e s').index(5).property('regular').toJSON()).toEqual('$["s p a c e s"][5].regular'));
 
   test('Weird properties', () =>
-    expect(
-      Path.property('@foo')
-        .property('a5')
-        .property('http://xmlns.com/foaf/0.1/name')
-        .toJSON(),
-    ).toEqual('$["@foo"].a5["http://xmlns.com/foaf/0.1/name"]'));
+    expect(Path.property('@foo').property('a5').property('http://xmlns.com/foaf/0.1/name').toJSON()).toEqual('$["@foo"].a5["http://xmlns.com/foaf/0.1/name"]'));
 
   describe('of', () => {
     test('equal to path constructed by builder', () => expect(Path.of(0, 'foo')).toEqual(Path.index(0).property('foo')));
@@ -82,6 +71,14 @@ describe('path', () => {
 
     test('creates root object if necessary', () =>
       expect(Path.of(0, 'array', 1, 'name').set(undefined, 'name')).toEqual([{ array: [undefined, { name: 'name' }] }]));
+
+    test('truncates undefined tail from an array', () => {
+      const obj = { array: [1, undefined, 3] };
+      expect(Path.of('array', 2).set(obj, undefined));
+      expect(obj).toEqual({ array: [1] });
+      expect(obj.array.length).toBe(1);
+      expect(obj.array[2]).toBeUndefined();
+    });
   });
 
   describe('unset', () => {
