@@ -1266,6 +1266,7 @@ describe('normalizers', () => {
       expect(b).toEqual(a);
       expect(b).not.toBe(a);
     });
+    test('will return existing value as is', async () => expectValid(123, validator));
   });
 
   describe('nullToArray', () => {
@@ -1277,6 +1278,7 @@ describe('normalizers', () => {
       expect(b).toEqual(a);
       expect(b).not.toBe(a);
     });
+    test('will return existing value as is', async () => expectValid(false, validator));
   });
 });
 
