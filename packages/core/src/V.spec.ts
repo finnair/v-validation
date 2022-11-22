@@ -1250,11 +1250,33 @@ describe('normalizers', () => {
   describe('nullTo', () => {
     test('undefined', () => expectValid(undefined, V.nullTo('default'), 'default'));
 
-    test('null', () => expectValid(null, V.nullTo('default'), 'default'));
+    test('null', () => expectValid(null, V.nullTo(1), 1));
 
-    test('empty string', () => expectValid('', V.nullTo('default')));
+    test('empty string', () => expectValid('', V.nullTo(true)));
 
     test('anything else is passed as is', () => expectValid('anything', V.nullTo('default')));
+  });
+
+  describe('nullToObject', () => {
+    const validator = V.nullToObject();
+    test('will produce new object each time', async () => {
+      const a = (await validator.validate(null)).getValue();
+      const b = (await validator.validate(undefined)).getValue();
+      expect(a).toEqual({});
+      expect(b).toEqual(a);
+      expect(b).not.toBe(a);
+    });
+  });
+
+  describe('nullToArray', () => {
+    const validator = V.nullToArray();
+    test('will produce new array each time', async () => {
+      const a = (await validator.validate(null)).getValue();
+      const b = (await validator.validate(undefined)).getValue();
+      expect(a).toEqual([]);
+      expect(b).toEqual(a);
+      expect(b).not.toBe(a);
+    });
   });
 });
 

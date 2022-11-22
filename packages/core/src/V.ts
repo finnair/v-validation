@@ -146,7 +146,11 @@ const V = {
   /** WARN: Objects as Map keys use identity hash/equals, i.e. === */
   toMapType: (keys: Validator, values: Validator) => new MapNormalizer(keys, values),
 
-  nullTo: (defaultValue: any) => new ValueMapper(value => (isNullOrUndefined(value) ? defaultValue : value)),
+  nullTo: (defaultValue: string | number | bigint | boolean | symbol) => new ValueMapper(value => (isNullOrUndefined(value) ? defaultValue : value)),
+
+  nullToObject: () => new ValueMapper(value => (isNullOrUndefined(value) ? {} : value)),
+
+  nullToArray: () => new ValueMapper(value => (isNullOrUndefined(value) ? [] : value)),
 
   array: (...items: Validator[]) => new ArrayValidator(maybeAllOfValidator(items)),
 
