@@ -1268,7 +1268,7 @@ describe('normalizers', () => {
     });
   });
 
-  describe('nullToObject', () => {
+  describe('nullToArray', () => {
     const validator = V.nullToArray();
     test('will produce new array each time', async () => {
       const a = (await validator.validate(null)).getValue();
