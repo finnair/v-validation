@@ -669,6 +669,22 @@ describe('Vluxon', () => {
     test('parse serialize roundtrip', () => expectValid('P23DT23H', Vluxon.duration().next(toJSON), 'P23DT23H'));
 
     test('any valid Duration is valid', () => expectValid(Duration.fromMillis(12345), Vluxon.duration()));
+
+    test('plain number is invalid', () => expectViolations(123, Vluxon.duration(), new TypeMismatch(Path.ROOT, 'Duration', 123)));
+  });
+
+  describe('timeDuration', () => {
+    test('null is invalid', () => expectViolations(null, Vluxon.timeDuration(), defaultViolations.notNull()));
+
+    test('undefined is invalid', () => expectViolations(null, Vluxon.timeDuration(), defaultViolations.notNull()));
+
+    test('ABC is invalid', () => expectViolations('ABC', Vluxon.timeDuration(), new TypeMismatch(Path.ROOT, 'TimeDuration', 'ABC')));
+
+    test('parse serialize roundtrip', () => expectValid('000900', Vluxon.timeDuration().next(toJSON), 'PT9M'));
+
+    test('any valid Duration is valid', () => expectValid(Duration.fromMillis(12345), Vluxon.timeDuration()));
+
+    test('plain number is invalid', () => expectViolations(123, Vluxon.timeDuration(), new TypeMismatch(Path.ROOT, 'TimeDuration', 123)));
   });
 
   describe('custom format', () => {
