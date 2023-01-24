@@ -228,6 +228,22 @@ export class DurationValidator extends Validator {
   }
 }
 
+export class TimeDurationValidator extends Validator {
+  async validatePath(value: any, path: Path, ctx: ValidationContext): Promise<ValidationResult> {
+    if (isNullOrUndefined(value)) {
+      return ctx.failure(defaultViolations.notNull(path), value);
+    } else if (Duration.isDuration(value)) {
+      return ctx.success(value);
+    } else if (isString(value)) {
+      const duration = Duration.fromISOTime(value);
+      if (duration.isValid) {
+        return ctx.success(duration);
+      }
+    }
+    return ctx.failure(new TypeMismatch(path, 'TimeDuration', value), value);
+  }
+}
+
 export const Vluxon = {
   // DateTime wrapper validators
   localDate,
@@ -245,5 +261,6 @@ export const Vluxon = {
   dateTimeFromSeconds,
   dateTimeFromMillis,
   duration: () => new DurationValidator(),
+  timeDuration: () => new TimeDurationValidator(),
 };
 Object.freeze(Vluxon);
