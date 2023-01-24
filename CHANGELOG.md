@@ -3,6 +3,17 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [4.2.0](https://github.com/finnair/v-validation/compare/v4.1.0...v4.2.0) (2023-01-24)
+
+
+### Features
+
+* Support ISO 8601 time string as Duration ([#89](https://github.com/finnair/v-validation/issues/89)) ([75fb154](https://github.com/finnair/v-validation/commit/75fb154fa5283e7a51d3301097c7ed759beeabd8))
+
+
+
+
+
 # [4.1.0](https://github.com/finnair/v-validation/compare/v4.0.0...v4.1.0) (2022-11-22)
 
 
