@@ -74,18 +74,19 @@ DateTime instance which is public readonly fiedl. However there are a few conven
 
 ## Build-in Validators
 
-| Vluxon.             | Format                     | Description                                               |
-| ------------------- | -------------------------- | --------------------------------------------------------- |
-| localDate           | `yyyy-MM-dd`               | Local date (time normalized to midninght UTC).            |
-| localTime           | `HH:mm:ss`                 | Local time (date normalized to 1970-01-01).               |
-| dateTime            | `yyyy-MM-ddTHH:mm:ssZ`     | Date and time in local (parsed) time zone.                |
-| dateTimeUtc         | `yyyy-MM-ddTHH:mm:ssZ`     | Date and time in UTC time zone.                           |
-| dateTimeMillis      | `yyyy-MM-ddTHH:mm:ss.SSSZ` | Date and time with millis in local (parsed) time zone.    |
-| dateTimeMillisUtc   | `yyyy-MM-ddTHH:mm:ss.SSSZ` | Date and time with millis in UTC time zone.               |
-| dateTimeFromISO     | Any ISO                    | Plain Luxon DateTime from ISO format.                     |
-| dateTimeFromRFC2822 | RFC2822                    | Plain Luxon DateTime from RFC2822 format.                 |
-| dateTimeFromHTTP    | HTTP date-time             | Plain Luxon DateTime from HTTP format.                    |
-| dateTimeFromSQL     | SQL date-time              | Plain Luxon DateTime from SQL format.                     |
-| dateTimeFromSeconds | Unix timestamp (number)    | Plain Luxon DateTime from Unix timestamp in seconds.      |
-| dateTimeFromMillis  | Unix timestamp (number)    | Plain Luxon DateTime from Unix timestamp in milliseconds. |
-| duration            | ISO 8601 Duration          | Luxon `Duration` with pattern validation.                 |
+| Vluxon.             | Format                           | Description                                               |
+| ------------------- | -------------------------------- | --------------------------------------------------------- |
+| localDate           | `yyyy-MM-dd`                     | Local date (time normalized to midninght UTC).            |
+| localTime           | `HH:mm:ss`                       | Local time (date normalized to 1970-01-01).               |
+| dateTime            | `yyyy-MM-ddTHH:mm:ssZ`           | Date and time in local (parsed) time zone.                |
+| dateTimeUtc         | `yyyy-MM-ddTHH:mm:ssZ`           | Date and time in UTC time zone.                           |
+| dateTimeMillis      | `yyyy-MM-ddTHH:mm:ss.SSSZ`       | Date and time with millis in local (parsed) time zone.    |
+| dateTimeMillisUtc   | `yyyy-MM-ddTHH:mm:ss.SSSZ`       | Date and time with millis in UTC time zone.               |
+| dateTimeFromISO     | Any ISO                          | Plain Luxon DateTime from ISO format.                     |
+| dateTimeFromRFC2822 | RFC2822                          | Plain Luxon DateTime from RFC2822 format.                 |
+| dateTimeFromHTTP    | HTTP date-time                   | Plain Luxon DateTime from HTTP format.                    |
+| dateTimeFromSQL     | SQL date-time                    | Plain Luxon DateTime from SQL format.                     |
+| dateTimeFromSeconds | Unix timestamp (number)          | Plain Luxon DateTime from Unix timestamp in seconds.      |
+| dateTimeFromMillis  | Unix timestamp (number)          | Plain Luxon DateTime from Unix timestamp in milliseconds. |
+| duration            | ISO 8601 Duration                | Luxon `Duration.fromISO` with pattern validation.         |
+| timeDuration        | ISO 8601 time string as Duration | Luxon `Duration.fromISOTime`.                             |
