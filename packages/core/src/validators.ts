@@ -1262,7 +1262,7 @@ export class AssertTrueValidator extends Validator {
 
   validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult> {
     if (!this.fn(value, path, ctx)) {
-      return ctx.failurePromise(new Violation(this.path ? this.path.connectTo(path) : path, this.type), value);
+      return ctx.failurePromise(new Violation(this.path ? this.path.connectTo(path) : path, this.type, value), value);
     }
     return ctx.successPromise(value);
   }

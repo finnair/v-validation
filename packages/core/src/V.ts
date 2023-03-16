@@ -1,4 +1,4 @@
-import { default as validateUuid } from 'uuid-validate';
+import { validate as validateUuid, version as uuidVersion } from 'uuid';
 import { SchemaValidator, SchemaModel } from './schema';
 import { Path } from '@finnair/path';
 import {
@@ -112,7 +112,8 @@ const V = {
 
   emptyTo: (defaultValue: any) => new ValueMapper(val => (isNullOrUndefined(val) || val === '' ? defaultValue : val)),
 
-  uuid: (version?: number) => new AssertTrueValidator(value => !isNullOrUndefined(value) && validateUuid(value, version), 'UUID'),
+  uuid: (version?: number) =>
+    new AssertTrueValidator(value => !isNullOrUndefined(value) && validateUuid(value) && (version === undefined || uuidVersion(value) === version), 'UUID'),
 
   pattern: (pattern: string | RegExp, flags?: string) => new PatternValidator(pattern, flags),
 
