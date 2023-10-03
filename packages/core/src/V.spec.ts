@@ -21,7 +21,7 @@ import {
   EnumMismatch,
   SyncPromise,
 } from './validators';
-import { default as V } from './V';
+import { V } from './V';
 import { Path } from '@finnair/path';
 import { expectUndefined, expectValid, expectViolations, verifyValid } from './testUtil.spec';
 
