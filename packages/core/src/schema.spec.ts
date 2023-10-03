@@ -1,5 +1,5 @@
 import { SchemaValidator, DiscriminatorViolation } from './schema';
-import { default as V } from './V';
+import { V } from './V';
 import { defaultViolations, TypeMismatch, ObjectValidator, HasValueViolation, Violation } from './validators';
 import { expectViolations, expectValid } from './testUtil.spec';
 import { Path } from '@finnair/path';
