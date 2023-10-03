@@ -73,7 +73,7 @@ const ignoreValidator = new IgnoreValidator(),
   toIntegerValidator = new NumberNormalizer(NumberFormat.integer),
   dateValidator = new DateValidator(ValidatorType.Date);
 
-const V = {
+export const V = {
   fn: (fn: ValidatorFn, type?: string) => new ValidatorFnWrapper(fn, type),
 
   map: (fn: MappingFn, error?: any) => new ValueMapper(fn, error),
@@ -179,5 +179,3 @@ const V = {
   json: (...validators: Validator[]) => new JsonValidator(validators),
 };
 Object.freeze(V);
-
-export default V;
