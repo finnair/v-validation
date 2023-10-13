@@ -10,7 +10,7 @@ See [Conventional Commits](https://conventionalcommits.org) for commit guideline
 
 * use ECMAScript modules (ESM) instead of CommonJS ([#95](https://github.com/finnair/v-validation/issues/95)) ([92e9118](https://github.com/finnair/v-validation/commit/92e9118235957ec4bc2bcf2de73e195ea940378c))
 
-
+* feat: drop support for node 14 and 16 
 
 
 
