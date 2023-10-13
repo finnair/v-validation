@@ -1,6 +1,6 @@
 {
   "name": "@finnair/path-parser",
-  "version": "4.0.0",
+  "version": "5.0.0",
   "private": false,
   "description": "Simple object path as array of strings and numbers",
   "type": "module",
@@ -30,9 +30,9 @@
     "build": "tsc -b ."
   },
   "dependencies": {
-    "@finnair/path": "^4.0.0",
-    "@types/nearley": "2.11.2",
+    "@finnair/path": "^5.0.0",
     "@types/moo": "0.5.1",
+    "@types/nearley": "2.11.2",
     "nearley": "2.20.1"
   }
 }
