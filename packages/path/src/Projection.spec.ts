@@ -1,8 +1,9 @@
-import { projection, Projection } from './Projection';
+import { describe, test, expect } from 'vitest'
+import { projection, Projection } from './Projection.js';
 import moment from 'moment';
-import { PathMatcher, UnionMatcher } from './PathMatcher';
-import { AnyProperty, AnyIndex } from './matchers';
-import { Path } from './Path';
+import { PathMatcher, UnionMatcher } from './PathMatcher.js';
+import { AnyProperty, AnyIndex } from './matchers.js';
+import { Path } from './Path.js';
 
 describe('project', () => {
   describe('map', () => {

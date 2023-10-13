@@ -1,1 +1,1 @@
-export * from './Vmoment';
+export * from './Vmoment.js';

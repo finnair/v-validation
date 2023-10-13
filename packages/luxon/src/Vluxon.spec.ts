@@ -1,5 +1,6 @@
+import { describe, beforeAll, afterAll, test, expect } from 'vitest'
 import { Validator, ValidatorOptions, ValidationResult, V, Violation, defaultViolations, TypeMismatch } from '@finnair/v-validation';
-import { LuxonValidator, Vluxon } from './Vluxon';
+import { LuxonValidator, Vluxon } from './Vluxon.js';
 import {
   LocalDateLuxon,
   DateTimeLuxon,
@@ -9,7 +10,7 @@ import {
   LuxonDateTime,
   LocalTimeLuxon,
   LocalDateTimeLuxon,
-} from './luxon';
+} from './luxon.js';
 import { DateTime, Duration, FixedOffsetZone, IANAZone, Settings } from 'luxon';
 import { Path } from '@finnair/path';
 
@@ -20,7 +21,7 @@ async function expectViolations(value: any, validator: Validator, ...violations:
 
 async function expectValid(value: any, validator: Validator, convertedValue?: any, ctx?: ValidatorOptions) {
   const result = await validator.validate(value, ctx);
-  return verifyValid(result, value, convertedValue);
+  verifyValid(result, value, convertedValue);
 }
 
 function verifyValid(result: ValidationResult, value: any, convertedValue?: any) {

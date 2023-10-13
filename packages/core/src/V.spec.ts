@@ -1,3 +1,4 @@
+import { describe, test, expect } from 'vitest'
 import {
   Validator,
   Violation,
@@ -21,9 +22,10 @@ import {
   EnumMismatch,
   SyncPromise,
 } from './validators';
-import { V } from './V';
+import { V } from './V.js';
 import { Path } from '@finnair/path';
-import { expectUndefined, expectValid, expectViolations, verifyValid } from './testUtil.spec';
+import { expectUndefined, expectValid, expectViolations, verifyValid } from './testUtil.spec.js';
+import { fail } from 'assert';
 
 const ROOT = Path.ROOT,
   index = Path.index,

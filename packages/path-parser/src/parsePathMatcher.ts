@@ -1,5 +1,5 @@
 import nearley from 'nearley';
-import matcherGrammar from './matcherGrammar';
+import matcherGrammar from './matcherGrammar.js';
 import { PathMatcher } from '@finnair/path';
 
 export function parsePathMatcher(str: string): PathMatcher {

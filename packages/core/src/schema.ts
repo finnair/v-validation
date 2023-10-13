@@ -11,7 +11,7 @@ import {
   Violation,
   TypeMismatch,
   ObjectModel,
-} from './validators';
+} from './validators.js';
 import { Path } from '@finnair/path';
 
 export interface DiscriminatorFn {
