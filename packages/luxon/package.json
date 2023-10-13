@@ -1,5 +1,5 @@
 {
-  "name": "´",
+  "name": "@finnair/v-validation-luxon",
   "version": "4.3.0",
   "private": false,
   "description": "Luxon validators",
