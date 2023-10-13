@@ -30,7 +30,7 @@
     "build": "tsc -b ."
   },
   "dependencies": {
-    "@finnair/path": "^5.0.0",
+    "@finnair/path": "^5.0.1",
     "@types/moo": "0.5.1",
     "@types/nearley": "2.11.2",
     "nearley": "2.20.1"
