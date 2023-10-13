@@ -1,5 +1,5 @@
-import { Path, PathComponent } from './Path';
-import { Node, PathExpression, PropertyMatcher, IndexMatcher, AnyIndex, AnyProperty, MatchHandler, UnionMatcher, isPathExpression } from './matchers';
+import { Path, PathComponent } from './Path.js';
+import { Node, PathExpression, PropertyMatcher, IndexMatcher, AnyIndex, AnyProperty, MatchHandler, UnionMatcher, isPathExpression } from './matchers.js';
 
 export class PathMatcher {
   readonly allowGaps: boolean;

@@ -1,6 +1,6 @@
-// Generated automatically by nearley, version 2.19.2
-// http://github.com/Hardmath123/nearley
-// Bypasses TS6133. Allow declared but unused functions.
+import * as matchers from '@finnair/path';
+import * as moo from 'moo'
+
 // @ts-ignore
 function id(d: any[]): any {
   return d[0];
@@ -9,9 +9,6 @@ declare var property: any;
 declare var integer: any;
 declare var qqString: any;
 declare var qString: any;
-
-import * as matchers from '@finnair/path';
-const moo = require('moo');
 
 const lexer = moo.compile({
   qString: /'(?:\\["bfnrt\/\\]|\\u[a-fA-F0-9]{4}|[^"\\])*?'/,
@@ -30,19 +27,6 @@ function handleQString(qString: string) {
   return JSON.parse('"' + qString.substring(1, qString.length - 1) + '"');
 }
 
-interface NearleyToken {
-  value: any;
-  [key: string]: any;
-}
-
-interface NearleyLexer {
-  reset: (chunk: string, info: any) => void;
-  next: () => NearleyToken | undefined;
-  save: () => any;
-  formatError: (token: NearleyToken) => string;
-  has: (tokenType: string) => boolean;
-}
-
 interface NearleyRule {
   name: string;
   symbols: NearleySymbol[];
@@ -52,7 +36,7 @@ interface NearleyRule {
 type NearleySymbol = string | { literal: any } | { test: (token: any) => boolean };
 
 interface Grammar {
-  Lexer: NearleyLexer | undefined;
+  Lexer: moo.Lexer | undefined;
   ParserRules: NearleyRule[];
   ParserStart: string;
 }

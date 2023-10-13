@@ -1,10 +1,10 @@
 {
   "compilerOptions": {
-    "target": "ES6",
+    "target": "es2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
     "composite": true,
     "strict": true,
-    "module": "commonjs",
-    "moduleResolution": "node",
     "resolveJsonModule": true,
     "noImplicitAny": true,
     "noImplicitReturns": true,
@@ -14,7 +14,7 @@
     "noFallthroughCasesInSwitch": true,
     "esModuleInterop": true,
     "typeRoots": ["./node_modules/@types"],
-    "lib": ["es2020"],
+    "lib": ["ES2023"],
     "rootDir": ".",
     "baseUrl": ".",
     "paths": {

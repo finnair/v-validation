@@ -1,5 +1,6 @@
+import { describe, test, expect } from 'vitest'
 import { PathMatcher, AnyIndex, AnyProperty, UnionMatcher } from '@finnair/path';
-import { parsePathMatcher } from './parsePathMatcher';
+import { parsePathMatcher } from './parsePathMatcher.js';
 
 const basicExpressions = `$.prop[123][*].*["foo\\nbar\\\\"]['\\"quoted\\u00E4\\"']`;
 

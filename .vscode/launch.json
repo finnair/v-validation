@@ -4,9 +4,9 @@
     {
       "type": "node",
       "request": "launch",
-      "name": "Jest All",
-      "program": "${workspaceFolder}/node_modules/.bin/jest",
-      "args": ["--runInBand"],
+      "name": "Test All",
+      "program": "${workspaceFolder}/node_modules/.bin/vitest",
+      "args": ["--run", "--no-threads"],
       "console": "integratedTerminal",
       "internalConsoleOptions": "neverOpen",
       "timeout": 20000
@@ -14,22 +14,30 @@
     {
       "type": "node",
       "request": "launch",
-      "name": "Jest Current File",
-      "program": "${workspaceFolder}/node_modules/.bin/jest",
-      "args": ["${relativeFile}"],
+      "name": "Test Current",
+      "program": "${workspaceFolder}/node_modules/.bin/vitest",
+      "args": ["--run", "--no-threads", "${relativeFile}"],
       "console": "integratedTerminal",
       "internalConsoleOptions": "neverOpen",
       "timeout": 20000
     },
     {
-      "name": "Run Current file",
+      "type": "node",
+      "request": "launch",
+      "name": "Watch Current",
+      "program": "${workspaceFolder}/node_modules/.bin/vitest",
+      "args": ["--no-threads", "${relativeFile}"],
+      "console": "integratedTerminal",
+      "internalConsoleOptions": "neverOpen",
+      "timeout": 20000
+    },
+    {
+      "name": "Run Current File",
       "type": "node",
       "request": "launch",
       "runtimeExecutable": "node",
-      "runtimeArgs": ["--nolazy", "-r", "${workspaceFolder}/node_modules/ts-node/register/transpile-only"],
-
+      "runtimeArgs": ["--nolazy", "--loader", "ts-node/esm", "-r", "${workspaceFolder}/node_modules/ts-node/register/transpile-only"],
       "args": ["${relativeFile}"],
-      
       "cwd": "${workspaceRoot}",
       "internalConsoleOptions": "openOnSessionStart",
       "skipFiles": ["<node_internals>/**", "node_modules/**"]

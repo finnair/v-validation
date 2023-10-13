@@ -1,6 +1,7 @@
-import { PathMatcher, AnyIndex, AnyProperty, Node, IndexMatcher, PropertyMatcher } from './PathMatcher';
-import { Path } from './Path';
-import { UnionMatcher } from './matchers';
+import { describe, test, expect } from 'vitest'
+import { PathMatcher, AnyIndex, AnyProperty, Node, IndexMatcher, PropertyMatcher } from './PathMatcher.js';
+import { Path } from './Path.js';
+import { UnionMatcher } from './matchers.js';
 
 describe('path', () => {
   const obj = {
