@@ -12,8 +12,6 @@
       }
     }
   },
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
   "license": "MIT",
   "homepage": "https://github.com/finnair/v-validation/tree/master/packages/core#readme",
   "bugs": "https://github.com/finnair/v-validation/issues",
