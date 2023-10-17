@@ -1,2 +1,2 @@
-export { parsePath } from './parsePath';
-export { parsePathMatcher } from './parsePathMatcher';
+export { parsePath } from './parsePath.js';
+export { parsePathMatcher } from './parsePathMatcher.js';

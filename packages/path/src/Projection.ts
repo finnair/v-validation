@@ -1,5 +1,5 @@
-import { PathMatcher } from './PathMatcher';
-import { Path } from './Path';
+import { PathMatcher } from './PathMatcher.js';
+import { Path } from './Path.js';
 
 export class Projection {
   private constructor(private readonly includes: PathMatcher[], private readonly excludes: PathMatcher[], private readonly allowGaps: boolean) {

@@ -10,7 +10,7 @@ import {
   LuxonDateTime,
   LocalTimeLuxon,
   LocalDateTimeLuxon,
-} from './luxon';
+} from './luxon.js';
 
 export type LuxonInput = string | DateTime | LuxonDateTime;
 

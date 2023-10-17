@@ -1,6 +1,6 @@
 import { Path } from '@finnair/path';
 import nearley from 'nearley';
-import pathGrammar from './pathGrammar';
+import pathGrammar from './pathGrammar.js';
 
 export function parsePath(str: string): Path {
   const parser = new nearley.Parser(nearley.Grammar.fromCompiled(pathGrammar));

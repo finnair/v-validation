@@ -1,7 +1,8 @@
-import { SchemaValidator, DiscriminatorViolation } from './schema';
-import { default as V } from './V';
-import { defaultViolations, TypeMismatch, ObjectValidator, HasValueViolation, Violation } from './validators';
-import { expectViolations, expectValid } from './testUtil.spec';
+import { describe, test, expect } from 'vitest'
+import { SchemaValidator, DiscriminatorViolation } from './schema.js';
+import { V } from './V.js';
+import { defaultViolations, TypeMismatch, ObjectValidator, HasValueViolation, Violation } from './validators.js';
+import { expectViolations, expectValid } from './testUtil.spec.js';
 import { Path } from '@finnair/path';
 
 const ROOT = Path.ROOT,

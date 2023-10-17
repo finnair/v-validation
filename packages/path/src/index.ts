@@ -1,4 +1,4 @@
-export { Path, PathComponent } from './Path';
-export * from './PathMatcher';
-export * from './matchers';
-export * from './Projection';
+export { Path, PathComponent } from './Path.js';
+export * from './PathMatcher.js';
+export * from './matchers.js';
+export * from './Projection.js';

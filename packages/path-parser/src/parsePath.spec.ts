@@ -1,4 +1,5 @@
-import { parsePath } from './parsePath';
+import { describe, test, expect } from 'vitest'
+import { parsePath } from './parsePath.js';
 import { Path } from '@finnair/path';
 
 describe('parsePath', () => {
