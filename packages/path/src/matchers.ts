@@ -1,4 +1,4 @@
-import { Path, PathComponent } from './Path';
+import { Path, PathComponent } from './Path.js';
 
 type Continue = boolean;
 
@@ -17,7 +17,7 @@ export function isPathExpression(component: PathComponent | PathExpression): com
 }
 
 export class Node {
-  constructor(public readonly path: Path, public readonly value: any) {}
+  constructor(public readonly path: Path, public readonly value: any) { }
 }
 
 export class IndexMatcher implements PathExpression {

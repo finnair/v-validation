@@ -1,2 +1,2 @@
-export { default as V } from './V';
-export * from './validators';
+export * from './V.js';
+export * from './validators.js';

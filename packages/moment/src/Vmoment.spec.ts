@@ -1,7 +1,8 @@
+import { describe, test, expect } from 'vitest'
 import moment, { Moment } from 'moment';
 import { V, defaultViolations, Validator, ValidatorOptions, ValidationResult, Violation, TypeMismatch } from '@finnair/v-validation';
 import { Path } from '@finnair/path';
-import { Vmoment, dateUtcMoment, dateTimeUtcMoment, dateTimeMoment, timeMoment, dateMoment, dateTimeMillisUtcMoment, dateTimeMillisMoment } from './Vmoment';
+import { Vmoment, dateUtcMoment, dateTimeUtcMoment, dateTimeMoment, timeMoment, dateMoment, dateTimeMillisUtcMoment, dateTimeMillisMoment } from './Vmoment.js';
 
 async function expectViolations(value: any, validator: Validator, ...violations: Violation[]) {
   const result = await validator.validate(value);

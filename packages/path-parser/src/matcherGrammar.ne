@@ -1,3 +1,5 @@
+# WARNING! This is the original grammar, but the result has been modified for typescript and ESM!
+
 # Usage: https://nearley.js.org/
 @preprocessor typescript
 @{%

@@ -1,5 +1,5 @@
 import { default as validateUuid } from 'uuid-validate';
-import { SchemaValidator, SchemaModel } from './schema';
+import { SchemaValidator, SchemaModel } from './schema.js';
 import { Path } from '@finnair/path';
 import {
   IgnoreValidator,
@@ -53,7 +53,7 @@ import {
   HasValueValidator,
   JsonValidator,
   RequiredValidator,
-} from './validators';
+} from './validators.js';
 
 const ignoreValidator = new IgnoreValidator(),
   anyValidator = new AnyValidator(),
@@ -63,9 +63,9 @@ const ignoreValidator = new IgnoreValidator(),
   nullOrUndefinedValidator = new IsNullOrUndefinedValidator(),
   notEmptyValidator = new NotEmptyValidator(),
   notBlankValidator = new NotBlankValidator(),
-  emptyToNullValidator = new ValueMapper(val => (isNullOrUndefined(val) || val === '' ? null : val)),
-  emptyToUndefinedValidator = new ValueMapper(val => (isNullOrUndefined(val) || val === '' ? undefined : val)),
-  undefinedToNullValidator = new ValueMapper(val => (val === undefined ? null : val)),
+  emptyToNullValidator = new ValueMapper((value: any) => (isNullOrUndefined(value) || value === '' ? null : value)),
+  emptyToUndefinedValidator = new ValueMapper((value: any) => (isNullOrUndefined(value) || value === '' ? undefined : value)),
+  undefinedToNullValidator = new ValueMapper((value: any) => (value === undefined ? null : value)),
   booleanValidator = new BooleanValidator(),
   numberValidator = new NumberValidator(NumberFormat.number),
   toNumberValidator = new NumberNormalizer(NumberFormat.number),
@@ -73,7 +73,7 @@ const ignoreValidator = new IgnoreValidator(),
   toIntegerValidator = new NumberNormalizer(NumberFormat.integer),
   dateValidator = new DateValidator(ValidatorType.Date);
 
-const V = {
+export const V = {
   fn: (fn: ValidatorFn, type?: string) => new ValidatorFnWrapper(fn, type),
 
   map: (fn: MappingFn, error?: any) => new ValueMapper(fn, error),
@@ -110,9 +110,9 @@ const V = {
 
   undefinedToNull: () => undefinedToNullValidator,
 
-  emptyTo: (defaultValue: any) => new ValueMapper(val => (isNullOrUndefined(val) || val === '' ? defaultValue : val)),
+  emptyTo: (defaultValue: any) => new ValueMapper((value: any) => (isNullOrUndefined(value) || value === '' ? defaultValue : value)),
 
-  uuid: (version?: number) => new AssertTrueValidator(value => !isNullOrUndefined(value) && validateUuid(value, version), 'UUID'),
+  uuid: (version?: number) => new AssertTrueValidator((value: any) => !isNullOrUndefined(value) && validateUuid(value, version), 'UUID'),
 
   pattern: (pattern: string | RegExp, flags?: string) => new PatternValidator(pattern, flags),
 
@@ -148,9 +148,9 @@ const V = {
 
   nullTo: (defaultValue: string | number | bigint | boolean | symbol) => new ValueMapper(value => (isNullOrUndefined(value) ? defaultValue : value)),
 
-  nullToObject: () => new ValueMapper(value => (isNullOrUndefined(value) ? {} : value)),
+  nullToObject: () => new ValueMapper((value: any) => (isNullOrUndefined(value) ? {} : value)),
 
-  nullToArray: () => new ValueMapper(value => (isNullOrUndefined(value) ? [] : value)),
+  nullToArray: () => new ValueMapper((value: any) => (isNullOrUndefined(value) ? [] : value)),
 
   array: (...items: Validator[]) => new ArrayValidator(maybeAllOfValidator(items)),
 
@@ -179,5 +179,3 @@ const V = {
   json: (...validators: Validator[]) => new JsonValidator(validators),
 };
 Object.freeze(V);
-
-export default V;

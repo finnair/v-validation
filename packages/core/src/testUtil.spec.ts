@@ -1,4 +1,5 @@
-import { Validator, Violation, ValidationResult, ValidatorOptions } from './validators';
+import { test, expect } from 'vitest'
+import { Validator, Violation, ValidationResult, ValidatorOptions } from './validators.js';
 
 export async function expectViolations(value: any, validator: Validator, ...violations: Violation[]) {
   const result = await validator.validate(value);
@@ -26,4 +27,4 @@ export function verifyValid(result: ValidationResult, value: any, convertedValue
   return result;
 }
 
-test.skip('do not fail build because of no tests found', () => {});
+test.skip('do not fail build because of no tests found', () => { });

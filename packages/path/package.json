@@ -1,10 +1,17 @@
 {
   "name": "@finnair/path",
-  "version": "4.0.0",
+  "version": "5.0.1",
   "private": false,
   "description": "Simple object path as array of strings and numbers",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "type": "module",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
+    }
+  },
   "license": "MIT",
   "homepage": "https://github.com/finnair/v-validation/tree/master/packages/path#readme",
   "bugs": "https://github.com/finnair/v-validation/issues",
