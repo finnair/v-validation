@@ -3,12 +3,18 @@
   "version": "5.0.1",
   "private": false,
   "description": "Luxon validators",
-  "type": "module",
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/cjs/index.js",
+  "types": "./dist/cjs/index.d.ts",
   "exports": {
     ".": {
+      "require": {
+        "types": "./dist/cjs/index.d.ts",
+        "default": "./dist/cjs/index.js"
+      },
       "import": {
-        "types": "./dist/index.d.ts",
-        "default": "./dist/index.js"
+        "types": "./dist/esm/index.d.ts",
+        "default": "./dist/esm/index.js"
       }
     }
   },
@@ -29,7 +35,9 @@
     "luxon"
   ],
   "scripts": {
-    "build": "tsc -b ."
+    "build": "yarn build:esm && yarn build:cjs",
+    "build:esm": "tsc -b . && cp ../../package-esm.json dist/esm/package.json",
+    "build:cjs": "tsc -p tsconfig-cjs.json && cp ../../package-cjs.json dist/cjs/package.json"
   },
   "dependencies": {
     "@finnair/path": "^5.0.1",

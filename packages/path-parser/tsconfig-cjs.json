@@ -2,8 +2,8 @@
   "extends": "../../tsconfig.json",
   "compilerOptions": {
     "rootDir": "src",
-    "module": "esnext",
-    "outDir": "dist/esm",
+    "module": "commonjs",
+    "outDir": "dist/cjs",
     "target": "esnext"
   },
   "exclude": ["dist", "**/*.spec.ts"]
