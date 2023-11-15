@@ -3,8 +3,7 @@
   "compilerOptions": {
     "rootDir": "src",
     "module": "commonjs",
-    "outDir": "dist/cjs",
-    "target": "esnext"
+    "outDir": "dist/cjs"
   },
   "exclude": ["dist", "**/*.spec.ts"]
 }
