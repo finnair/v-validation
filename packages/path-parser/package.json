@@ -1,6 +1,6 @@
 {
   "name": "@finnair/path-parser",
-  "version": "5.0.1",
+  "version": "5.1.0",
   "private": false,
   "description": "Simple object path as array of strings and numbers",
   "main": "./dist/cjs/index.js",
@@ -38,7 +38,7 @@
     "build:esm": "tsc -b . && cp ../../package.esm.json dist/esm/package.json"
   },
   "dependencies": {
-    "@finnair/path": "^5.0.1",
+    "@finnair/path": "^5.1.0",
     "@types/moo": "0.5.1",
     "@types/nearley": "2.11.2",
     "nearley": "2.20.1"
