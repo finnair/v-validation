@@ -3,12 +3,18 @@
   "version": "5.0.1",
   "private": false,
   "description": "V-validation core package",
-  "type": "module",
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/cjs/index.js",
+  "types": "./dist/cjs/index.d.ts",
   "exports": {
     ".": {
+      "require": {
+        "types": "./dist/cjs/index.d.ts",
+        "default": "./dist/cjs/index.js"
+      },
       "import": {
-        "types": "./dist/index.d.ts",
-        "default": "./dist/index.js"
+        "types": "./dist/esm/index.d.ts",
+        "default": "./dist/esm/index.js"
       }
     }
   },
@@ -28,7 +34,9 @@
     "typescript"
   ],
   "scripts": {
-    "build": "tsc -b ."
+    "build": "yarn build:cjs && yarn build:esm",
+    "build:cjs": "tsc -b tsconfig.cjs.json && cp ../../package.cjs.json dist/cjs/package.json",
+    "build:esm": "tsc -b . && cp ../../package.esm.json dist/esm/package.json"
   },
   "dependencies": {
     "@finnair/path": "^5.0.1",

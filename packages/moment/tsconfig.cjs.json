@@ -2,8 +2,8 @@
   "extends": "../../tsconfig.json",
   "compilerOptions": {
     "rootDir": "src",
-    "module": "es2022",
-    "outDir": "dist/esm"
+    "module": "commonjs",
+    "outDir": "dist/cjs"
   },
   "exclude": ["dist", "**/*.spec.ts"]
 }

@@ -1,8 +1,7 @@
 {
   "compilerOptions": {
-    "target": "es2022",
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
+    "moduleResolution": "node",
+    "target": "ES2022",
     "composite": true,
     "strict": true,
     "resolveJsonModule": true,
@@ -14,7 +13,7 @@
     "noFallthroughCasesInSwitch": true,
     "esModuleInterop": true,
     "typeRoots": ["./node_modules/@types"],
-    "lib": ["ES2023"],
+    "lib": ["ES2022"],
     "rootDir": ".",
     "baseUrl": ".",
     "paths": {
