@@ -976,6 +976,19 @@ describe('number', () => {
       test('convert string to integer', () => expectValid('-123', V.toInteger(), -123));
     });
   });
+
+  describe('async', () => {
+    class WaitValidator extends Validator {
+      async validatePath(value: any, path: Path, ctx: ValidationContext): Promise<ValidationResult> {
+        return new Promise<ValidationResult>((resolve, reject) => {
+          setTimeout(() => {
+            resolve(ctx.success(value));
+          }, value as number);
+        });
+      }
+    }
+    test('should maintain original order even if execution order is reversed', () => expectValid([50, 40, 20, 10, 1], V.array(new WaitValidator())))
+  })
 });
 
 describe('null or undefined', () => {
