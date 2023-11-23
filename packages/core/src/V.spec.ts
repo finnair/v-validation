@@ -1,4 +1,4 @@
-import { describe, test, expect } from 'vitest';
+import { describe, test, expect } from 'vitest'
 import {
   Validator,
   Violation,
@@ -359,7 +359,7 @@ describe('objects', () => {
 
     test('parent conversion is available for child validator', () => expectValid({ foo: '1' }, validator, { foo: 1 }));
 
-    test('invalid value for parent doesn\'t run child validator', () =>
+    test("invalid value for parent doesn't run child validator", () =>
       expectViolations({ foo: 'a' }, validator, defaultViolations.number('a', NumberFormat.integer, property('foo'))));
 
     test('invalid value for child validator', () => expectViolations({ foo: 0 }, validator, defaultViolations.min(1, true, 0, property('foo'))));
@@ -408,16 +408,10 @@ describe('objects', () => {
     );
 
     test('matching passwords', async () =>
-      await expectValid({ password1: 'pwd', password2: 'pwd' }, validator, new PasswordRequest({
-        password1: 'pwd',
-        password2: 'pwd',
-      })));
+      await expectValid({ password1: 'pwd', password2: 'pwd' }, validator, new PasswordRequest({ password1: 'pwd', password2: 'pwd' })));
 
     test('non-matching passwords', async () =>
-      await expectViolations({
-        password1: 'pwd',
-        password2: 'pwb',
-      }, validator, new Violation(property('password1'), 'ConfirmPassword')));
+      await expectViolations({ password1: 'pwd', password2: 'pwb' }, validator, new Violation(property('password1'), 'ConfirmPassword')));
   });
 
   describe('recursive models', () => {
@@ -428,10 +422,7 @@ describe('objects', () => {
       },
     });
 
-    test('recursive type', () => expectValid({
-      first: 'first',
-      next: { first: 'second', next: { first: 'third' } },
-    }, validator));
+    test('recursive type', () => expectValid({ first: 'first', next: { first: 'second', next: { first: 'third' } } }, validator));
 
     test('cyclic data', async () => {
       const first: any = { first: 'first' };
@@ -582,17 +573,11 @@ describe('inheritance', () => {
 
   test('valid child', () => expectValid({ id: '123', name: 'child' }, childValidator));
 
-  test('valid child id', () => expectViolations({
-    id: 123,
-    name: 'child',
-  }, childValidator, defaultViolations.string(123, property('id'))));
+  test('valid child id', () => expectViolations({ id: 123, name: 'child' }, childValidator, defaultViolations.string(123, property('id'))));
 
   test('invalid parent property', () => expectViolations({ name: 'child' }, childValidator, defaultViolations.notNull(property('id'))));
 
-  test('invalid child property', () => expectViolations({
-    id: '123',
-    name: '',
-  }, childValidator, defaultViolations.notEmpty(property('name'))));
+  test('invalid child property', () => expectViolations({ id: '123', name: '' }, childValidator, defaultViolations.notEmpty(property('name'))));
 
   test('valid multi-parent object', () =>
     expectValid(
@@ -613,7 +598,7 @@ describe('inheritance', () => {
       defaultViolations.notNull(property('anything')),
     ));
 
-  test('child\'s extended property validators are only run after successful parent property validation', async () => {
+  test("child's extended property validators are only run after successful parent property validation", async () => {
     const type = V.object({
       extends: {
         properties: {
@@ -654,10 +639,7 @@ describe('object next', () => {
 
   test('passwords match', () => expectValid({ pw1: 'test', pw2: 'test' }, passwordValidator));
 
-  test('passwords mismatch', () => expectViolations({
-    pw1: 'test',
-    pw2: 't3st',
-  }, passwordValidator, new Violation(Path.of('pw2'), 'PasswordVerification')));
+  test('passwords mismatch', () => expectViolations({ pw1: 'test', pw2: 't3st' }, passwordValidator, new Violation(Path.of('pw2'), 'PasswordVerification')));
 
   test('run after property validators', () => expectViolations({ pw1: 'test' }, passwordValidator, defaultViolations.notNull(Path.of('pw2'))));
 
@@ -670,18 +652,10 @@ describe('object next', () => {
       next: V.assertTrue(user => user.pw1.indexOf(user.name) < 0, 'BadPassword', Path.of('pw1')),
     });
 
-    test('BadPassword', () => expectViolations({
-      pw1: 'test',
-      pw2: 'test',
-      name: 'tes',
-    }, userValidator, new Violation(Path.of('pw1'), 'BadPassword')));
+    test('BadPassword', () => expectViolations({ pw1: 'test', pw2: 'test', name: 'tes' }, userValidator, new Violation(Path.of('pw1'), 'BadPassword')));
 
     test('child next is applied after successfull parent next', () =>
-      expectViolations({
-        pw1: 'test',
-        pw2: 't3st',
-        name: 'tes',
-      }, userValidator, new Violation(Path.of('pw2'), 'PasswordVerification')));
+      expectViolations({ pw1: 'test', pw2: 't3st', name: 'tes' }, userValidator, new Violation(Path.of('pw2'), 'PasswordVerification')));
   });
 });
 
@@ -1024,82 +998,71 @@ describe('number', () => {
 
     test('should maintain original order even if execution order is reversed', async () => {
       const waitValidator = new WaitValidator();
-      await expectValid([50, 40, 30, 20, 10, 1], V.array(waitValidator));
-      expect(waitValidator.executionOrder).toEqual([1, 10, 20, 30, 40, 50]);
-    });
-  });
-});
+      await expectValid([50, 40, 30, 20, 10, 1], V.array(waitValidator))
+      expect(waitValidator.executionOrder).toEqual([1, 10, 20, 30, 40, 50])
+    })
+  })
 
-describe('notEmpty', () => {
-  describe('valid cases', () => {
-    test('valid string input', async () => {
-      await expectValid('abc', V.notEmpty(), 'abc');
-    });
-
-    test('valid number input', async () => {
-      await expectValid(123, V.notEmpty(), 123);
-    });
-
-    test('valid object input', async () => {
-      await expectValid({ foo: 'bar' }, V.notEmpty(), { foo: 'bar' });
-    });
-
-    test('valid array input', async () => {
-      await expectValid([1, 2, 3], V.notEmpty(), [1, 2, 3]);
-    });
-
-    test('valid boolean input', async () => {
-      await expectValid(true, V.notEmpty(), true);
-    });
-  });
-
-  describe('invalid cases', () => {
-    test('validates undefined input', async () => {
-      await expectViolations(undefined, V.notEmpty(), defaultViolations.notEmpty(ROOT, undefined));
-    });
-
-    test('validates null input', async () => {
-      await expectViolations(null, V.notEmpty(), defaultViolations.notEmpty(ROOT, null));
-    });
-
-    test('validates empty string input', async () => {
-      await expectViolations('', V.notEmpty(), defaultViolations.notEmpty(ROOT, ''));
-    });
-
-    test('validates empty array input', async () => {
-      await expectViolations([], V.notEmpty(), defaultViolations.notEmpty(ROOT, []));
-    });
-
-    test('validates empty object input', async () => {
-      await expectViolations({}, V.notEmpty(), defaultViolations.notEmpty(ROOT, {}));
-    });
-
-    test('validates prototyped objects with inherited properties, not own ones', async () => {
-      const myObject = Object.create({
-        foo: 'This is an inherited property'
+  describe('notEmpty', () => {
+    describe('valid cases', () => {
+      test('valid string input', async () => {
+        await expectValid('abc', V.notEmpty(), 'abc');
       });
 
-      await expectViolations(myObject, V.notEmpty(), defaultViolations.notEmpty(ROOT, myObject));
-    });
-
-    test('validates corner case prototyped objects having an inherited property length > 0', async () => {
-      const myObject = Object.create({
-        length: 5
+      test('valid number input', async () => {
+        await expectValid(123, V.notEmpty(), 123);
       });
 
-      await expectViolations(myObject, V.notEmpty(), defaultViolations.notEmpty(ROOT, myObject));
+      test('valid object input', async () => {
+        await expectValid({ foo: 'bar' }, V.notEmpty(), { foo: 'bar' });
+      });
+
+      test('valid array input', async () => {
+        await expectValid([1, 2, 3], V.notEmpty(), [1, 2, 3]);
+      });
+
+      test('valid boolean input', async () => {
+        await expectValid(true, V.notEmpty(), true);
+      });
     });
-  });
-});
 
-describe('next', () => {
-  const validator = defer(V.string()).next(defer(V.hasValue('true')));
-  test('valid', async () => {
-    await expectValid('true', validator);
-  });
+    describe('invalid cases', () => {
+      test('validates undefined input', async () => {
+        await expectViolations(undefined, V.notEmpty(), defaultViolations.notEmpty(ROOT, undefined));
+      });
 
-  test('invalid', async () => {
-    await expectViolations(true, validator, defaultViolations.string(true));
+      test('validates null input', async () => {
+        await expectViolations(null, V.notEmpty(), defaultViolations.notEmpty(ROOT, null));
+      });
+
+      test('validates empty string input', async () => {
+        await expectViolations('', V.notEmpty(), defaultViolations.notEmpty(ROOT, ''));
+      });
+
+      test('validates empty array input', async () => {
+        await expectViolations([], V.notEmpty(), defaultViolations.notEmpty(ROOT, []));
+      });
+
+      test('validates empty object input', async () => {
+        await expectViolations({}, V.notEmpty(), defaultViolations.notEmpty(ROOT, {}));
+      });
+
+      test('validates prototyped objects with inherited properties, not own ones', async () => {
+        const myObject = Object.create({
+          foo: 'This is an inherited property',
+        });
+
+        await expectViolations(myObject, V.notEmpty(), defaultViolations.notEmpty(ROOT, myObject));
+      });
+
+      test('validates corner case prototyped objects having an inherited property length > 0', async () => {
+        const myObject = Object.create({
+          length: 5,
+        });
+
+        await expectViolations(myObject, V.notEmpty(), defaultViolations.notEmpty(ROOT, myObject));
+      });
+    });
   });
 });
 
