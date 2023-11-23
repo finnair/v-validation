@@ -168,7 +168,7 @@ const UserRegistrationValidator = V.object({
 
 ## Vhy?
 
-- Machine readable error reports
+- Machine-readable error reports
   - V's Violation is easily readable to any developer and can be used to localize and target human readable error messages in the UI
   - Errors serialize to JSON nicely for easy interoperability
 - Asynchronous processing allows I/O based validators
@@ -332,7 +332,7 @@ Arrays are defined in terms of their element type:
 V.array(V.integer()).next(V.size(1, 100)); // An integer array of size 1 to 100
 ```
 
-Note that basic validators do not handle polymoprhism even though they support inheritance. For example this definition would not validate elements against `bike` or `aircraft`:
+Note that basic validators do not handle polymorphism even though they support inheritance. For example this definition would not validate elements against `bike` or `aircraft`:
 
 ```typescript
 V.array(vehicle);
@@ -340,11 +340,11 @@ V.array(vehicle);
 
 ## <a name="schema">Schema</a>
 
-Polymorphims requires that objects are somehow tagged with a type used to validate it. Since plain JSON/JavaScript objects do not have type information attached to them
+Polymorphism requires that objects are somehow tagged with a type used to validate it. Since plain JSON/JavaScript objects do not have type information attached to them
 one needs a _discriminator_ property or a function to infer object's type. This type is then used to actually validate the object.
 
-Polymorphic schemas are recursive in nature: 1) a child needs to know it's parents so that it may extend them and 2) unless the type information is natively bound to
-the object being validated, the parent needs to know it's children so that it may dispatch the validation to the correct child. As (direct) cyclic references are not possible, SchemaValidator is created with a callback function that supports referencing other models within the schema by name
+Polymorphic schemas are recursive in nature: 1) a child needs to know its parents so that it may extend them and 2) unless the type information is natively bound to
+the object being validated, the parent needs to know its children so that it may dispatch the validation to the correct child. As (direct) cyclic references are not possible, SchemaValidator is created with a callback function that supports referencing other models within the schema by name
 even before they are defined:
 
 1. An object may extend other models by simply referencing them by name.
@@ -525,61 +525,62 @@ class MyViolation extends Violation {
 
 Unless otherwise stated, all validators require non-null and non-undefined values.
 
-| V.                      | Arguments                                                        | Description                                                                                                                                |
-| ----------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| fn                      |  fn: ValidatorFn, type?: string                                  | Function reference as a validator. A short cut for extending Validator class.                                                              |
-| ignore                  |                                                                  | Converts any input value to undefined.                                                                                                     |
-| any                     |                                                                  | Accepts any value, including undefined and null.                                                                                           |
-| check                   | ...allOf: Validator[]                                            | Runs all the validators and, if successful, returns the original value discarding any conversions.                                         |
-| map                     | fn: MappingFn, error?: any                                       | Mapping function to convert a value. Catches and converts errors to Violations                                                             |
-| optional                | type: Validator, ...allOf: Validator[]                           | Allows null and undefined. For other values, runs first the `type` validator and then `allOf` the rest validators.                         |
-| required                | type: Validator, ...allOf: Validator[]                           | 1) Requires a non-null and non-undefined value, 2) runs `type` validator and 3) then `allOf` the rest validators.                          |
-| string                  |                                                                  | Requires string or String.                                                                                                                 |
-| toString                |                                                                  | Converts primitive values to (primitive) strings.                                                                                          |
-| notNull                 |                                                                  | Requires non-null and non-undefined value.                                                                                                 |
-| nullOrUndefined         |                                                                  | Requires null or undefined value.                                                                                                          |
-| notEmpty                |                                                                  | Requires non-null, non-undefined and not empty. Works with anything having numeric `length` property, e.g. string or array.                |
-| notBlank                |                                                                  | Requires non-null, non-undefined and not blank (whitespace only string) values.                                                            |
-| uuid                    | version?: number                                                 | Uses `uuid-validate` package to validate input.                                                                                            |
-| pattern                 |  pattern: string \| RegExp, flags?: string                       | Tests input against the pattern.                                                                                                           |
-| toPattern               |                                                                  | Combines `toString` normalization with pattern validator.                                                                                  |
-| boolean                 |                                                                  | Requires that input is primitive boolean.                                                                                                  |
-| toBoolean               | truePattern?: RegExp, falsePattern?: RegExp                      | Converts strings and numbers to boolean. Patterns for true and false can be configured using regexp, defaults to true and false.           |
-| number                  |                                                                  | Requires that input is either primitive number or Number and not NaN.                                                                      |
-| toNumber                |                                                                  | Converts numeric strings to numbers.                                                                                                       |
-| integer                 |                                                                  |  Requires that input is integer.                                                                                                           |
-| toInteger               |                                                                  | Converts numeric strings to integers.                                                                                                      |
-| min                     | min: number, inclusive = true                                    | Asserts that numeric input is greater than or equal (if inclusive = true) than `min`.                                                      |
-| max                     | max: number, inclusive = true                                    | Asserts that numeric input is less than or equal (if inclusive = true) than `max`.                                                         |
-| date                    |                                                                  | Reqruires a valid date. Converts string to Date.                                                                                           |
-| enum                    | enumType: object, name: string                                   | Requires that the input is one of given enumType. Name of the enum provided for error message.                                             |
-| assertTrue              | fn: AssertTrue, type: string = 'AssertTrue', path?: Path         | Requires that the input passes `fn`. Type can be provided for error messages and path to target a sub property                             |
-| hasValue                | expectedValue: any                                               | Requires that the input matches `expectedValue`. Uses `node-deep-equal` library.                                                           |
-| object                  | model: Model                                                     | Defines an [Object validator](#object) based on provided Model.                                                                            |
-| toObject                | property: string                                                 | Converts a primitive value to object `{ property: 'value' }`. Undefined is passed on as such.                                              |
-| schema                  | callback: (schema: SchemaValidator) => SchemaModel               | Defines a [SchemaValidator](#schema) for a discriminator and models.                                                                       |
-| properties              | keys: Validator \| Validator[], values: Validator \| Validator[] | A shortcut for object with `additionalProperties`.                                                                                         |
-| mapType                 | keys: Validator, values: Validator, jsonSafeMap: boolean = true  | [Map validator](#map)                                                                                                                      |
-| toMapType(keys, values) | keys: Validator, values: Validator                               | Converts an array-of-arrays representation of a Map into a JsonSafeMap instance.                                                           |
-| array                   | ...items: Validator[]                                            | [Array validator](#array)                                                                                                                  |
-| toArray                 | items: Validator                                                 | Converts undefined to an empty array and non-arrays to single-valued arrays.                                                               |
-| size                    | min: number, max: number                                         |  Asserts that input's numeric `length` property is between min and max (both inclusive).                                                   |
-| allOf                   | ...validators: Validator[]                                       | Requires that all given validators match. Validators are run in parallel and in case they convert the input, all must provide same output. |
-| anyOf                   | ...validators: Validator[]                                       | Requires minimum one of given validators matches. Validators are run in parallel and in case of failure, all violations will be returned.  |
-| oneOf                   | ...validators: Validator[]                                       | Requires that exactly one of the given validators match.                                                                                   |
-| compositionOf           | ...validators: Validator[]                                       | Runs given the validators one after another, chaining the result.                                                                          |
-| emptyToUndefined        |                                                                  | Converts null or empty string to undefined. Does not touch any other values.                                                               |
-| emptyToNull             |                                                                  | Converts undefined or empty string to null. Does not touch any other values.                                                               |
-| emptyTo                 | defaultValue: string                                             | Uses given `defaultValue` in place of null, undefined or empty string. Does not touch any other values.                                    |
-| nullTo                  | defaultValue: string                                             | Uses given `defaultValue` in place of null. Does not touch any other values.                                                               |
-| undefinedToNull         |                                                                  | Convets undefined to null. Does not touch any other values.                                                                                |
-| if...elseif...else      | fn: AssertTrue, ...allOf: Validator[]                            | Configures validators (`allOf`) to be executed for cases where if/elseif AssertTrue fn returns true.                                       |
-| whenGroup...otherwise   | group: GroupOrName, ...allOf: Validator[]                        | Defines validation rules (`allOf`) to be executed for given `ValidatorOptions.group`.                                                      |
-| json                    | ...validators: Validator[]                                       | Parse JSON input and validate it against given validators.                                                                                 |
+| V.                       | Arguments                                                         | Description                                                                                                                                |
+|--------------------------|-------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------|
+| fn                       | fn: ValidatorFn, type?: string                                    | Function reference as a validator. A short cut for extending Validator class.                                                              |
+| ignore                   |                                                                   | Converts any input value to undefined.                                                                                                     |
+| any                      |                                                                   | Accepts any value, including undefined and null.                                                                                           |
+| check                    | ...allOf: Validator[]                                             | Runs all the validators and, if successful, returns the original value discarding any conversions.                                         |
+| map                      | fn: MappingFn, error?: any                                        | Mapping function to convert a value. Catches and converts errors to Violations                                                             |
+| optional                 | type: Validator, ...allOf: Validator[]                            | Allows null and undefined. For other values, runs first the `type` validator and then `allOf` the rest validators.                         |
+| required                 | type: Validator, ...allOf: Validator[]                            | 1) Requires a non-null and non-undefined value, 2) runs `type` validator and 3) then `allOf` the rest validators.                          |
+| string                   |                                                                   | Requires string or String.                                                                                                                 |
+| toString                 |                                                                   | Converts primitive values to (primitive) strings.                                                                                          |
+| notNull                  |                                                                   | Requires non-null and non-undefined value.                                                                                                 |
+| nullOrUndefined          |                                                                   | Requires null or undefined value.                                                                                                          |
+| notEmptyObject           | optionalProperties?: string[]                                     | Asserts that an object validated is not empty. When `optionalProperties` are provided, outputs them in the Violation output.               |
+| notEmpty                 |                                                                   | Requires non-null, non-undefined and not empty. Works with anything having numeric `length` property, e.g. string or array.                |
+| notBlank                 |                                                                   | Requires non-null, non-undefined and not blank (whitespace only string) values.                                                            |
+| uuid                     | version?: number                                                  | Uses `uuid-validate` package to validate input.                                                                                            |
+| pattern                  | pattern: string \| RegExp, flags?: string                         | Tests input against the pattern.                                                                                                           |
+| toPattern                |                                                                   | Combines `toString` normalization with pattern validator.                                                                                  |
+| boolean                  |                                                                   | Requires that input is primitive boolean.                                                                                                  |
+| toBoolean                | truePattern?: RegExp, falsePattern?: RegExp                       | Converts strings and numbers to boolean. Patterns for true and false can be configured using regexp, defaults to true and false.           |
+| number                   |                                                                   | Requires that input is either primitive number or Number and not NaN.                                                                      |
+| toNumber                 |                                                                   | Converts numeric strings to numbers.                                                                                                       |
+| integer                  |                                                                   | Requires that input is integer.                                                                                                            |
+| toInteger                |                                                                   | Converts numeric strings to integers.                                                                                                      |
+| min                      | min: number, inclusive = true                                     | Asserts that numeric input is greater than or equal (if inclusive = true) than `min`.                                                      |
+| max                      | max: number, inclusive = true                                     | Asserts that numeric input is less than or equal (if inclusive = true) than `max`.                                                         |
+| date                     |                                                                   | Requires a valid date. Converts string to Date.                                                                                            |
+| enum                     | enumType: object, name: string                                    | Requires that the input is one of given enumType. Name of the enum provided for error message.                                             |
+| assertTrue               | fn: AssertTrue, type: string = 'AssertTrue', path?: Path          | Requires that the input passes `fn`. Type can be provided for error messages and path to target a sub property                             |
+| hasValue                 | expectedValue: any                                                | Requires that the input matches `expectedValue`. Uses `node-deep-equal` library.                                                           |
+| object                   | model: Model                                                      | Defines an [Object validator](#object) based on provided Model.                                                                            |
+| toObject                 | property: string                                                  | Converts a primitive value to object `{ property: 'value' }`. Undefined is passed on as such.                                              |
+| schema                   | callback: (schema: SchemaValidator) => SchemaModel                | Defines a [SchemaValidator](#schema) for a discriminator and models.                                                                       |
+| properties               | keys: Validator \| Validator[], values: Validator \| Validator[]  | A shortcut for object with `additionalProperties`.                                                                                         |
+| mapType                  | keys: Validator, values: Validator, jsonSafeMap: boolean = true   | [Map validator](#map)                                                                                                                      |
+| toMapType(keys, values)  | keys: Validator, values: Validator                                | Converts an array-of-arrays representation of a Map into a JsonSafeMap instance.                                                           |
+| array                    | ...items: Validator[]                                             | [Array validator](#array)                                                                                                                  |
+| toArray                  | items: Validator                                                  | Converts undefined to an empty array and non-arrays to single-valued arrays.                                                               |
+| size                     | min: number, max: number                                          | Asserts that input's numeric `length` property is between min and max (both inclusive).                                                    |
+| allOf                    | ...validators: Validator[]                                        | Requires that all given validators match. Validators are run in parallel and in case they convert the input, all must provide same output. |
+| anyOf                    | ...validators: Validator[]                                        | Requires minimum one of given validators matches. Validators are run in parallel and in case of failure, all violations will be returned.  |
+| oneOf                    | ...validators: Validator[]                                        | Requires that exactly one of the given validators match.                                                                                   |
+| compositionOf            | ...validators: Validator[]                                        | Runs given the validators one after another, chaining the result.                                                                          |
+| emptyToUndefined         |                                                                   | Converts null or empty string to undefined. Does not touch any other values.                                                               |
+| emptyToNull              |                                                                   | Converts undefined or empty string to null. Does not touch any other values.                                                               |
+| emptyTo                  | defaultValue: string                                              | Uses given `defaultValue` in place of null, undefined or empty string. Does not touch any other values.                                    |
+| nullTo                   | defaultValue: string                                              | Uses given `defaultValue` in place of null. Does not touch any other values.                                                               |
+| undefinedToNull          |                                                                   | Converts undefined to null. Does not touch any other values.                                                                               |
+| if...elseif...else       | fn: AssertTrue, ...allOf: Validator[]                             | Configures validators (`allOf`) to be executed for cases where if/elseif AssertTrue fn returns true.                                       |
+| whenGroup...otherwise    | group: GroupOrName, ...allOf: Validator[]                         | Defines validation rules (`allOf`) to be executed for given `ValidatorOptions.group`.                                                      |
+| json                     | ...validators: Validator[]                                        | Parse JSON input and validate it against given validators.                                                                                 |
 
 ## Violations
 
-All `Violations` have following propertie in common:
+All `Violations` have the following properties in common:
 
 | Property           | Description                                                                                                                                                                                          |
 | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -591,23 +592,24 @@ All `Violations` have following propertie in common:
 
 ### Built-in Violations
 
-| Class                  | Type                  | Properties                       | Description                                                                         |
-| ---------------------- | --------------------- | -------------------------------- | ----------------------------------------------------------------------------------- |
-| TypeMismatch           | TypeMismatch          | expected: string                 | Type mismatch: `expected` is a description of expected type.                        |
-| EnumMismatch           | EnumMismatch          | enumType: string                 | Invalid enum value: `enumType` is the name of the expected enumeration.             |
-| ErrorViolation         | Error                 | error: any                       | An unspecified Error that was thrown and caught.                                    |
-| HasValueViolation      | HasValue              | expectedValue: any               | Input does not match (deepEqual) expectedValue.                                     |
-| PatternViolationi      | Pattern               | pattern: string                  | Input does not match the regular expression (pattern).                              |
-| OneOfMismatch          | OneOf                 | matches: number                  | Input matches 0 or >= 2 of the configured validators.                               |
-| MaxViolation           | Max                   | max: number, inclusive: boolean  | Input is greater-than or greater-than-or-equal, if `inclusive=true`, than `max`.    |
-| MinViolation           | Min                   |  min: number, inclusive: boolean | Input is less-than or less-than-or-equal if inclusive=true than `min`.              |
-| SizeViolation          | Size                  | min: number, max: number         | Input `length` (required numeric property) is less-than `min` or grater-than `max`. |
-| Violation              | NotNull               |                                  | Input is `null` or `undefined`.                                                     |
-| Violation              | NotEmpty              |                                  | Input is `null`, `undefined` or empty (i.e. input.length === 0).                    |
-| Violation              | NotBlank              |                                  | Input (string) is `null`, `undefined` or empty when trimmed.                        |
-| Violation              | UnknownProperty       |                                  | Additional property that is denied by default (see ignoreUnknownProperties).        |
-| Violation              | UnknownPropertyDenied |                                  | Explicitly denied additional property.                                              |
-| DiscriminatorViolation | Discriminator         | expectedOneOf: string[]          | Invalid discriminator value: `expectedOneOf` is a list of known types.              |
+| Class                   | Type                  | Properties                       | Description                                                                              |
+|-------------------------|-----------------------|----------------------------------|------------------------------------------------------------------------------------------|
+| TypeMismatch            | TypeMismatch          | expected: string                 | Type mismatch: `expected` is a description of expected type.                             |
+| EnumMismatch            | EnumMismatch          | enumType: string                 | Invalid enum value: `enumType` is the name of the expected enumeration.                  |
+| ErrorViolation          | Error                 | error: any                       | An unspecified Error that was thrown and caught.                                         |
+| HasValueViolation       | HasValue              | expectedValue: any               | Input does not match (deepEqual) expectedValue.                                          |
+| PatternViolationi       | Pattern               | pattern: string                  | Input does not match the regular expression (pattern).                                   |
+| OneOfMismatch           | OneOf                 | matches: number                  | Input matches 0 or >= 2 of the configured validators.                                    |
+| MaxViolation            | Max                   | max: number, inclusive: boolean  | Input is greater-than or greater-than-or-equal, if `inclusive=true`, than `max`.         |
+| MinViolation            | Min                   |  min: number, inclusive: boolean | Input is less-than or less-than-or-equal if inclusive=true than `min`.                   |
+| SizeViolation           | Size                  | min: number, max: number         | Input `length` (required numeric property) is less-than `min` or grater-than `max`.      |
+| Violation               | NotNull               |                                  | Input is `null` or `undefined`.                                                          |
+| Violation               | NotEmpty              |                                  | Input is `null`, `undefined` or empty (i.e. input.length === 0).                         |
+| NotEmptyObjectViolation | NotEmptyObject        | optionalProperties: string[]     | Input is an empty object, if `optionalProperties` provided Validation output shows them. |
+| Violation               | NotBlank              |                                  | Input (string) is `null`, `undefined` or empty when trimmed.                             |
+| Violation               | UnknownProperty       |                                  | Additional property that is denied by default (see ignoreUnknownProperties).             |
+| Violation               | UnknownPropertyDenied |                                  | Explicitly denied additional property.                                                   |
+| DiscriminatorViolation  | Discriminator         | expectedOneOf: string[]          | Invalid discriminator value: `expectedOneOf` is a list of known types.                   |
 
 ## Roadmap
 

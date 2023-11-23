@@ -53,6 +53,7 @@ import {
   HasValueValidator,
   JsonValidator,
   RequiredValidator,
+  NotEmptyObjectValidator,
 } from './validators.js';
 
 const ignoreValidator = new IgnoreValidator(),
@@ -101,6 +102,8 @@ export const V = {
   nullOrUndefined: () => nullOrUndefinedValidator,
 
   notEmpty: () => notEmptyValidator,
+
+  notEmptyObject: (optionalProperties?: string[]) => new NotEmptyObjectValidator(optionalProperties),
 
   notBlank: () => notBlankValidator,
 

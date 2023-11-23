@@ -22,7 +22,8 @@ export interface ValidatorOptions {
 }
 
 export class ValidationContext {
-  constructor(public readonly options: ValidatorOptions) {}
+  constructor(public readonly options: ValidatorOptions) {
+  }
 
   private readonly objects = new Map<any, any>();
 
@@ -38,18 +39,23 @@ export class ValidationContext {
     }
     return new ValidationResult(violations);
   }
+
   success(value: any) {
     return new ValidationResult(undefined, value);
   }
+
   failurePromise(violation: Violation | Violation[], value: any) {
     return this.promise(this.failure(violation, value));
   }
+
   successPromise(value: any) {
     return this.promise(this.success(value));
   }
+
   promise<T>(result: ValidationResult) {
     return new SyncPromise(result);
   }
+
   registerObject(value: any, path: Path, convertedValue: any): undefined | ValidationResult {
     if (this.objects.has(value)) {
       if (this.options.allowCycles) {
@@ -60,6 +66,7 @@ export class ValidationContext {
     this.objects.set(value, convertedValue);
     return undefined;
   }
+
   private ignoreViolation(violation: Violation) {
     return (
       (this.options.ignoreUnknownEnumValues && violation.type === ValidatorType.EnumMismatch) ||
@@ -69,7 +76,9 @@ export class ValidationContext {
 }
 
 export class SyncPromise<T> implements PromiseLike<T> {
-  constructor(private readonly value: T) {}
+  constructor(private readonly value: T) {
+  }
+
   then<TResult1 = T, TResult2 = never>(
     onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null,
     onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null,
@@ -160,7 +169,8 @@ export class ValidationError extends Error {
 }
 
 export class Violation {
-  constructor(public readonly path: Path, public readonly type: string, public readonly invalidValue?: any) {}
+  constructor(public readonly path: Path, public readonly type: string, public readonly invalidValue?: any) {
+  }
 }
 
 export class TypeMismatch extends Violation {
@@ -214,6 +224,15 @@ export class MaxViolation extends Violation {
 export class SizeViolation extends Violation {
   constructor(path: Path, public readonly min: number, public readonly max: number) {
     super(path, 'Size');
+  }
+}
+
+export class NotEmptyObjectViolation extends Violation {
+  constructor(invalidValue: any, path: Path, public optionalProperties?: string[]) {
+    super(path, 'NotEmptyObject', invalidValue);
+    if (!optionalProperties) {
+      delete this.optionalProperties;
+    }
   }
 }
 
@@ -281,6 +300,10 @@ export function isNullOrUndefined(value: any) {
   return value === null || value === undefined;
 }
 
+export function isEmptyObject(obj: any) {
+  return typeof obj !== 'object' || Object.keys(obj).length === 0;
+}
+
 export enum ValidatorType {
   TypeMismatch = 'TypeMismatch',
   UnknownProperty = 'UnknownProperty',
@@ -288,6 +311,7 @@ export enum ValidatorType {
   EnumMismatch = 'EnumMismatch',
   NotNull = 'NotNull',
   NotEmpty = 'NotEmpty',
+  NotEmptyObject = 'NotEmptyObject',
   NotBlank = 'NotBlank',
   Date = 'Date',
   DateTime = 'DateTime',
@@ -307,6 +331,7 @@ export const defaultViolations = {
   size: (min: number, max: number, path: Path = ROOT) => new SizeViolation(path, min, max),
   notNull: (path: Path = ROOT) => new Violation(path, ValidatorType.NotNull),
   notEmpty: (path: Path = ROOT) => new Violation(path, ValidatorType.NotEmpty),
+  notEmptyObject: (invalidValue: any, path: Path = ROOT, optionalProperties?: string[]) => new NotEmptyObjectViolation(invalidValue, path, optionalProperties),
   notBlank: (path: Path = ROOT) => new Violation(path, ValidatorType.NotBlank),
   oneOf: (matches: number, path: Path = ROOT) => new OneOfMismatch(path, matches),
   pattern: (pattern: RegExp, invalidValue: any, path: Path = ROOT) => new PatternViolation(path, '' + pattern, invalidValue),
@@ -605,6 +630,7 @@ export class ObjectNormalizer extends Validator {
     super();
     Object.freeze(this);
   }
+
   validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult> {
     if (value === undefined) {
       return ctx.successPromise(undefined);
@@ -676,6 +702,7 @@ export class ArrayNormalizer extends ArrayValidator {
   constructor(itemsValidator: Validator) {
     super(itemsValidator);
   }
+
   validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult> {
     if (value === undefined) {
       return super.validatePath([], path, ctx);
@@ -777,6 +804,7 @@ export class AnyOfValidator extends Validator {
     Object.freeze(this.validators);
     Object.freeze(this);
   }
+
   async validatePath(value: any, path: Path, ctx: ValidationContext): Promise<ValidationResult> {
     const passes: ValidationResult[] = [];
     const failures: Violation[] = [];
@@ -874,6 +902,7 @@ export class WhenGroupValidator extends Validator {
     return new WhenGroupValidator(this.whenGroups, maybeAllOfValidator(allOf));
   }
 }
+
 export class WhenGroup {
   public readonly group: string;
 
@@ -891,6 +920,7 @@ export class MapValidator extends Validator {
     super();
     Object.freeze(this);
   }
+
   validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult> {
     if (isNullOrUndefined(value)) {
       return ctx.failurePromise(defaultViolations.notNull(path), value);
@@ -940,6 +970,7 @@ export class MapNormalizer extends MapValidator {
   constructor(keys: Validator, values: Validator) {
     super(keys, values, true);
   }
+
   validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult> {
     if (value instanceof Map) {
       return super.validatePath(value, path, ctx);
@@ -972,6 +1003,7 @@ export class JsonMap<K, V> extends Map<K, V> {
   constructor(params?: any) {
     super(params);
   }
+
   toJSON() {
     return [...this.entries()];
   }
@@ -1036,6 +1068,18 @@ export class NotEmptyValidator extends Validator {
     return !isNullOrUndefined(value) && isNumber(value.length) && value.length > 0
       ? ctx.successPromise(value)
       : ctx.failurePromise(defaultViolations.notEmpty(path), value);
+  }
+}
+
+export class NotEmptyObjectValidator extends Validator {
+  constructor(public readonly optionalProperties?: string[]) {
+    super();
+  }
+
+  validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult> {
+    return !isNullOrUndefined(value) && !isEmptyObject(value)
+      ? ctx.successPromise(value)
+      : ctx.failurePromise(defaultViolations.notEmptyObject(value, path, this.optionalProperties), value);
   }
 }
 
@@ -1147,6 +1191,7 @@ export class NumberValidator extends Validator {
     }
     return this.validateFormat(value, path, ctx);
   }
+
   protected validateFormat(value: any, path: Path, ctx: ValidationContext) {
     switch (this.format) {
       case NumberFormat.integer:
@@ -1273,6 +1318,7 @@ export class HasValueValidator extends Validator {
     super();
     Object.freeze(this);
   }
+
   validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult> {
     if (deepEqual(value, this.expectedValue)) {
       return ctx.successPromise(value);
@@ -1393,6 +1439,7 @@ export class PatternNormalizer extends PatternValidator {
   constructor(pattern: string | RegExp, flags?: string) {
     super(pattern, flags);
   }
+
   validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult> {
     if (isNullOrUndefined(value)) {
       return ctx.failurePromise(defaultViolations.notNull(path), value);
