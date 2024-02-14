@@ -43,6 +43,10 @@
   "peerDependencies": {
     "@finnair/path": "^5.1.0",
     "@finnair/v-validation": "^5.1.0",
-    "luxon": "^3.0.0"
+    "luxon": "^3.4.0"
+  },
+  "devDependencies": {
+    "@finnair/path": "^5.1.0",
+    "@finnair/v-validation": "^5.1.0"
   }
 }

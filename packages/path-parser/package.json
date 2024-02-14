@@ -44,5 +44,8 @@
   },
   "peerDependencies": {
     "@finnair/path": "^5.1.0"
+  },
+  "devDependencies": {
+    "@finnair/path": "^5.1.0"
   }
 }

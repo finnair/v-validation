@@ -43,6 +43,10 @@
   "peerDependencies": {
     "@finnair/path": "^5.1.0",
     "@finnair/v-validation": "^5.1.0",
-    "moment": "^2.29.1"
+    "moment": "^2.30.0"
+  },
+  "devDependencies": {
+    "@finnair/path": "^5.1.0",
+    "@finnair/v-validation": "^5.1.0"
   }
 }
