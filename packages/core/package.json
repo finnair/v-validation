@@ -39,10 +39,15 @@
     "build:esm": "tsc -b . && cp ../../package.esm.json dist/esm/package.json"
   },
   "dependencies": {
-    "@finnair/path": "^5.1.0",
     "@types/deep-equal": "1.0.1",
     "@types/uuid-validate": "0.0.1",
     "deep-equal": "2.0.5",
     "uuid-validate": "0.0.3"
+  },
+  "peerDependencies": {
+    "@finnair/path": "^5.1.0"
+  },
+  "devDependencies": {
+    "@finnair/path": "^5.1.0"
   }
 }
