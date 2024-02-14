@@ -8,7 +8,7 @@
 - node (tested with 12.x, 14.x, 16.x, and 18.x)
 - typescript (tested with 4.5.x)
 - yarn (tested with 1.22.10)
-- lerna (tested 8.1.2)
+- lerna (tested with 8.1.2)
 - jest (tested with 27.4.7)
 
 ## Commands

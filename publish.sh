@@ -13,7 +13,6 @@ set -v
 
 yarn clean
 yarn install
-yarn boot
 yarn build
 yarn test --coverage
 npm config set access public
