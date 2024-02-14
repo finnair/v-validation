@@ -39,11 +39,10 @@
     "build:cjs": "tsc -b tsconfig.cjs.json && cp ../../package.cjs.json dist/cjs/package.json",
     "build:esm": "tsc -b . && cp ../../package.esm.json dist/esm/package.json"
   },
-  "dependencies": {
-    "@finnair/path": "^5.1.0",
-    "@finnair/v-validation": "^5.1.0"
-  },
+  "dependencies": {},
   "peerDependencies": {
+    "@finnair/path": "^5.1.0",
+    "@finnair/v-validation": "^5.1.0",
     "luxon": "^3.0.0"
   }
 }
