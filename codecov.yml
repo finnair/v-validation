@@ -4,4 +4,4 @@ comment:
   require_changes: false
 ignore:
   # Only exports
-  - "packages/*/index.ts"
+  - "packages/*/src/index.ts"
