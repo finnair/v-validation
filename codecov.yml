@@ -2,3 +2,6 @@ comment:
   layout: 'diff, flags, tree'
   behavior: default
   require_changes: false
+ignore:
+  # Only exports
+  - "packages/*/index.ts"
