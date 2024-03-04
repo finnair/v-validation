@@ -15,7 +15,6 @@ jobs:
     steps:
       - uses: actions/checkout@master
       - run: yarn
-      - run: yarn boot
       - run: yarn build
       - run: yarn test --coverage
       - uses: codecov/codecov-action@v3
