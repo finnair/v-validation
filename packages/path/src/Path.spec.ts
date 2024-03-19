@@ -75,10 +75,14 @@ describe('path', () => {
 
     test('truncates undefined tail from an array', () => {
       const obj = { array: [1, undefined, 3] };
-      expect(Path.of('array', 2).set(obj, undefined));
+      Path.of('array', 2).set(obj, undefined);
       expect(obj).toEqual({ array: [1] });
       expect(obj.array.length).toBe(1);
       expect(obj.array[2]).toBeUndefined();
+    });
+
+    test('does not create undefined intermediate', () => {
+      expect('nested' in Path.of('nested', 'value').set({}, undefined)).toBe(false);
     });
   });
 
