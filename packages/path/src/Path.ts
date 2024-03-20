@@ -77,8 +77,10 @@ export class Path {
     for (pathIndex = 0; pathIndex < this.path.length - 1 && current; pathIndex++) {
       const component = this.path[pathIndex];
       const child = toObject(current[component], this.path);
-      current[component] = child;
-      current = child;
+      if (child !== undefined) {
+        current[component] = child;
+        current = child;
+      }
     }
     if (value === undefined) {
       if (current !== undefined) {
