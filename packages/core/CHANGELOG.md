@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [5.4.0](https://github.com/finnair/v-validation/compare/v5.3.0...v5.4.0) (2024-05-08)
+
+### Features
+
+- Set-validation with JSON-safe extension ([#108](https://github.com/finnair/v-validation/issues/108)) ([91129df](https://github.com/finnair/v-validation/commit/91129df42978c44e9494ba41376db3c549d2c919))
+
 # [5.3.0](https://github.com/finnair/v-validation/compare/v5.2.0...v5.3.0) (2024-03-20)
 
 **Note:** Version bump only for package @finnair/v-validation
