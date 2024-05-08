@@ -977,6 +977,52 @@ export class JsonMap<K, V> extends Map<K, V> {
   }
 }
 
+export class SetValidator extends Validator {
+  constructor(public readonly values: Validator, public readonly jsonSafeSet: boolean) {
+    super();
+    Object.freeze(this);
+  }
+  validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult> {
+    if (isNullOrUndefined(value)) {
+      return ctx.failurePromise(defaultViolations.notNull(path), value);
+    }
+    if (!(value instanceof Set || Array.isArray(value))) {
+      return ctx.failurePromise(new TypeMismatch(path, 'Set'), value);
+    }
+    const convertedSet: Set<any> = this.jsonSafeSet ? new JsonSet() : new Set<any>();
+    const promises: PromiseLike<void>[] = [];
+    let violations: Violation[] = [];
+    let i = 0;
+    for (const entry of value) {
+      const entryPath = path.index(i);
+      promises[i] = this.values.validatePath(entry, entryPath, ctx).then((result: ValidationResult) => {
+        if (result.isFailure()) {
+          violations = violations.concat(result.getViolations());
+        } else {
+          convertedSet.add(result.getValue());
+        }
+      });
+      ++i;
+    }
+
+    return Promise.all(promises).then(_ => {
+      if (violations.length > 0) {
+        return ctx.failurePromise(violations, value);
+      }
+      return ctx.successPromise(convertedSet);
+    });
+  }
+}
+
+export class JsonSet<K> extends Set<K> {
+  constructor(params?: any) {
+    super(params);
+  }
+  toJSON() {
+    return [...this.values()];
+  }
+}
+
 export class AnyValidator extends Validator {
   validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult> {
     return ctx.successPromise(value);

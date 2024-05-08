@@ -53,6 +53,7 @@ import {
   HasValueValidator,
   JsonValidator,
   RequiredValidator,
+  SetValidator,
 } from './validators.js';
 
 const ignoreValidator = new IgnoreValidator(),
@@ -145,6 +146,8 @@ export const V = {
 
   /** WARN: Objects as Map keys use identity hash/equals, i.e. === */
   toMapType: (keys: Validator, values: Validator) => new MapNormalizer(keys, values),
+
+  setType: (values: Validator, jsonSafeSet: boolean = true) => new SetValidator(values, jsonSafeSet),
 
   nullTo: (defaultValue: string | number | bigint | boolean | symbol) => new ValueMapper(value => (isNullOrUndefined(value) ? defaultValue : value)),
 
