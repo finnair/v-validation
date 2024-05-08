@@ -21,6 +21,7 @@ import {
   SizeViolation,
   EnumMismatch,
   SyncPromise,
+  JsonSet,
 } from './validators';
 import { V } from './V.js';
 import { Path } from '@finnair/path';
@@ -1400,6 +1401,29 @@ describe('Map', () => {
     test('Map has invalid key', () => expectViolations(new Map([[0, 'foo']]), validator, new TypeMismatch(Path.of(0, 0), 'string', 0)));
   });
 });
+
+describe('Set', () => {
+  test('undefined not allowed', () => expectViolations(undefined, V.setType(V.any()), defaultViolations.notNull()));
+
+  test('Set instance is valid', () => expectValid(new Set([1, 2]), V.setType(V.number(), false)));
+
+  test('array is valid', () => expectValid([1, 2], V.setType(V.number(), false), new Set([1, 2])));
+ 
+  test('object is not valid', () => expectViolations({}, V.setType(V.number(), false), new TypeMismatch(ROOT, 'Set')));
+
+  test('Set has invalid value', () => expectViolations(new Set(['foo']), V.setType(V.number()), new TypeMismatch(Path.of(0), 'number', 'foo')));
+ 
+  test('json round-trip', async () => {
+    const setArray = [1, 2, 3];
+    const validator = V.setType(V.number(), true);
+    
+    const set1 = (await validator.validate(new Set(setArray))).getValue();
+    expect(set1).toBeInstanceOf(JsonSet);
+    
+    const parsedArray = JSON.parse(JSON.stringify(set1));
+    expect(parsedArray).toEqual(setArray);
+  })
+})
 
 describe('json', () => {
   const validator = V.json(V.array(V.string()));
