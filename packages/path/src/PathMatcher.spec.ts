@@ -8,6 +8,7 @@ describe('path', () => {
     id: 'id',
     name: 'name',
     object: {
+      'undefined': undefined,
       id: 'nested id',
       name: 'nested name',
     },
@@ -24,51 +25,69 @@ describe('path', () => {
         name: 'c',
         value: 789,
       },
+      undefined,
     ],
   };
 
-  describe('find', () => {
-    test('root', () => expect(PathMatcher.of().find('root')).toEqual([new Node(Path.of(), 'root')]));
+  describe('findAll', () => {
+    test('root', () => expect(PathMatcher.of().findAll('root')).toEqual([<Node>{ path: Path.of(), value: 'root'}]));
 
-    test('property of non-object', () => expect(PathMatcher.of('length').find('root')).toEqual([]));
+    test('property of non-object', () => expect(PathMatcher.of('length').findAll('root')).toEqual([]));
 
-    test('nested object name', () => expect(PathMatcher.of('object', 'name').find(obj)).toEqual([new Node(Path.of('object', 'name'), 'nested name')]));
+    test('nested object name', () => expect(PathMatcher.of('object', 'name').findAll(obj)).toEqual([<Node>{ path: Path.of('object', 'name'), value: 'nested name'}]));
 
     test('nested array element values', () =>
-      expect(PathMatcher.of('array', AnyIndex, 'value').find(obj)).toEqual([
-        new Node(Path.of('array', 0, 'value'), 123),
-        new Node(Path.of('array', 1, 'value'), 456),
-        new Node(Path.of('array', 2, 'value'), 789),
+      expect(PathMatcher.of('array', AnyIndex, 'value').findAll(obj)).toEqual([
+        <Node>{ path: Path.of('array', 0, 'value'), value: 123 },
+        <Node>{ path: Path.of('array', 1, 'value'), value: 456 },
+        <Node>{ path: Path.of('array', 2, 'value'), value: 789 },
       ]));
 
     test('nested object wildcard', () =>
-      expect(PathMatcher.of('object', AnyProperty).find(obj)).toEqual([
-        new Node(Path.of('object', 'id'), 'nested id'),
-        new Node(Path.of('object', 'name'), 'nested name'),
+      expect(PathMatcher.of('object', AnyProperty).findAll(obj)).toEqual([
+        <Node>{ path: Path.of('object', 'id'), value: 'nested id' },
+        <Node>{ path: Path.of('object', 'name'), value: 'nested name' },
       ]));
 
-    test('non-existing property', () => expect(PathMatcher.of('non-existing', 0).find(obj)).toEqual([]));
+    test('non-existing property', () => expect(PathMatcher.of('non-existing', 0).findAll(obj)).toEqual([]));
 
-    test('non-existing index', () => expect(PathMatcher.of(999, 'property').find(obj)).toEqual([]));
+    test('non-existing index', () => expect(PathMatcher.of(999, 'property').findAll(obj)).toEqual([]));
 
-    test("only object's properties are accessible", () => expect(PathMatcher.of('id', 'length').find(obj)).toEqual([]));
+    test("only object's properties are accessible", () => expect(PathMatcher.of('id', 'length').findAll(obj)).toEqual([]));
 
-    test("only arrays's indexes are accessible", () => expect(PathMatcher.of('object', 0).find(obj)).toEqual([]));
+    test("only arrays's indexes are accessible", () => expect(PathMatcher.of('object', 0).findAll(obj)).toEqual([]));
 
-    test('AnyIndex only works on an array', () => expect(PathMatcher.of(AnyIndex).find(obj)).toEqual([]));
+    test('AnyIndex only works on an array', () => expect(PathMatcher.of(AnyIndex).findAll(obj)).toEqual([]));
 
-    test('AnyProperty only works on an object', () => expect(PathMatcher.of('id', AnyProperty).find(obj)).toEqual([]));
+    test('AnyProperty only works on an object', () => expect(PathMatcher.of('id', AnyProperty).findAll(obj)).toEqual([]));
 
     test('union of properties', () =>
-      expect(PathMatcher.of(new UnionMatcher(['id', 'name'])).find(obj)).toEqual([new Node(Path.of('id'), 'id'), new Node(Path.of('name'), 'name')]));
-
-    test('union of indexes', () =>
-      expect(PathMatcher.of('array', new UnionMatcher([0, 2]), 'name').find(obj)).toEqual([
-        new Node(Path.of('array', 0, 'name'), 'a'),
-        new Node(Path.of('array', 2, 'name'), 'c'),
+      expect(PathMatcher.of(new UnionMatcher(['id', 'name'])).findAll(obj)).toEqual([
+        <Node>{ path: Path.of('id'), value: 'id' }, 
+        <Node>{ path: Path.of('name'), value: 'name' }
       ]));
 
-    test('union of properties on a string', () => expect(PathMatcher.of('name', new UnionMatcher(['length', 'prototype'])).find(obj)).toEqual([]));
+    test('union of indexes', () =>
+      expect(PathMatcher.of('array', new UnionMatcher([0, 2]), 'name').findAll(obj)).toEqual([
+        <Node>{ path: Path.of('array', 0, 'name'), value: 'a' },
+        <Node>{ path: Path.of('array', 2, 'name'), value: 'c' },
+      ]));
+
+    test('union of properties on a string', () => expect(PathMatcher.of('name', new UnionMatcher(['length', 'prototype'])).findAll(obj)).toEqual([]));
+
+    describe('acceptUndefined', () => {
+      test('nested array element values', () => {
+        const nodes = PathMatcher.of('array', AnyIndex).findAll(obj, true);
+        expect(nodes.length).toBe(4);
+        expect(nodes[3]).toEqual(<Node>{ path: Path.of('array', 3), value: undefined });
+      });
+  
+      test('nested object wildcard', () => {
+        const nodes = PathMatcher.of('object', AnyProperty).findAll(obj, true);
+        expect(nodes.length).toBe(3);
+        expect(nodes[0]).toEqual(<Node>{ path: Path.of('object', 'undefined'), value: undefined });
+      });
+    });
   });
 
   describe('match', () => {
@@ -124,15 +143,19 @@ describe('path', () => {
   });
 
   describe('findFirst', () => {
-    test('first array element', () => expect(PathMatcher.of('array', AnyIndex, 'value').findFirst(obj)).toEqual(new Node(Path.of('array', 0, 'value'), 123)));
+    test('first array element', () => expect(PathMatcher.of('array', AnyIndex, 'value').findFirst(obj)).toEqual(<Node>{ path: Path.of('array', 0, 'value'), value: 123 }));
 
-    test('last array element', () => expect(PathMatcher.of('array', 2, 'value').findFirst(obj)).toEqual(new Node(Path.of('array', 2, 'value'), 789)));
+    test('last array element', () => expect(PathMatcher.of('array', 2, 'value').findFirst(obj)).toEqual(<Node>{ path: Path.of('array', 2, 'value'), value: 789 }));
 
     test('non-existing array element', () => expect(PathMatcher.of('array', 3, 'value').findFirst(obj)).toBeUndefined());
 
-    test('first property', () => expect(PathMatcher.of(AnyProperty).findFirst(obj)).toEqual(new Node(Path.of('id'), 'id')));
+    test('first property', () => expect(PathMatcher.of(AnyProperty).findFirst(obj)).toEqual(<Node>{ path: Path.of('id'), value: 'id' }));
 
     test('non-existing array element', () => expect(PathMatcher.of(AnyProperty, 'non-existing property').findFirst(obj)).toBeUndefined());
+
+    test('acceptUndefined=true', () => expect(PathMatcher.of('object', AnyProperty).findFirst(obj, true)).toEqual(<Node>{ path: Path.of('object', 'undefined'), value: undefined }))
+
+    test('acceptUndefined=false', () => expect(PathMatcher.of('object', AnyProperty).findFirst(obj, false)).toEqual(<Node>{ path: Path.of('object', 'id'), value: 'nested id' }))
   });
 
   describe('findValues', () => {
@@ -145,6 +168,10 @@ describe('path', () => {
     test('nested array element values', () => expect(PathMatcher.of('array', AnyIndex, 'value').findValues(obj)).toEqual([123, 456, 789]));
 
     test('nested object wildcard', () => expect(PathMatcher.of('object', AnyProperty).findValues(obj)).toEqual(['nested id', 'nested name']));
+
+    test('acceptUndefined=true', () => expect(PathMatcher.of('object', AnyProperty).findValues(obj, true)).toEqual([undefined, 'nested id', 'nested name']));
+
+    test('acceptUndefined=false', () => expect(PathMatcher.of('object', AnyProperty).findValues(obj, false)).toEqual(['nested id', 'nested name']));
   });
 
   describe('findFirstValue', () => {
@@ -159,6 +186,10 @@ describe('path', () => {
     test('non-existing array element', () => expect(PathMatcher.of(AnyProperty, 'non-existing property').findFirstValue(obj)).toBeUndefined());
 
     test('first value of an union', () => expect(PathMatcher.of('array', AnyIndex, new UnionMatcher(['name', 'value'])).findFirstValue(obj)).toEqual('a'));
+
+    test('acceptUndefined=true', () => expect(PathMatcher.of('object', AnyProperty).findFirstValue(obj, true)).toBeUndefined());
+
+    test('acceptUndefined=false', () => expect(PathMatcher.of('object', AnyProperty).findFirstValue(obj, false)).toEqual('nested id'));
   });
 
   describe('matchers', () => {

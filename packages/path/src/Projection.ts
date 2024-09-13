@@ -62,11 +62,11 @@ function validatePathMatcher(value: PathMatcher): PathMatcher {
 }
 
 function include(input: any, matcher: PathMatcher, output: any) {
-  matcher.find(input).forEach(node => node.path.set(output, node.value));
+  matcher.find(input, (path: Path, value: any) => path.set(output, value));
 }
 
 function exclude(output: any, matcher: PathMatcher) {
-  matcher.find(output).forEach(node => node.path.unset(output));
+  matcher.find(output, (path: Path) => path.unset(output));
 }
 
 function jsonClone(value: any) {

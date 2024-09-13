@@ -10,7 +10,7 @@
 
 ## Getting Started
 
-Install v-validation using [`yarn`](https://yarnpkg.com/en/package/jest):
+Install v-validation using [`yarn`](https://yarnpkg.com):
 
 ```bash
 yarn add @finnair/v-validation-moment

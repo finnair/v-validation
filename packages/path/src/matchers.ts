@@ -16,8 +16,9 @@ export function isPathExpression(component: PathComponent | PathExpression): com
   return !!component && typeof (component as PathExpression).test === 'function' && typeof (component as PathExpression).find === 'function';
 }
 
-export class Node {
-  constructor(public readonly path: Path, public readonly value: any) { }
+export interface Node {
+  readonly path: Path; 
+  readonly value: any;
 }
 
 export class IndexMatcher implements PathExpression {
