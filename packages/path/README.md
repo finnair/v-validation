@@ -10,7 +10,7 @@ Parsers for Path and PathMatcher are available in a separate package [`@finnair/
 
 ## Getting Started
 
-Install v-validation using [`yarn`](https://yarnpkg.com/en/package/jest):
+Install v-validation using [`yarn`](https://yarnpkg.com):
 
 ```bash
 yarn add @finnair/path
@@ -24,48 +24,13 @@ npm install @finnair/path
 
 ## Use Case Examples
 
-### Report Validation Errors
+### Validation 
 
 Path can be used to point a location of invalid value (see [`v-validation`](../core/README.md). Path's immutability and fluent API makes it easy and safe to use.
 
-### Analyze Changes
+### Diff, Versioning & Patching
 
-Path can be used to report changes made to an object:
-
-```typescript
-// NOTE: This is pseudocode!
-const originalValue = fetchResource(); // No need for long lasting, e.g. optimistic, locking
-const updatedValue = await doUpdate(originalValue); // Edit in e.g. UI
-
-// Map from Path to new value
-const changes: Map<Path, any> = analyzeChanges(updatedValue, originalValue);
-// analyzeChanges implementation is not in this library's scope
-```
-
-### Detect Interesting Changes
-
-In message based systems, consumers may be interested only in specific changes. Once a change is analyzed, `PathMatcher` can be used to check if it's of interest to a particular consumer.
-
-```typescript
-const subscription = [PathMatcher.of('interestingProperty'), PathMatcher.of('interestingArray', AnyIndex, 'someProperty')];
-const isInteresting = Array.from(changes.keys()).some(path => subscription.some(pathMatcher => pathMatcher.prefixMatch(path)));
-```
-
-### Apply Changes (Patch)
-
-Changes can also be applied to another (newer) version of the same object safely. This is important in systems where there
-
-```typescript
-// Fetch and lock (pessimistic or optimistic) latest value for the duration of the actual update
-const latestValue = fetchAndLockResource();
-changes.forEach((newValue, path) => {
-  path.set(latestValue, newValue); // Unsets value if newValue is undefined
-});
-updateResource(latestValue);
-```
-
-NOTE: Updating an array with `Path.set` will truncate possible undefined values from the end of the array. This allows
-removing trailing elements without leaving undefined elements in place.
+Analyze changes and trigger logic based on what has changed (see [`diff`](../diff/README.md).
 
 ### Include/Exclude Projection
 

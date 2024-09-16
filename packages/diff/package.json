@@ -1,0 +1,48 @@
+{
+  "name": "@finnair/diff",
+  "version": "5.4.0",
+  "private": false,
+  "description": "Object Diff Based on Paths And Valudes of an Object",
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/cjs/index.js",
+  "types": "./dist/cjs/index.d.ts",
+  "exports": {
+    ".": {
+      "require": {
+        "types": "./dist/cjs/index.d.ts",
+        "default": "./dist/cjs/index.js"
+      },
+      "import": {
+        "types": "./dist/esm/index.d.ts",
+        "default": "./dist/esm/index.js"
+      }
+    }
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/finnair/v-validation/tree/master/packages/diff#readme",
+  "bugs": "https://github.com/finnair/v-validation/issues",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/finnair/v-validation.git",
+    "directory": "packages/diff"
+  },
+  "keywords": [
+    "diff",
+    "versioning", 
+    "patching"
+  ],
+  "scripts": {
+    "build": "yarn build:cjs && yarn build:esm",
+    "build:cjs": "tsc -b tsconfig.cjs.json && cp ../../package.cjs.json dist/cjs/package.json",
+    "build:esm": "tsc -b . && cp ../../package.esm.json dist/esm/package.json"
+  },
+  "dependencies": {},
+  "peerDependencies": {
+    "@finnair/path": "^5.4.0",
+    "@finnair/path-parser": "^5.4.0"
+  },
+  "devDependencies": {
+    "@finnair/path": "^5.4.0",
+    "@finnair/path-parser": "^5.4.0"
+  }
+}
