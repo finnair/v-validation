@@ -45,7 +45,7 @@
     "uuid-validate": "0.0.3"
   },
   "peerDependencies": {
-    "@finnair/path": "^5.1.0"
+    "@finnair/path": "~6.0"
   },
   "devDependencies": {
     "@finnair/path": "^6.0.0"
