@@ -1,6 +1,6 @@
 {
   "name": "@finnair/diff",
-  "version": "5.4.0",
+  "version": "6.0.0",
   "private": false,
   "description": "Object Diff Based on Paths And Valudes of an Object",
   "main": "./dist/cjs/index.js",
@@ -28,7 +28,7 @@
   },
   "keywords": [
     "diff",
-    "versioning", 
+    "versioning",
     "patching"
   ],
   "scripts": {
@@ -36,13 +36,12 @@
     "build:cjs": "tsc -b tsconfig.cjs.json && cp ../../package.cjs.json dist/cjs/package.json",
     "build:esm": "tsc -b . && cp ../../package.esm.json dist/esm/package.json"
   },
-  "dependencies": {},
   "peerDependencies": {
     "@finnair/path": "^5.4.0",
     "@finnair/path-parser": "^5.4.0"
   },
   "devDependencies": {
-    "@finnair/path": "^5.4.0",
-    "@finnair/path-parser": "^5.4.0"
+    "@finnair/path": "^6.0.0",
+    "@finnair/path-parser": "^6.0.0"
   }
 }
