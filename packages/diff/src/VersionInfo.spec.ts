@@ -4,7 +4,6 @@ import { Change, Diff } from './Diff.js';
 import { VersionInfo, VersionInfoConfig } from './VersionInfo.js';
 
 describe('VersionInfo', () => {
-
   const a: any = Object.freeze({
     id: 1234,
     _timestamp: new Date(2024, 8, 10),

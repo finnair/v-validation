@@ -31,7 +31,7 @@ describe('Diff', () => {
   describe('nested object', () => {
     const oldObject = {
       object: {
-        name: 'matti',
+        name: 'Alexis',
       },
       array: [0]
     };
@@ -84,11 +84,11 @@ describe('Diff', () => {
   });
 
   test('property value is added, removed and changed', async () => {
-    const right = {
+    const right: any = {
       name: 'oldName',
       age: 20,
     };
-    const left = {
+    const left: any  = {
       name: 'changedName',
       lastName: 'Added lastName',
     };
@@ -106,7 +106,7 @@ describe('Diff', () => {
       names: [],
     };
     const newObject = {
-      names: ['mikko'],
+      names: ['Alexis'],
     };
     const diff = defaultDiff.changedPaths(oldObject, newObject);
     const expected = new Set(['$.names[0]']);
@@ -118,7 +118,7 @@ describe('Diff', () => {
       persons: [],
     };
     const newObject = {
-      persons: [{ name: 'mikko' }],
+      persons: [{ name: 'Alexis' }],
     };
     const diff = defaultDiff.changedPaths(oldObject, newObject);
     const expected = new Set(['$.persons[0].name']);
@@ -127,10 +127,10 @@ describe('Diff', () => {
   
   test('addItemToArray with multiple items', async () => {
     const oldObject = {
-      persons: [{ firstName: 'mikko' }],
+      persons: [{ firstName: 'Alexis' }],
     };
     const newObject = {
-      persons: [{ firstName: 'mikko', lastName: 'aho' }, { firstName: 'jukka' }],
+      persons: [{ firstName: 'Alexis', lastName: 'Doe' }, { firstName: 'Riley' }],
     };
     const diff = defaultDiff.changedPaths(oldObject, newObject);
     const expected = new Set(['$.persons[0].lastName', '$.persons[1].firstName']);

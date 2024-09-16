@@ -35,7 +35,6 @@ function isPrimitive(value: any) {
 }
 
 export class Diff {
-
   constructor(private readonly config?: DiffConfig) {}
 
   allPaths(value: any) {
