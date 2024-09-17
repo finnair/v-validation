@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [6.0.2](https://github.com/finnair/v-validation/compare/v6.0.1...v6.0.2) (2024-09-17)
+
+### Bug Fixes
+
+- add missing index.ts ([886bff3](https://github.com/finnair/v-validation/commit/886bff312f2abb081e1683e8d3481ac045cfeee1))
+
 ## [6.0.1](https://github.com/finnair/v-validation/compare/v6.0.0...v6.0.1) (2024-09-16)
 
 **Note:** Version bump only for package @finnair/diff
