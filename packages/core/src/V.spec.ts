@@ -243,6 +243,8 @@ describe('uuid', () => {
 
   test('undefined is not valid', () => expectViolations(undefined, V.uuid(), defaultViolations.notNull()));
 
+  test('non-string is not valid', () => expectViolations(12345, V.uuid(), new TypeMismatch(ROOT, 'string', 12345)));
+
   test('valid uuid v4', () => expectValid('ffa7870a-a612-446c-b892-d33e71caf016', V.uuid()));
 
   test('valid uuid v4 required', () => expectValid('ffa7870a-a612-446c-b892-d33e71caf016', V.uuid(4)));
