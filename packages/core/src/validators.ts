@@ -122,11 +122,11 @@ export interface WarnLogger {
 }
 
 export class ValidationResult {
-  private value?: any;
+  private value?: unknown;
 
   private violations?: Violation[];
 
-  constructor(violations?: Violation[], value?: any) {
+  constructor(violations?: Violation[], value?: unknown) {
     this.violations = violations;
     this.value = value;
     Object.freeze(this.violations);
@@ -140,7 +140,7 @@ export class ValidationResult {
     return !this.isSuccess();
   }
 
-  getValue(): any {
+  getValue(): unknown {
     if (!this.isSuccess()) {
       throw new ValidationError(this.getViolations());
     }
@@ -778,7 +778,7 @@ export class AnyOfValidator extends Validator {
     Object.freeze(this);
   }
   async validatePath(value: any, path: Path, ctx: ValidationContext): Promise<ValidationResult> {
-    const passes: ValidationResult[] = [];
+    const passes: unknown[] = [];
     const failures: Violation[] = [];
 
     for (let i = 0; i < this.validators.length; i++) {
