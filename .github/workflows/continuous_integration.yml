@@ -13,15 +13,16 @@ jobs:
     runs-on: [ubuntu-latest]
     strategy:
       matrix:
-        node: ['18', '20']
+        node: ['18', '20', '22']
     name: Node ${{ matrix.node }} sample
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - name: Setup node
-        uses: actions/setup-node@v1
+        uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node }}
+          cache: 'yarn'
       - run: yarn
       - run: yarn build
       - run: yarn test
