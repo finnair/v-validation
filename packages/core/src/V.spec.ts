@@ -239,9 +239,9 @@ describe('boolean', () => {
 test('empty next', () => expectValid(1, V.number().next()));
 
 describe('uuid', () => {
-  test('null is not valid', () => expectViolations(null, V.uuid(), new Violation(ROOT, 'UUID')));
+  test('null is not valid', () => expectViolations(null, V.uuid(), defaultViolations.notNull()));
 
-  test('undefined is not valid', () => expectViolations(undefined, V.uuid(), new Violation(ROOT, 'UUID')));
+  test('undefined is not valid', () => expectViolations(undefined, V.uuid(), defaultViolations.notNull()));
 
   test('valid uuid v4', () => expectValid('ffa7870a-a612-446c-b892-d33e71caf016', V.uuid()));
 
@@ -251,9 +251,11 @@ describe('uuid', () => {
 
   test('valid uuid v1 required', () => expectValid('761ae724-46fa-11e9-b210-d663bd873d93', V.uuid(1)));
 
-  test('v1 uuid is not valid v4', () => expectViolations('761ae724-46fa-11e9-b210-d663bd873d93', V.uuid(4), new Violation(ROOT, 'UUID')));
+  test('v1 uuid is not valid v4', () => expectViolations('761ae724-46fa-11e9-b210-d663bd873d93', V.uuid(4), new Violation(ROOT, 'UUIDv4', '761ae724-46fa-11e9-b210-d663bd873d93')));
 
-  test('missing one character', () => expectViolations('761ae724-46fa-11e9-b210-d663bd873d9', V.uuid(), new Violation(ROOT, 'UUID')));
+  test('missing one character', () => expectViolations('761ae724-46fa-11e9-b210-d663bd873d9', V.uuid(), new Violation(ROOT, 'UUID', '761ae724-46fa-11e9-b210-d663bd873d9')));
+
+  test('supports UUIDv7', () => expectValid('0192a07b-69d7-73bd-adb7-d1e060c081b9', V.uuid(7)));
 });
 
 describe('objects', () => {
