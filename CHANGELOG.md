@@ -3,6 +3,17 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [6.1.0](https://github.com/finnair/v-validation/compare/v6.0.2...v6.1.0) (2024-10-21)
+
+### Bug Fixes
+
+- yarn clean script ([5f3411b](https://github.com/finnair/v-validation/commit/5f3411b1beb323abb3dd8f634415b43ca0ad4eef))
+
+### Features
+
+- UUID v7 support ([#115](https://github.com/finnair/v-validation/issues/115)) ([2312c94](https://github.com/finnair/v-validation/commit/2312c943d3362fc85a242903381654c4db7dd5c6))
+- validation result as unknown instead of any ([#116](https://github.com/finnair/v-validation/issues/116)) ([124f14e](https://github.com/finnair/v-validation/commit/124f14ef949f4b9a11143d49d6554efdc8b955f4))
+
 ## [6.0.2](https://github.com/finnair/v-validation/compare/v6.0.1...v6.0.2) (2024-09-17)
 
 ### Bug Fixes
