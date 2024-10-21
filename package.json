@@ -6,8 +6,8 @@
     "build": "lerna run build",
     "test": "vitest --run",
     "clean": "yarn clean:dist && yarn clean:modules && yarn clean:tscache",
-    "clean:dist": "find . -type f -path '*/dist/*' -delete && find . -type d -name dist -delete -empty",
-    "clean:modules": "find . -type f -path '*/node_modules/*' -delete && find . -type d -name node_modules -delete -empty",
+    "clean:dist": "find . -type f -path '*/dist/*' -delete && find . -type d -name dist -empty -delete",
+    "clean:modules": "find . -type f -path '*/node_modules/*' -delete && find . -type d -name node_modules -empty -delete",
     "clean:tscache": "find . -type f -name 'tsconfig.tsbuildinfo' -delete"
   },
   "devDependencies": {
