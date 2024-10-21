@@ -1,5 +1,6 @@
 import deepEqual from 'deep-equal';
 import { Path } from '@finnair/path';
+import { validate as uuidValidate, version as uuidVersion } from 'uuid';
 
 const ROOT = Path.ROOT;
 
@@ -1309,6 +1310,27 @@ export class AssertTrueValidator extends Validator {
   validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult> {
     if (!this.fn(value, path, ctx)) {
       return ctx.failurePromise(new Violation(this.path ? this.path.connectTo(path) : path, this.type), value);
+    }
+    return ctx.successPromise(value);
+  }
+}
+
+export class UuidValidator extends Validator {
+  constructor(public readonly version?: number) {
+    super();
+  }
+  validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult> {
+    if (isNullOrUndefined(value)) {
+      return ctx.failurePromise(defaultViolations.notNull(path), value);
+    }
+    if (!isString(value)) {
+      return ctx.failurePromise(defaultViolations.string(value, path), value);
+    }
+    if (!uuidValidate(value)) {
+      return ctx.failurePromise(new Violation(path, 'UUID', value), value);
+    }
+    if (this.version && uuidVersion(value) !== this.version) {
+      return ctx.failurePromise(new Violation(path, `UUIDv${this.version}`, value), value);
     }
     return ctx.successPromise(value);
   }

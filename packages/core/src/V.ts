@@ -1,4 +1,3 @@
-import { default as validateUuid } from 'uuid-validate';
 import { SchemaValidator, SchemaModel } from './schema.js';
 import { Path } from '@finnair/path';
 import {
@@ -54,6 +53,7 @@ import {
   JsonValidator,
   RequiredValidator,
   SetValidator,
+  UuidValidator,
 } from './validators.js';
 
 const ignoreValidator = new IgnoreValidator(),
@@ -113,7 +113,7 @@ export const V = {
 
   emptyTo: (defaultValue: any) => new ValueMapper((value: any) => (isNullOrUndefined(value) || value === '' ? defaultValue : value)),
 
-  uuid: (version?: number) => new AssertTrueValidator((value: any) => !isNullOrUndefined(value) && validateUuid(value, version), 'UUID'),
+  uuid: (version?: number) => new UuidValidator(version),
 
   pattern: (pattern: string | RegExp, flags?: string) => new PatternValidator(pattern, flags),
 
