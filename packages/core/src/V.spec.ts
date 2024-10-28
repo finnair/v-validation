@@ -69,7 +69,8 @@ class DeferredValidator extends Validator {
 describe('ValidationResult', () => {
   test('getValue() returns valid value', async () => {
     const result = await V.string().validate('123');
-    expect(result.getValue()).toEqual('123');
+    const str: string = result.getValue();
+    expect(str).toEqual('123');
   });
 
   test('getValue() throws ValidationError if validation failed', async () => {
@@ -236,8 +237,6 @@ describe('boolean', () => {
   });
 });
 
-test('empty next', () => expectValid(1, V.number().next()));
-
 describe('uuid', () => {
   test('null is not valid', () => expectViolations(null, V.uuid(), defaultViolations.notNull()));
 
@@ -400,12 +399,12 @@ describe('objects', () => {
       }
     }
 
-    const modelValidator = V.object({
+    const modelValidator: Validator<PasswordRequest> = V.object<IPasswordRequest>({
       properties: {
         password1: V.allOf(V.string(), V.notEmpty()),
-        password2: [V.string(), V.notEmpty()],
+        password2: V.compositionOf(V.string(), V.notEmpty()),
       },
-    }).nextMap(value => new PasswordRequest(value as IPasswordRequest));
+    }).nextMap(value => new PasswordRequest(value));
 
     const validator = modelValidator.next(
       V.assertTrue((request: PasswordRequest) => request.password1 === request.password2, 'ConfirmPassword', property('password1')),
@@ -419,7 +418,11 @@ describe('objects', () => {
   });
 
   describe('recursive models', () => {
-    const validator = V.object({
+    interface RecursiveModel {
+      first: string;
+      next?: RecursiveModel;
+    }
+    const validator: Validator<RecursiveModel> = V.object<RecursiveModel>({
       properties: {
         first: V.string(),
         next: V.optional(V.fn((value: any, path: Path, ctx: ValidationContext) => validator.validatePath(value, path, ctx))),
@@ -437,11 +440,11 @@ describe('objects', () => {
   });
 
   describe('custom property filtering ObjectValidator extension', () => {
-    class DropAllPropertiesValidator extends ObjectValidator {
+    class DropAllPropertiesValidator<T> extends ObjectValidator<Partial<T>> {
       constructor(model: ObjectModel) {
         super(model);
       }
-      validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult> {
+      validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<Partial<T>>> {
         return this.validateFilteredPath(value, path, ctx, _ => false);
       }
     }
@@ -663,7 +666,12 @@ describe('object next', () => {
 });
 
 describe('object localNext', () => {
-  const parent = V.object({
+  interface Parent {
+    name: string;
+    upper?: boolean;
+  }
+  interface Child extends Parent {}
+  const parent = V.object<Parent>({
     properties: {
       name: V.string(),
       upper: V.optional(V.boolean()),
@@ -676,7 +684,7 @@ describe('object localNext', () => {
     }),
     localNext: V.map(obj => `parent:${obj.name}`),
   });
-  const child = V.object({
+  const child = V.object<Child>({
     extends: parent,
     localNext: V.map(obj => `child:${obj.name}`),
   });
@@ -890,11 +898,11 @@ describe('arrays', () => {
 
     test('single value to array of one', () => expectValid('foo', stringArray, ['foo']));
 
-    test('any item is allowed', () => expectValid(['string'], V.toArray()));
+    test('any item is allowed', () => expectValid(['string'], V.toArray(V.string())));
   });
 
   describe('size', () => {
-    test('valid', () => expectValid([1], V.size(1, 1)));
+    test('valid', () => expectValid([1], V.size<number[]>(1, 1)));
 
     test('too short', () => expectViolations([1], V.size(2, 3), defaultViolations.size(2, 3)));
 
@@ -1131,11 +1139,11 @@ describe('groups', () => {
   });
 
   test('whenGroup not allowed after otherwise', () => {
-    expect(() => (V.whenGroup('any').otherwise() as WhenGroupValidator).whenGroup('foo')).toThrow();
+    expect(() => (V.whenGroup('any', V.any()).otherwise(V.any()) as WhenGroupValidator).whenGroup('foo', V.any())).toThrow();
   });
 
   test('otherwise not allowed after otherwise', () => {
-    expect(() => (V.whenGroup('any').otherwise() as WhenGroupValidator).otherwise()).toThrow();
+    expect(() => (V.whenGroup('any', V.any()).otherwise(V.any()) as WhenGroupValidator).otherwise(V.any())).toThrow();
   });
 
   test('Group.of', () => {
@@ -1226,11 +1234,11 @@ describe('if', () => {
   test('else matches invalid', () => expectViolations({}, validator, defaultViolations.string({})));
 
   test('defining else before elseif is not allowed', () => {
-    expect(() => (V.if(_ => true).else() as IfValidator).elseIf(_ => true)).toThrow();
+    expect(() => (V.if(_ => true, V.any()).else(V.any()) as IfValidator).elseIf(_ => true, V.any())).toThrow();
   });
 
   test('redefining else is not allowed', () => {
-    expect(() => (V.if(_ => true).else() as IfValidator).else()).toThrow();
+    expect(() => (V.if(_ => true, V.any()).else(V.any()) as IfValidator).else(V.any())).toThrow();
   });
 
   test('no-conditional anomaly', () => expectValid({}, new IfValidator([])));
@@ -1269,6 +1277,8 @@ describe('normalizers', () => {
     test('undefined', () => expectValid(undefined, V.emptyTo('default'), 'default'));
 
     test('empty string', () => expectValid('', V.emptyTo('default'), 'default'));
+
+    test('empty array', () => expectValid([], V.emptyTo(['default']), ['default']));
 
     test('anything else is passed as is', () => expectValid('anything', V.emptyTo('default')));
   });
