@@ -4,12 +4,12 @@ import { validate as uuidValidate, version as uuidVersion } from 'uuid';
 
 const ROOT = Path.ROOT;
 
-export interface ValidatorFn<T = unknown>{
-  (value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<T>>;
+export interface ValidatorFn<Out = unknown, In = any>{
+  (value: In, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<Out>>;
 }
 
-export interface MappingFn<T = unknown, I = any> {
-  (value: I, path: Path, ctx: ValidationContext): T | PromiseLike<T>;
+export interface MappingFn<Out = unknown, In = any> {
+  (value: In, path: Path, ctx: ValidationContext): Out | PromiseLike<Out>;
 }
 
 export type Properties = { [s: string]: Validator };
@@ -95,25 +95,27 @@ export class SyncPromise<T> implements PromiseLike<T> {
   }
 }
 
-export abstract class Validator<T = unknown> {
-  validateGroup(value: any, group: Group): Promise<ValidationResult<T>> {
+export abstract class Validator<Out = unknown, In = any> {
+  validateGroup(value: In, group: Group): Promise<ValidationResult<Out>> {
     return this.validate(value, { group });
   }
 
-  validate(value: any, options?: ValidatorOptions): Promise<ValidationResult<T>> {
+  validate(value: In, options?: ValidatorOptions): Promise<ValidationResult<Out>> {
     return Promise.resolve(this.validatePath(value, ROOT, new ValidationContext(options || {})));
   }
 
-  abstract validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<T>>;
+  abstract validatePath(value: In, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<Out>>;
 
-  next<V>(validator: Validator<V>): Validator<V> {
-    return new NextValidator<V>(this, validator);
+  next<V extends Validator<any, Out>>(validator: V): Validator<VType<V>, Out> {
+    return new NextValidator<VType<V>, Out>(this, validator);
   }
 
-  nextMap<O>(fn: MappingFn<O, T>): Validator<O> {
-    return this.next<O>(new ValueMapper<O>(fn));
+  nextMap<XOut>(fn: MappingFn<XOut, Out>): Validator<XOut> {
+    return this.next<Validator<XOut>>(new ValueMapper<XOut, Out>(fn));
   }
 }
+
+export type VType<V extends Validator<any>> = V extends Validator<infer Out> ? Out : unknown;
 
 export interface WarnLogger {
   (violation: Violation, ctx: ValidatorOptions): void;
@@ -311,15 +313,15 @@ export const defaultViolations = {
   cycle: (path: Path) => new Violation(path, 'Cycle'),
 };
 
-export interface AssertTrue<T = unknown> {
-  (value: T, path: Path, ctx: ValidationContext): boolean;
+export interface AssertTrue<In = any> {
+  (value: In, path: Path, ctx: ValidationContext): boolean;
 }
 
 export type PropertyModel = { [s: string]: string | number | Validator };
 
-export type ParentModel = ObjectModel | ObjectValidator | (ObjectModel | ObjectValidator)[];
+export type ParentModel = ObjectValidator | ObjectValidator<any>[];
 
-export interface ObjectModel {
+export interface ObjectModel<LocalType = unknown, InheritableType = unknown> {
   /**
    * Inherit all non-local rules from parent validators. 
    */
@@ -342,11 +344,11 @@ export interface ObjectModel {
    * Use this to define additional rules or conversions for the ObjectValidator. 
    * Using the `next` function returns a `NextValidator` that cannot be further extended. 
    */
-  readonly next?: Validator;
+  readonly next?: Validator | Validator[];
   /**
    * Local, non-inheritable rules. 
    */
-  readonly localNext?: Validator;
+  readonly localNext?: Validator | Validator[];
 }
 
 export interface MapEntryModel<K = unknown, V = unknown> {
@@ -368,23 +370,6 @@ function getPropertyValidators(properties?: PropertyModel): Properties {
   return propertyValidators;
 }
 
-function getParentValidators(parents: undefined | ParentModel): ObjectValidator[] {
-  let validators: ObjectValidator[] = [];
-  let parentValidators: any = [];
-  if (parents) {
-    parentValidators = parentValidators.concat(parents);
-  }
-  for (let i = 0; i < parentValidators.length; i++) {
-    const modelOrValidator = parentValidators[i];
-    if (modelOrValidator instanceof ObjectValidator) {
-      validators[i] = modelOrValidator as ObjectValidator;
-    } else {
-      validators[i] = new ObjectValidator(modelOrValidator as ObjectModel);
-    }
-  }
-  return validators;
-}
-
 function getMapEntryValidators(additionalProperties?: boolean | MapEntryModel | MapEntryModel[]): MapEntryValidator[] {
   if (isNullOrUndefined(additionalProperties)) {
     return [];
@@ -403,13 +388,13 @@ function getMapEntryValidators(additionalProperties?: boolean | MapEntryModel | 
   return validators;
 }
 
-export class ValidatorFnWrapper<T = unknown> extends Validator<T> {
-  constructor(private readonly fn: ValidatorFn<T>, public readonly type?: string) {
+export class ValidatorFnWrapper<Out = unknown> extends Validator<Out> {
+  constructor(private readonly fn: ValidatorFn<Out>, public readonly type?: string) {
     super();
     Object.freeze(this);
   }
 
-  validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<T>> {
+  validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<Out>> {
     return this.fn(value, path, ctx);
   }
 }
@@ -418,7 +403,7 @@ const lenientUnknownPropertyValidator = new ValidatorFnWrapper((value: any, path
   ctx.failurePromise(defaultViolations.unknownProperty(path), value),
 );
 
-const strictUnknownPropertyValidator = new ValidatorFnWrapper((value: any, path: Path, ctx: ValidationContext) =>
+export const strictUnknownPropertyValidator = new ValidatorFnWrapper((value: any, path: Path, ctx: ValidationContext) =>
   ctx.failurePromise(defaultViolations.unknownPropertyDenied(path), value),
 );
 
@@ -439,7 +424,7 @@ export function mergeProperties(from: Properties, to: Properties): Properties {
   return to;
 }
 
-export class ObjectValidator<T = unknown> extends Validator<T> {
+export class ObjectValidator<LocalType = unknown, InheritableType = unknown> extends Validator<LocalType> {
   public readonly properties: Properties;
 
   public readonly localProperties: Properties;
@@ -452,13 +437,13 @@ export class ObjectValidator<T = unknown> extends Validator<T> {
 
   public readonly localNextValidator?: Validator;
 
-  constructor(public readonly model: ObjectModel) {
+  constructor(public readonly model: ObjectModel<LocalType, InheritableType>) {
     super();
     let properties: Properties = {};
     let additionalProperties: MapEntryValidator[] = [];
     let nextValidators: Validator[] = [];
 
-    this.parentValidators = getParentValidators(model.extends);
+    this.parentValidators = model.extends ? ([] as ObjectValidator[]).concat(model.extends) : [];
     for (let i = 0; i < this.parentValidators.length; i++) {
       const parent = this.parentValidators[i];
       additionalProperties = additionalProperties.concat(parent.additionalProperties);
@@ -468,13 +453,15 @@ export class ObjectValidator<T = unknown> extends Validator<T> {
       }
     }
     if (model.next) {
-      nextValidators.push(model.next);
+      nextValidators = nextValidators.concat(model.next);
     }
     this.additionalProperties = additionalProperties.concat(getMapEntryValidators(model.additionalProperties));
     this.properties = mergeProperties(getPropertyValidators(model.properties), properties);
     this.localProperties = getPropertyValidators(model.localProperties);
-    this.nextValidator = nextValidators.length ? nextValidators.length === 1 ? nextValidators[0] : new CompositionValidator(nextValidators) : undefined;
-    this.localNextValidator = model.localNext;
+    this.nextValidator = nextValidators.length ? nextValidators.length === 1 ? nextValidators[0] : new CompositionValidator(nextValidators as [Validator, ...Validator[], Validator]) : undefined;
+    if (model.localNext) {
+      this.localNextValidator = Array.isArray(model.localNext) ? new CompositionValidator(model.localNext) : model.localNext;
+    }
 
     Object.freeze(this.properties);
     Object.freeze(this.localProperties);
@@ -483,11 +470,11 @@ export class ObjectValidator<T = unknown> extends Validator<T> {
     Object.freeze(this);
   }
 
-  validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<T>> {
+  validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<LocalType>> {
     return this.validateFilteredPath(value, path, ctx, _ => true);
   }
 
-  validateFilteredPath(value: any, path: Path, ctx: ValidationContext, filter: PropertyFilter): PromiseLike<ValidationResult<T>> {
+  validateFilteredPath(value: any, path: Path, ctx: ValidationContext, filter: PropertyFilter): PromiseLike<ValidationResult<LocalType>> {
     if (isNullOrUndefined(value)) {
       return ctx.failurePromise(defaultViolations.notNull(path), value);
     }
@@ -503,7 +490,7 @@ export class ObjectValidator<T = unknown> extends Validator<T> {
     };
     const cycleResult = ctx.registerObject(value, path, context.convertedObject);
     if (cycleResult) {
-      return ctx.promise(cycleResult as ValidationResult<T>);
+      return ctx.promise(cycleResult as ValidationResult<LocalType>);
     }
     const propertyResults: PromiseLike<ValidationResult>[] = [];
 
@@ -694,30 +681,30 @@ export class ArrayNormalizer<T> extends ArrayValidator<T> {
   }
 }
 
-export class NextValidator<T = unknown> extends Validator<T> {
-  constructor(public readonly firstValidator: Validator<unknown>, public readonly nextValidator: Validator<T>) {
+export class NextValidator<Out = unknown, In = any> extends Validator<Out, In> {
+  constructor(public readonly firstValidator: Validator<In>, public readonly nextValidator: Validator<Out>) {
     super();
     Object.freeze(this);
   }
 
-  validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<T>> {
+  validatePath(value: In, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<Out>> {
     return this.firstValidator.validatePath(value, path, ctx).then(firstResult => {
       if (firstResult.isSuccess()) {
         return this.nextValidator.validatePath(firstResult.getValue(), path, ctx);
       }
       // Violations without value is essentially same for both
-      return firstResult as unknown as ValidationResult<T>;
+      return firstResult as unknown as ValidationResult<Out>;
     });
   }
 }
 
-export class CheckValidator<T = unknown> extends Validator<T> {
-  constructor(public readonly validator: Validator<T>) {
+export class CheckValidator<In> extends Validator<In, In> {
+  constructor(public readonly validator: Validator<any, In>) {
     super();
     Object.freeze(this);
   }
 
-  validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<T>> {
+  validatePath(value: In, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<In>> {
     return this.validator.validatePath(value, path, ctx).then(result => {
       if (result.isSuccess()) {
         return ctx.successPromise(value);
@@ -727,21 +714,23 @@ export class CheckValidator<T = unknown> extends Validator<T> {
   }
 }
 
-export class CompositionValidator<T = unknown> extends Validator<T> {
-  constructor(public readonly validators: Validator[]) {
+export class CompositionValidator<Out = unknown, In = any> extends Validator<Out, In> {
+  public readonly validators: Validator[];
+  constructor(validators: Validator[]) {
     super();
+    this.validators = ([] as Validator[]).concat(validators);
     Object.freeze(this.validators);
     Object.freeze(this);
   }
 
-  async validatePath(value: any, path: Path, ctx: ValidationContext): Promise<ValidationResult<T>> {
-    let currentValue = value;
+  async validatePath(value: In, path: Path, ctx: ValidationContext): Promise<ValidationResult<Out>> {
+    let currentValue: any = value;
     for (let i = 0; i < this.validators.length; i++) {
       const result = await this.validators[i].validatePath(currentValue, path, ctx);
       if (result.isSuccess()) {
         currentValue = result.getValue();
       } else {
-        return result as ValidationResult<T>;
+        return result as ValidationResult<Out>;
       }
     }
     return ctx.success(currentValue);
@@ -776,18 +765,17 @@ export class OneOfValidator<T = unknown> extends Validator<T> {
   }
 }
 
-export class AnyOfValidator extends Validator {
-  constructor(public readonly validators: [Validator, ...Validator[]]) {
+export class AnyOfValidator<T = unknown> extends Validator<T> {
+  constructor(public readonly validators: Validator<T>[]) {
     super();
     Object.freeze(this.validators);
     Object.freeze(this);
   }
-  async validatePath(value: any, path: Path, ctx: ValidationContext): Promise<ValidationResult> {
-    const passes: unknown[] = [];
+  async validatePath(value: any, path: Path, ctx: ValidationContext): Promise<ValidationResult<T>> {
+    const passes: T[] = [];
     const failures: Violation[] = [];
 
-    for (let i = 0; i < this.validators.length; i++) {
-      const validator = this.validators[i];
+    for (const validator of this.validators) {
       const result = await validator.validatePath(value, path, ctx);
       result.isSuccess() ? passes.push(result.getValue()) : failures.push(...result.getViolations());
     }
@@ -796,14 +784,14 @@ export class AnyOfValidator extends Validator {
   }
 }
 
-export class IfValidator<T = unknown, E = unknown> extends Validator<T | E> {
-  constructor(public readonly conditionals: Conditional<T>[], public readonly elseValidator?: Validator<E>) {
+export class IfValidator<If = unknown, Else = unknown> extends Validator<If | Else> {
+  constructor(public readonly conditionals: Conditional<If>[], public readonly elseValidator?: Validator<Else>) {
     super();
     Object.freeze(this.conditionals);
     Object.freeze(this);
   }
 
-  validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<T | E>> {
+  validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<If | Else>> {
     for (let i = 0; i < this.conditionals.length; i++) {
       const conditional = this.conditionals[i];
       if (conditional.fn(value, path, ctx)) {
@@ -816,23 +804,23 @@ export class IfValidator<T = unknown, E = unknown> extends Validator<T | E> {
     return ctx.successPromise(value);
   }
 
-  elseIf<U>(fn: AssertTrue, validator: Validator<U>): IfValidator<T | U, E> {
+  elseIf<EIf>(fn: AssertTrue, validator: Validator<EIf>): IfValidator<If | EIf, Else> {
     if (this.elseValidator) {
       throw new Error('Else is already defined. Define elseIfs first.');
     }
-    return new IfValidator<T | U, E>([...this.conditionals, new Conditional(fn, validator)], this.elseValidator);
+    return new IfValidator<If | EIf, Else>([...this.conditionals, new Conditional(fn, validator)], this.elseValidator);
   }
 
-  else<E>(validator: Validator<E>): IfValidator<T, E> {
+  else<Else>(validator: Validator<Else>): IfValidator<If, Else> {
     if (this.elseValidator) {
       throw new Error('Else is already defined.');
     }
-    return new IfValidator<T, E>(this.conditionals, validator);
+    return new IfValidator<If, Else>(this.conditionals, validator);
   }
 }
 
-export class Conditional<T = unknown> {
-  constructor(public readonly fn: AssertTrue, public readonly validator: Validator<T>) {
+export class Conditional<Out = unknown> {
+  constructor(public readonly fn: AssertTrue, public readonly validator: Validator<Out>) {
     Object.freeze(this.validator);
     Object.freeze(this);
   }
@@ -1020,8 +1008,9 @@ export class JsonSet<K> extends Set<K> {
   }
 }
 
-export class AnyValidator extends Validator<unknown> {
-  validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<unknown>> {
+
+export class AnyValidator extends Validator<any> {
+  validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<any>> {
     return ctx.successPromise(value);
   }
 }
@@ -1035,8 +1024,37 @@ export function isSimplePrimitive(value: any) {
   return type === 'boolean' || type === 'number' || type === 'bigint' || type === 'string' || type === 'symbol';
 }
 
-export class StringValidator extends Validator<string> {
-  validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<string>> {
+export abstract class StringValidatorBase<In> extends Validator<string, In> {
+  notEmpty() {
+    return new NextStringValidator(this, new NotEmptyValidator<string>());
+  }
+  notBlank() {
+    return new NextStringValidator(this, new NotBlankValidator());
+  }
+  pattern(pattern: string | RegExp, flags?: string) {
+    return new NextStringValidator(this, new PatternValidator(pattern, flags));
+  }
+}
+
+export class NextStringValidator extends StringValidatorBase<string> {
+  constructor(public readonly firstValidator: Validator<string, any>, public readonly nextValidator: Validator<string, any>) {
+    super();
+    Object.freeze(this);
+  }
+
+  validatePath(value: string, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<string>> {
+    return this.firstValidator.validatePath(value, path, ctx).then(firstResult => {
+      if (firstResult.isSuccess()) {
+        return this.nextValidator.validatePath(firstResult.getValue(), path, ctx);
+      }
+      // Violations without value is essentially same for both
+      return firstResult;
+    });
+  }
+}
+
+export class StringValidator extends StringValidatorBase<string> {
+  validatePath(value: string, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<string>> {
     if (isNullOrUndefined(value)) {
       return ctx.failurePromise(defaultViolations.notNull(path), value);
     }
@@ -1047,7 +1065,7 @@ export class StringValidator extends Validator<string> {
   }
 }
 
-export class StringNormalizer extends Validator<string> {
+export class StringNormalizer extends StringValidatorBase<any> {
   validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<string>> {
     if (isNullOrUndefined(value)) {
       return ctx.failurePromise(defaultViolations.notNull(path), value);
@@ -1074,9 +1092,9 @@ export class IsNullOrUndefinedValidator extends Validator<null | undefined> {
   }
 }
 
-export class NotEmptyValidator extends Validator {
-  validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult> {
-    return !isNullOrUndefined(value) && isNumber(value.length) && value.length > 0
+export class NotEmptyValidator<Out extends { length: number}> extends Validator<Out, Out> {
+  validatePath(value: Out, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<Out>> {
+    return !isNullOrUndefined(value) && isNumber((value as any).length) && (value as any).length > 0
       ? ctx.successPromise(value)
       : ctx.failurePromise(defaultViolations.notEmpty(path), value);
   }
@@ -1105,8 +1123,8 @@ export class SizeValidator<T extends { length: number }> extends Validator<T> {
   }
 }
 
-export class NotBlankValidator extends Validator {
-  validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult> {
+export class NotBlankValidator extends Validator<string, string> {
+  validatePath(value: string, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<string>> {
     if (isNullOrUndefined(value)) {
       return ctx.failurePromise(defaultViolations.notBlank(path), value);
     }
@@ -1176,7 +1194,66 @@ export function isNumber(value: any) {
   return (typeof value === 'number' || value instanceof Number) && !Number.isNaN(value.valueOf());
 }
 
-export class NumberValidator extends Validator<number> {
+export abstract class NumberValidatorBase<In> extends Validator<number, In> {
+  constructor() {
+    super();
+  }
+
+  min(min: number, inclusive = true) {
+    return new NextNumberValidator(this, new MinValidator(min, inclusive));
+  }
+
+  max(max: number, inclusive = true) {
+    return new NextNumberValidator(this, new MaxValidator(max, inclusive));
+  }
+
+  protected validateNumberFormat(value: number, format: undefined | NumberFormat, path: Path, ctx: ValidationContext) {
+    switch (format) {
+      case NumberFormat.integer:
+        if (!Number.isInteger(value)) {
+          return ctx.failurePromise(defaultViolations.number(value, format, path), value);
+        }
+        break;
+    }
+    return ctx.successPromise(value);
+  }
+}
+
+export class NextNumberValidator extends NumberValidatorBase<number> {
+  constructor(public readonly firstValidator: Validator<number, any>, public readonly nextValidator: Validator<number, any>) {
+    super();
+    Object.freeze(this);
+  }
+
+  validatePath(value: number, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<number>> {
+    return this.firstValidator.validatePath(value, path, ctx).then(firstResult => {
+      if (firstResult.isSuccess()) {
+        return this.nextValidator.validatePath(firstResult.getValue(), path, ctx);
+      }
+      // Violations without value is essentially same for both
+      return firstResult;
+    });
+  }
+}
+
+export class NumberValidator extends NumberValidatorBase<number> {
+  constructor(public readonly format: NumberFormat) {
+    super();
+    Object.freeze(this);
+  }
+
+  validatePath(value: number, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<number>> {
+    if (isNullOrUndefined(value)) {
+      return ctx.failurePromise(defaultViolations.notNull(path), value);
+    }
+    if (!isNumber(value)) {
+      return ctx.failurePromise(defaultViolations.number(value, this.format, path), value);
+    }
+    return super.validateNumberFormat(value, this.format, path, ctx);
+  }
+}
+
+export class NumberNormalizer extends NumberValidatorBase<any> {
   constructor(public readonly format: NumberFormat) {
     super();
     Object.freeze(this);
@@ -1186,34 +1263,8 @@ export class NumberValidator extends Validator<number> {
     if (isNullOrUndefined(value)) {
       return ctx.failurePromise(defaultViolations.notNull(path), value);
     }
-    if (!isNumber(value)) {
-      return ctx.failurePromise(defaultViolations.number(value, this.format, path), value);
-    }
-    return this.validateFormat(value, path, ctx);
-  }
-  protected validateFormat(value: any, path: Path, ctx: ValidationContext) {
-    switch (this.format) {
-      case NumberFormat.integer:
-        if (!Number.isInteger(value)) {
-          return ctx.failurePromise(defaultViolations.number(value, this.format, path), value);
-        }
-        break;
-    }
-    return ctx.successPromise(value);
-  }
-}
-
-export class NumberNormalizer extends NumberValidator {
-  constructor(format: NumberFormat) {
-    super(format);
-  }
-
-  validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<number>> {
-    if (isNullOrUndefined(value)) {
-      return ctx.failurePromise(defaultViolations.notNull(path), value);
-    }
     if (isNumber(value)) {
-      return super.validateFormat(value, path, ctx);
+      return super.validateNumberFormat(value, this.format, path, ctx);
     }
     if (isString(value)) {
       if (value.trim() === '') {
@@ -1221,7 +1272,7 @@ export class NumberNormalizer extends NumberValidator {
       }
       const nbr = Number(value);
       if (isNumber(nbr)) {
-        return this.validateFormat(nbr, path, ctx);
+        return super.validateNumberFormat(nbr, this.format, path, ctx);
       }
       return ctx.failurePromise(defaultViolations.number(value, this.format, path), value);
     }
@@ -1229,13 +1280,13 @@ export class NumberNormalizer extends NumberValidator {
   }
 }
 
-export class MinValidator extends Validator<number> {
+export class MinValidator extends Validator<number, number> {
   constructor(public readonly min: number, public readonly inclusive: boolean) {
     super();
     Object.freeze(this);
   }
 
-  validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<number>> {
+  validatePath(value: number, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<number>> {
     if (isNullOrUndefined(value)) {
       return ctx.failurePromise(defaultViolations.notNull(path), value);
     }
@@ -1253,13 +1304,13 @@ export class MinValidator extends Validator<number> {
   }
 }
 
-export class MaxValidator extends Validator<number> {
+export class MaxValidator extends Validator<number, number> {
   constructor(public readonly max: number, public readonly inclusive: boolean) {
     super();
     Object.freeze(this);
   }
 
-  validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<number>> {
+  validatePath(value: number, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<number>> {
     if (isNullOrUndefined(value)) {
       return ctx.failurePromise(defaultViolations.notNull(path), value);
     }
@@ -1295,13 +1346,13 @@ export class EnumValidator<T extends {[key: number]: string | number}> extends V
   }
 }
 
-export class AssertTrueValidator<T> extends Validator<T> {
-  constructor(public readonly fn: AssertTrue<T>, public readonly type: string, public readonly path?: Path) {
+export class AssertTrueValidator<In> extends Validator<In, In> {
+  constructor(public readonly fn: AssertTrue<In>, public readonly type: string, public readonly path?: Path) {
     super();
     Object.freeze(this);
   }
 
-  validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<T>> {
+  validatePath(value: In, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<In>> {
     if (!this.fn(value, path, ctx)) {
       return ctx.failurePromise(new Violation(this.path ? this.path.connectTo(path) : path, this.type), value);
     }
@@ -1406,7 +1457,7 @@ export class DateValidator extends Validator<Date> {
   }
 }
 
-export class PatternValidator extends Validator<string> {
+export class PatternValidator extends StringValidatorBase<string> {
   public readonly regExp: RegExp;
 
   constructor(pattern: string | RegExp, flags?: string) {
@@ -1455,27 +1506,27 @@ export class PatternNormalizer extends PatternValidator {
   }
 }
 
-export class OptionalValidator<T = unknown> extends Validator<null | undefined | T> {
-  constructor(private readonly validator: Validator<T>) {
+export class OptionalValidator<Out, In> extends Validator<null | undefined | Out, null | undefined | In> {
+  constructor(private readonly validator: Validator<Out, In>) {
     super();
     Object.freeze(this);
   }
 
-  validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<null | undefined | T>> {
+  validatePath(value: null | undefined | In, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<null | undefined | Out>> {
     if (isNullOrUndefined(value)) {
-      return ctx.successPromise(value);
+      return ctx.successPromise(value as null | undefined);
     }
-    return this.validator.validatePath(value, path, ctx);
+    return this.validator.validatePath(value as In, path, ctx);
   }
 }
 
-export class RequiredValidator<T> extends Validator<T> {
-  constructor(private readonly validator: Validator<T>) {
+export class RequiredValidator<Out, In> extends Validator<Out, In> {
+  constructor(private readonly validator: Validator<Out, In>) {
     super();
     Object.freeze(this);
   }
 
-  validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<T>> {
+  validatePath(value: In, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<Out>> {
     if (isNullOrUndefined(value)) {
       return ctx.failurePromise(defaultViolations.notNull(path), value);
     }
@@ -1483,13 +1534,13 @@ export class RequiredValidator<T> extends Validator<T> {
   }
 }
 
-export class ValueMapper<T = unknown> extends Validator<T> {
-  constructor(public readonly fn: MappingFn<T>, public readonly error?: any) {
+export class ValueMapper<Out = unknown, In = any> extends Validator<Out, In> {
+  constructor(public readonly fn: MappingFn<Out, In>, public readonly error?: any) {
     super();
     Object.freeze(this);
   }
 
-  validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<T>> {
+  validatePath(value: In, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<Out>> {
     try {
       const maybePromise = this.fn(value, path, ctx);
       if (isPromise(maybePromise)) {

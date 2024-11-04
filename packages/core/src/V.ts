@@ -53,14 +53,15 @@ import {
   RequiredValidator,
   SetValidator,
   UuidValidator,
+  VType,
 } from './validators.js';
+import { ObjectValidatorBuilder } from './objectValidatorBuilder.js';
 
 const ignoreValidator = new IgnoreValidator(),
   anyValidator = new AnyValidator(),
   stringValidator = new StringValidator(),
   toStringValidator = new StringNormalizer(),
   nullOrUndefinedValidator = new IsNullOrUndefinedValidator(),
-  notEmptyValidator = new NotEmptyValidator(),
   notBlankValidator = new NotBlankValidator(),
   emptyToNullValidator = new ValueMapper((value: any) => (isNullOrUndefined(value) || value === '' ? null : value)),
   emptyToUndefinedValidator = new ValueMapper((value: any) => (isNullOrUndefined(value) || value === '' ? undefined : value)),
@@ -72,42 +73,49 @@ const ignoreValidator = new IgnoreValidator(),
   toIntegerValidator = new NumberNormalizer(NumberFormat.integer),
   dateValidator = new DateValidator(ValidatorType.Date);
 
-export const V = {
-  fn: <T>(fn: ValidatorFn<T>, type?: string) => new ValidatorFnWrapper<T>(fn, type),
+type CompositionParameters<Out, In, T1, T2, T3> = 
+  [Validator<Out, In>] | 
+  [Validator<T1, In>, Validator<Out, T1>] |
+  [Validator<T1, In>, Validator<T2, T1>, Validator<Out, T2>] |
+  [Validator<T1, In>, Validator<T2, T1>, Validator<T3, T2>, Validator<Out, T3>];
+  
 
-  map: <T>(fn: MappingFn<T>, error?: any) => new ValueMapper<T>(fn, error),
+export const V = {
+  fn: <Out>(fn: ValidatorFn<Out>, type?: string) => new ValidatorFnWrapper<Out>(fn, type),
+
+  map: <Out, In>(fn: MappingFn<Out, In>, error?: any) => new ValueMapper<Out, In>(fn, error),
 
   ignore: () => ignoreValidator,
 
   any: () => anyValidator,
 
-  check: <T>(...validators: [...Validator<unknown>[], Validator<T>]) => {
-    if (validators.length === 1) {
-      return new CheckValidator<T>(validators[0] as Validator<T>);
+  check: <Out, In, T1, T2, T3>(...validators: CompositionParameters<Out, In, T1, T2, T3>) => {
+    if (validators.length > 1) {
+      return new CheckValidator<In>(new CompositionValidator<Out, In>(validators))
     } else {
-      return new CheckValidator<T>(new CompositionValidator<T>(validators))
+      return new CheckValidator<In>(validators[0]);
     }
   },
 
-  optional: <T>(...validators: [...Validator<unknown>[], Validator<T>]) => {
-    if (validators.length === 1) {
-      return new OptionalValidator<T>(validators[0] as Validator<T>);
+  optional: <Out, In, T1, T2, T3>(...validators: CompositionParameters<Out, In, T1, T2, T3>) => {
+    if (validators.length > 1) {
+      return new OptionalValidator<Out, In>(new CompositionValidator<Out, In>(validators))
     } else {
-      return new OptionalValidator<T>(new CompositionValidator<T>(validators))
+      return new OptionalValidator<Out, In>(validators[0] as Validator<Out, In>);
     }
   },
 
-  required: <T>(...validators: [...Validator<unknown>[], Validator<T>]) => {
-    if (validators.length === 1) {
-      return new RequiredValidator<T>(validators[0] as Validator<T>);
+  required: <Out, In, T1, T2, T3>(...validators: CompositionParameters<Out, In, T1, T2, T3>) => {
+    if (validators.length > 1) {
+      return new RequiredValidator<Out, In>(new CompositionValidator<Out, In>(validators))
     } else {
-      return new RequiredValidator<T>(new CompositionValidator<T>(validators))
+      return new RequiredValidator<Out, In>(validators[0] as Validator<Out, In>);
     }
   },
 
-  if: <T>(fn: AssertTrue, validator: Validator<T>) => new IfValidator<T>([new Conditional<T>(fn, validator)]),
+  if: <Out>(fn: AssertTrue, validator: Validator<Out>) => new IfValidator<Out>([new Conditional<Out>(fn, validator)]),
 
-  whenGroup: <T>(group: GroupOrName, validator: Validator<T>) => new WhenGroupValidator([new WhenGroup(group, validator)]),
+  whenGroup: <Out>(group: GroupOrName, validator: Validator<Out>) => new WhenGroupValidator([new WhenGroup(group, validator)]),
 
   string: () => stringValidator,
 
@@ -117,7 +125,7 @@ export const V = {
 
   nullOrUndefined: () => nullOrUndefinedValidator,
 
-  notEmpty: () => notEmptyValidator,
+  notEmpty: <Out extends { length:  number }>() => new NotEmptyValidator<Out>(),
 
   notBlank: () => notBlankValidator,
 
@@ -151,7 +159,9 @@ export const V = {
 
   max: (max: number, inclusive = true) => new MaxValidator(max, inclusive),
 
-  object: <T>(model: ObjectModel) => new ObjectValidator<T>(model),
+  object: <T, I = T>(model: ObjectModel<T, I>) => new ObjectValidator<T, I>(model),
+
+  objectType: () => new ObjectValidatorBuilder(),
 
   toObject: (property: string) => new ObjectNormalizer(property),
 
@@ -181,19 +191,19 @@ export const V = {
 
   allOf: (...validators: [Validator, ...Validator[]]) => new AllOfValidator(validators),
 
-  anyOf: (...validators: [Validator, ...Validator[]]) => new AnyOfValidator(validators),
+  anyOf: <A extends Validator<any>, B extends Array<Validator<any>>>(...validators: [A, ...B]) => new AnyOfValidator<VType<A> | VType<B[any]>>(validators),
 
-  oneOf: (...validators: [Validator, ...Validator[]]) => new OneOfValidator(validators),
+  oneOf: <A extends Validator<any>, B extends Array<Validator<any>>>(...validators: [A, ...B]) => new OneOfValidator<VType<A> | VType<B[any]>>(validators),
 
-  compositionOf: <T>(...validators: [...Validator<any>[], Validator<T>]) => new CompositionValidator<T>(validators),
+  compositionOf: <Out, In, T1, T2, T3>(...validators: CompositionParameters<Out, In, T1, T2, T3>) => new CompositionValidator<Out, In>(validators),
 
   date: () => dateValidator,
 
   enum: <T extends {[key: number]: string | number}>(enumType: T, name: string) => new EnumValidator(enumType, name),
 
-  assertTrue: <T>(fn: AssertTrue<T>, type: string = 'AssertTrue', path?: Path) => new AssertTrueValidator<T>(fn, type, path),
+  assertTrue: <In>(fn: AssertTrue<In>, type: string = 'AssertTrue', path?: Path) => new AssertTrueValidator<In>(fn, type, path),
 
-  hasValue: <T>(expectedValue: T) => new HasValueValidator(expectedValue),
+  hasValue: <T>(expectedValue: T) => new HasValueValidator<T>(expectedValue),
 
   json: <T>(validator: Validator<T>) => new JsonValidator(validator),
 };

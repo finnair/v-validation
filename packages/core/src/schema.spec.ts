@@ -15,7 +15,8 @@ describe('schema', () => {
         type: V.string(),
       },
     });
-    const schema = new SchemaValidator((schema: SchemaValidator) => ({
+    V.compositionOf(V.string())
+    const schema = new SchemaValidator((schema: SchemaValidator<any>) => ({
       discriminator: 'type', // or (value: any) => string function
       models: {
         Object: {
@@ -110,7 +111,7 @@ describe('schema', () => {
     test('circular inheritance is not allowed', () => {
       expect(
         () =>
-          new SchemaValidator((schema: SchemaValidator) => ({
+          new SchemaValidator((schema: SchemaValidator<any>) => ({
             discriminator: 'type',
             models: {
               Parent: {

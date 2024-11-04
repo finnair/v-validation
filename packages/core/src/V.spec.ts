@@ -22,6 +22,7 @@ import {
   EnumMismatch,
   SyncPromise,
   JsonSet,
+  VType,
 } from './validators';
 import { V } from './V.js';
 import { Path } from '@finnair/path';
@@ -48,17 +49,17 @@ const failAlwaysViolation = (path: Path = ROOT) => new Violation(path, 'Fail');
 const validDateString = '2019-01-23T09:10:00Z';
 const validDate = new Date(Date.UTC(2019, 0, 23, 9, 10, 0));
 
-function defer(validator: Validator, ms: number = 1) {
-  return new DeferredValidator(validator, ms);
+function defer<T>(validator: Validator<T>, ms: number = 1) {
+  return new DeferredValidator<T>(validator, ms);
 }
 
-class DeferredValidator extends Validator {
-  constructor(public validator: Validator, public ms: number = 1) {
+class DeferredValidator<T> extends Validator<T> {
+  constructor(public validator: Validator<T>, public ms: number = 1) {
     super();
   }
 
-  async validatePath(value: any, path: Path, ctx: ValidationContext): Promise<ValidationResult> {
-    return new Promise<ValidationResult>((resolve, reject) => {
+  async validatePath(value: any, path: Path, ctx: ValidationContext): Promise<ValidationResult<T>> {
+    return new Promise<ValidationResult<T>>((resolve, reject) => {
       setTimeout(() => {
         this.validator.validatePath(value, path, ctx).then(resolve, reject);
       }, this.ms);
@@ -125,6 +126,8 @@ describe('strings', () => {
   describe('NotBlank', () => {
     test('valid string', () => expectValid(' A ', V.notBlank()));
 
+    test('string validator chaining', () => expectValid('A', V.string().notBlank().notEmpty().pattern(/^[A-Z]$/)));
+
     test('null is invalid', () => expectViolations(null, V.notBlank(), defaultViolations.notBlank()));
 
     test('undefined is invalid', () => expectViolations(null, V.notBlank(), defaultViolations.notBlank()));
@@ -137,7 +140,7 @@ describe('strings', () => {
   describe('pattern', () => {
     const pattern = '^[A-Z]{3}$';
     const regexp = new RegExp(pattern);
-    test('valid string', () => expectValid('ABC', V.pattern(regexp)));
+    test('valid string', () => expectValid('ABC', V.string().pattern(regexp)));
 
     test('too short', () => expectViolations('AB', V.pattern(pattern), defaultViolations.pattern(regexp, 'AB')));
 
@@ -348,13 +351,14 @@ describe('objects', () => {
   });
 
   describe('extending additional property validations', () => {
-    const validator = V.object({
-      extends: {
-        additionalProperties: {
-          keys: V.any(),
-          values: V.toInteger(),
-        },
+    const parent = V.object({
+      additionalProperties: {
+        keys: V.any(),
+        values: V.toInteger(),
       },
+    });
+    const validator = V.object({
+      extends: parent,
       additionalProperties: {
         keys: V.any(),
         values: V.min(1),
@@ -377,7 +381,8 @@ describe('objects', () => {
   test('number not allowed', () => expectViolations(123, V.object({}), defaultViolations.object()));
 
   test('parent may disallow additional properties for child models', async () => {
-    const validator = V.object({ extends: { additionalProperties: false }, additionalProperties: true });
+    const parent = V.object({ additionalProperties: false });
+    const validator = V.object({ extends: parent, additionalProperties: true });
     await expectViolations({ property: 'string' }, validator, defaultViolations.unknownPropertyDenied(ROOT.property('property')));
   });
 
@@ -388,23 +393,19 @@ describe('objects', () => {
       password1: string;
       password2: string;
     }
-    class PasswordRequest implements IPasswordRequest {
+    class PasswordRequest {
       password1: string;
-
       password2: string;
-
       constructor(properties: IPasswordRequest) {
         this.password1 = properties.password1;
         this.password2 = properties.password2;
       }
     }
-
-    const modelValidator: Validator<PasswordRequest> = V.object<IPasswordRequest>({
-      properties: {
-        password1: V.allOf(V.string(), V.notEmpty()),
+    const modelValidator = V.objectType().properties({
+        password1: V.compositionOf(V.string(), V.notEmpty<string>()),
         password2: V.compositionOf(V.string(), V.notEmpty()),
-      },
-    }).nextMap(value => new PasswordRequest(value));
+      }).next(V.map(value => new PasswordRequest(value)))
+      .build()
 
     const validator = modelValidator.next(
       V.assertTrue((request: PasswordRequest) => request.password1 === request.password2, 'ConfirmPassword', property('password1')),
@@ -553,28 +554,20 @@ describe('additionalProperties', () => {
 });
 
 describe('inheritance', () => {
-  const parentValidator: ObjectValidator = V.object({
-    properties: {
-      id: V.notNull(),
-    },
-  });
-  const childValidator: ObjectValidator = V.object({
-    extends: parentValidator,
-    properties: {
+  const parentValidator = V.objectType().properties({ id: V.notNull()}).build();
+
+  const childValidator = V.objectType().extends(parentValidator).properties({
       id: V.string(), // Additional requirements for the id property
-      name: V.notEmpty(),
-    },
-  });
-  const addionalPropertiesAllowed: ObjectValidator = V.object({
-    additionalProperties: true,
-    properties: {},
-  });
-  const multiParentChild: ObjectValidator = V.object({
-    extends: [childValidator, addionalPropertiesAllowed],
-    properties: {
-      anything: V.notNull(),
-    },
-  });
+      name: V.string().notEmpty(),
+    }).build();
+
+  const addionalPropertiesAllowed = V.objectType().allowAdditionalProperties(true).build();
+
+  const multiParentChild = V.objectType()
+    .extends(childValidator)
+    .extends(addionalPropertiesAllowed)
+    .properties({ anything: V.notNull() }).build();
+  
   test('valid parent', () => expectValid({ id: 123 }, parentValidator));
 
   test('valid child', () => expectValid({ id: '123', name: 'child' }, childValidator));
@@ -592,12 +585,12 @@ describe('inheritance', () => {
         name: 'multi-parent',
         anything: true,
         additionalProperty: 123,
-      },
+      } satisfies VType<typeof multiParentChild>,
       multiParentChild,
     ));
   test('invalid multi-parent object', () =>
     expectViolations(
-      { additionalProperty: 123 },
+      { additionalProperty: 123, name: '' },
       multiParentChild,
       defaultViolations.notNull(property('id')),
       defaultViolations.notEmpty(property('name')),
@@ -605,12 +598,13 @@ describe('inheritance', () => {
     ));
 
   test("child's extended property validators are only run after successful parent property validation", async () => {
-    const type = V.object({
-      extends: {
-        properties: {
-          required: V.required(V.toInteger(), V.min(0)),
-        },
+    const parent = V.object({
+      properties: {
+        required: V.required(V.toInteger(), V.min(0)),
       },
+    });
+    const type = V.object({
+      extends: parent,
       properties: {
         required: V.allOf(V.min(1), V.max(3)), // Extend parent rules
       },
@@ -635,12 +629,16 @@ describe('inheritance', () => {
 });
 
 describe('object next', () => {
-  const passwordValidator = V.object({
+  interface Password {
+    pw1: string;
+    pw2: string;
+  }
+  const passwordValidator = V.object<Password>({
     properties: {
       pw1: V.string(),
       pw2: V.string(),
     },
-    next: V.assertTrue(user => user.pw1 === user.pw2, 'PasswordVerification', Path.of('pw2')),
+    next: V.assertTrue((user: Password) => user.pw1 === user.pw2, 'PasswordVerification', Path.of('pw2')),
   });
 
   test('passwords match', () => expectValid({ pw1: 'test', pw2: 'test' }, passwordValidator));
@@ -650,12 +648,15 @@ describe('object next', () => {
   test('run after property validators', () => expectViolations({ pw1: 'test' }, passwordValidator, defaultViolations.notNull(Path.of('pw2'))));
 
   describe('inherited next', () => {
+    interface User extends Password {
+      name: string; 
+    }
     const userValidator = V.object({
       extends: passwordValidator,
       properties: {
         name: V.string(),
       },
-      next: V.assertTrue(user => user.pw1.indexOf(user.name) < 0, 'BadPassword', Path.of('pw1')),
+      next: V.assertTrue((user: User) => user.pw1.indexOf(user.name) < 0, 'BadPassword', Path.of('pw1')),
     });
 
     test('BadPassword', () => expectViolations({ pw1: 'test', pw2: 'test', name: 'tes' }, userValidator, new Violation(Path.of('pw1'), 'BadPassword')));
@@ -930,13 +931,15 @@ describe('number', () => {
 
     test('string is not allowed', () => expectViolations('123', V.min(1), defaultViolations.number('123')));
 
+    test('min chaining', () => expectValid(2, V.number().min(1).max(3)));
+
     test('min inclusive equal value', () => expectValid(1.1, V.min(1.1, true)));
 
     test('min smaller value', () => expectViolations(0.1, V.min(1.1, false), defaultViolations.min(1.1, false, 0.1)));
 
     test('min larger value', () => expectValid(1.2, V.min(1.1, false)));
 
-    test('min inclusive equal (string) value', () => expectValid('1.1', V.check(V.toNumber().next(V.min(1.1, true)))));
+    test('min inclusive equal (string) value', () => expectValid('1.1', V.check(V.toNumber(), V.min(1.1, true))));
 
     test('min strict equal value', () => expectViolations(1.1, V.min(1.1, false), defaultViolations.min(1.1, false, 1.1)));
 
@@ -954,7 +957,7 @@ describe('number', () => {
 
     test('max smaller value', () => expectValid(1.0, V.max(1.1, false)));
 
-    test('max inclusive equal (string) value', () => expectValid('1.1', V.check(V.toNumber().next(V.max(1.1, true)))));
+    test('max inclusive equal (string) value', () => expectValid('1.1', V.check(V.toNumber(), V.max(1.1, true))));
 
     test('max strict equal value', () => expectViolations(1.1, V.max(1.1, false), defaultViolations.max(1.1, false, 1.1)));
 
