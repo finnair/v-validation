@@ -1015,7 +1015,7 @@ export class AnyValidator extends Validator<any> {
   }
 }
 
-export function isString(value: any) {
+export function isString(value: any): value is string {
   return typeof value === 'string';
 }
 
@@ -1059,7 +1059,7 @@ export class StringValidator extends StringValidatorBase<string> {
       return ctx.failurePromise(defaultViolations.notNull(path), value);
     }
     if (isString(value)) {
-      return ctx.successPromise(value.toString());
+      return ctx.successPromise(value);
     }
     return ctx.failurePromise(defaultViolations.string(value, path), value);
   }
@@ -1173,11 +1173,10 @@ export class BooleanNormalizer extends Validator<boolean> {
       return ctx.successPromise(value.valueOf());
     }
     if (isString(value)) {
-      const str = value.toString()
-      if (this.truePattern.test(str)) {
+      if (this.truePattern.test(value)) {
         return ctx.successPromise(true);
       }
-      if (this.falsePattern.test(str)) {
+      if (this.falsePattern.test(value)) {
         return ctx.successPromise(false);
       }
       return ctx.failurePromise(defaultViolations.boolean(value, path), value);
@@ -1374,14 +1373,13 @@ export class UuidValidator extends Validator<string> {
     if (!isString(value)) {
       return ctx.failurePromise(defaultViolations.string(value, path), value);
     }
-    const str = value.toString();
-    if (!uuidValidate(str)) {
+    if (!uuidValidate(value)) {
       return ctx.failurePromise(new Violation(path, 'UUID', value), value);
     }
-    if (this.version && uuidVersion(str) !== this.version) {
+    if (this.version && uuidVersion(value) !== this.version) {
       return ctx.failurePromise(new Violation(path, `UUIDv${this.version}`, value), value);
     }
-    return ctx.successPromise(str);
+    return ctx.successPromise(value);
   }
 }
 
@@ -1477,9 +1475,8 @@ export class PatternValidator extends StringValidatorBase<string> {
     if (!isString(value)) {
       return ctx.failurePromise(defaultViolations.string(value, path), value);
     }
-    const str = value.toString();
-    if (this.regExp.test(str)) {
-      return ctx.successPromise(str);
+    if (this.regExp.test(value)) {
+      return ctx.successPromise(value);
     }
     return ctx.failurePromise(defaultViolations.pattern(this.regExp, value, path), value);
   }
@@ -1608,7 +1605,7 @@ export class JsonValidator<T> extends Validator<T> {
       return ctx.failurePromise(defaultViolations.string(value, path), value);
     }
     try {
-      const parsedValue = JSON.parse(value.toString());
+      const parsedValue = JSON.parse(value);
       return this.validator.validatePath(parsedValue, path, ctx);
     } catch (e) {
       return ctx.failurePromise(new TypeMismatch(path, 'JSON', value), value);
