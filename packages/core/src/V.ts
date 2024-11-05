@@ -167,7 +167,7 @@ export const V = {
 
   toObject: (property: string) => new ObjectNormalizer(property),
 
-  schema: <T>(fn: (schema: SchemaValidator<T>) => SchemaModel) => new SchemaValidator<T>(fn),
+  schema: (fn: (schema: SchemaValidator) => SchemaModel) => new SchemaValidator(fn),
 
   /** WARN: Objects as Map keys use identity hash/equals, i.e. === */
   mapType: (keys: Validator, values: Validator, jsonSafeMap: boolean = true) => new MapValidator(keys, values, jsonSafeMap),

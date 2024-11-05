@@ -100,7 +100,7 @@ test('assertTrue', () =>
 describe('strings', () => {
   test('valid value', () => expectValid('str', V.string()));
 
-  test('String is no longer valid string', () => {
+  test('String objects do not pass as string primitives', () => {
     const str = new String('String');
     expectViolations(str, V.string(), defaultViolations.string(str))
   });
@@ -1006,6 +1006,8 @@ describe('number', () => {
     describe('convert', () => {
       test('valid integer', () => expectValid(-123, V.toInteger(), -123));
 
+      test('convert Number to number', () => expectValid(new Number(123), V.toInteger(), 123));
+  
       test('convert string to integer', () => expectValid('-123', V.toInteger(), -123));
     });
   });
@@ -1229,14 +1231,14 @@ describe('isNumber', () => {
 
     test('Number("123")', () => expect(isNumber(Number('123'))).toBe(true));
 
-    test('new Number("123")', () => expect(isNumber(new Number('123'))).toBe(true));
+    test('Number objects do not pass as number primitives', () => expect(isNumber(new Number('123'))).toBe(false));
   });
   describe('negative cases', () => {
     test('"123"', () => expect(isNumber('123')).toBe(false));
 
     test('Number("abc")', () => expect(isNumber(Number('abc'))).toBe(false));
 
-    test('new Number("abc")', () => expect(isNumber(new Number('abc'))).toBe(false));
+    test('new Number(123)', () => expect(isNumber(new Number(123))).toBe(false));
   });
 });
 
