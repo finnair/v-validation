@@ -1,12 +1,12 @@
 import { test, expect } from 'vitest'
 import { Validator, Violation, ValidationResult, ValidatorOptions } from './validators.js';
 
-export async function expectViolations(value: any, validator: Validator, ...violations: Violation[]) {
+export async function expectViolations<In>(value: In, validator: Validator<any, In>, ...violations: Violation[]) {
   const result = await validator.validate(value);
   expect(result).toEqual(new ValidationResult(violations));
 }
 
-export async function expectValid(value: any, validator: Validator, convertedValue?: any, ctx?: ValidatorOptions) {
+export async function expectValid<In>(value: In, validator: Validator<any, In>, convertedValue?: any, ctx?: ValidatorOptions) {
   const result = await validator.validate(value, ctx);
   return verifyValid(result, value, convertedValue);
 }

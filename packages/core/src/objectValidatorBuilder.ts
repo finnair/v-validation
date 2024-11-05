@@ -1,5 +1,5 @@
 import { V } from "./V";
-import { MapEntryModel, ObjectModel, ObjectValidator, PropertyModel, strictUnknownPropertyValidator, Validator } from "./validators";
+import { MapEntryModel, ObjectValidator, PropertyModel, strictUnknownPropertyValidator, Validator } from "./validators";
 
 export class ObjectValidatorBuilder<Props, Next, LocalProps, LocalNext> {
   private _extends: ObjectValidator[] = [];
@@ -45,13 +45,13 @@ export class ObjectValidatorBuilder<Props, Next, LocalProps, LocalNext> {
     return this as unknown as ObjectValidatorBuilder<Props, Next, LocalProps, X>;
   }
   build() {
-    return new ObjectValidator({
+    return new ObjectValidator<LocalNext extends {} ? LocalNext : Next extends {} ? Next : Props & LocalProps, Next extends {} ? Next : Props>({
       extends: this._extends,
       properties: this._properties,
       additionalProperties: this._additionalProperties,
       next: this._next,
       localProperties: this._localProperties,
       localNext: this._localNext,
-    } as ObjectModel<LocalNext extends {} ? LocalNext : Next extends {} ? Next : Props & LocalProps, Next extends {} ? Next : Props>);
+    });
   }
 };

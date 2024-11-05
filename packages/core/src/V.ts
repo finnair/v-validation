@@ -73,12 +73,14 @@ const ignoreValidator = new IgnoreValidator(),
   toIntegerValidator = new NumberNormalizer(NumberFormat.integer),
   dateValidator = new DateValidator(ValidatorType.Date);
 
-type CompositionParameters<Out, In, T1, T2, T3> = 
+type CompositionParameters<Out, In, T1, T2, T3, T4, T5> = 
   [Validator<Out, In>] | 
   [Validator<T1, In>, Validator<Out, T1>] |
   [Validator<T1, In>, Validator<T2, T1>, Validator<Out, T2>] |
-  [Validator<T1, In>, Validator<T2, T1>, Validator<T3, T2>, Validator<Out, T3>];
-  
+  [Validator<T1, In>, Validator<T2, T1>, Validator<T3, T2>, Validator<Out, T3>] |
+  [Validator<T1, In>, Validator<T2, T1>, Validator<T3, T2>, Validator<T4, T3>, Validator<Out, T4>] |
+  [Validator<T1, In>, Validator<T2, T1>, Validator<T3, T2>, Validator<T4, T3>, Validator<T5, T4>, Validator<Out, T5>];
+
 
 export const V = {
   fn: <Out>(fn: ValidatorFn<Out>, type?: string) => new ValidatorFnWrapper<Out>(fn, type),
@@ -89,7 +91,7 @@ export const V = {
 
   any: () => anyValidator,
 
-  check: <Out, In, T1, T2, T3>(...validators: CompositionParameters<Out, In, T1, T2, T3>) => {
+  check: <Out, In, T1, T2, T3, T4, T5>(...validators: CompositionParameters<Out, In, T1, T2, T3, T4, T5>) => {
     if (validators.length > 1) {
       return new CheckValidator<In>(new CompositionValidator<Out, In>(validators))
     } else {
@@ -97,7 +99,7 @@ export const V = {
     }
   },
 
-  optional: <Out, In, T1, T2, T3>(...validators: CompositionParameters<Out, In, T1, T2, T3>) => {
+  optional: <Out, In, T1, T2, T3, T4, T5>(...validators: CompositionParameters<Out, In, T1, T2, T3, T4, T5>) => {
     if (validators.length > 1) {
       return new OptionalValidator<Out, In>(new CompositionValidator<Out, In>(validators))
     } else {
@@ -105,7 +107,7 @@ export const V = {
     }
   },
 
-  required: <Out, In, T1, T2, T3>(...validators: CompositionParameters<Out, In, T1, T2, T3>) => {
+  required: <Out, In, T1, T2, T3, T4, T5>(...validators: CompositionParameters<Out, In, T1, T2, T3, T4, T5>) => {
     if (validators.length > 1) {
       return new RequiredValidator<Out, In>(new CompositionValidator<Out, In>(validators))
     } else {
@@ -195,7 +197,7 @@ export const V = {
 
   oneOf: <A extends Validator<any>, B extends Array<Validator<any>>>(...validators: [A, ...B]) => new OneOfValidator<VType<A> | VType<B[any]>>(validators),
 
-  compositionOf: <Out, In, T1, T2, T3>(...validators: CompositionParameters<Out, In, T1, T2, T3>) => new CompositionValidator<Out, In>(validators),
+  compositionOf: <Out, In, T1, T2, T3, T4, T5>(...validators: CompositionParameters<Out, In, T1, T2, T3, T4, T5>) => new CompositionValidator<Out, In>(validators),
 
   date: () => dateValidator,
 

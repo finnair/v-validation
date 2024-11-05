@@ -76,7 +76,7 @@ describe('ValidationResult', () => {
 
   test('getValue() throws ValidationError if validation failed', async () => {
     try {
-      const result = await V.string().validate(123);
+      const result = await V.string().validate(123 as any);
       result.getValue();
       fail('expected ValidationError');
     } catch (e) {
@@ -84,6 +84,11 @@ describe('ValidationResult', () => {
       expect((e as ValidationError).violations).toEqual([defaultViolations.string(123)]);
     }
   });
+
+  test('value xor violations', () => {
+    expect(() => new ValidationResult([defaultViolations.notNull()], 'value'))
+      .toThrow('both violations and success value defined');
+  })
 });
 
 test('assertTrue', () =>
@@ -95,7 +100,7 @@ test('assertTrue', () =>
 describe('strings', () => {
   test('valid value', () => expectValid('str', V.string()));
 
-  test('number is not accepted', () => expectViolations(123, V.string(), defaultViolations.string(123)));
+  test('number is not accepted', () => expectViolations(123 as any, V.string(), defaultViolations.string(123)));
 
   test('null is not accepted', () => expectViolations(null, V.string(), defaultViolations.notNull()));
 
@@ -123,16 +128,22 @@ describe('strings', () => {
     test('undefined is not allowed', () => expectViolations(undefined, V.toString(), defaultViolations.notNull()));
   });
 
+  describe('string validator chaining', () => {
+    test('notBlank > notEmpty > pattern', () => expectValid('A', V.string().notBlank().notEmpty().pattern(/^[A-Z]$/)));
+    
+    test('first validator failure', () => {
+      expectViolations(123 as any, V.string().notBlank(), new TypeMismatch(ROOT, 'string', 123));
+    })
+  })
+
   describe('NotBlank', () => {
     test('valid string', () => expectValid(' A ', V.notBlank()));
-
-    test('string validator chaining', () => expectValid('A', V.string().notBlank().notEmpty().pattern(/^[A-Z]$/)));
 
     test('null is invalid', () => expectViolations(null, V.notBlank(), defaultViolations.notBlank()));
 
     test('undefined is invalid', () => expectViolations(null, V.notBlank(), defaultViolations.notBlank()));
 
-    test('non-string is invalid', () => expectViolations(123, V.notBlank(), defaultViolations.string(123)));
+    test('non-string is invalid', () => expectViolations(123 as any, V.notBlank(), defaultViolations.string(123)));
 
     test('blank is invalid', () => expectViolations(' \t\n ', V.notBlank(), defaultViolations.notBlank()));
   });
@@ -316,7 +327,7 @@ describe('objects', () => {
 
     test('explicitly denied additionalProperties are still not allowed', async () => {
       const object = { unknownProperty: true };
-      const result = await V.object({ additionalProperties: false }).validate(object, { ignoreUnknownProperties: true });
+      const result = await V.objectType().allowAdditionalProperties(false).build().validate(object, { ignoreUnknownProperties: true });
       expect(result).toEqual(new ValidationResult([defaultViolations.unknownPropertyDenied(property('unknownProperty'))]));
     });
   });
@@ -403,7 +414,7 @@ describe('objects', () => {
     }
     const modelValidator = V.objectType().properties({
         password1: V.compositionOf(V.string(), V.notEmpty<string>()),
-        password2: V.compositionOf(V.string(), V.notEmpty()),
+        password2: V.compositionOf(V.string(), V.notBlank()),
       }).next(V.map(value => new PasswordRequest(value)))
       .build()
 
@@ -479,20 +490,16 @@ describe('objects', () => {
   });
 
   describe('localProperties', () => {
-    const parent = V.object({
-      properties: {
+    const parent = V.objectType().properties({
         type: V.string(),
-      },
-      localProperties: {
-        type: 'Parent',
-      },
-    });
-    const child = V.object({
-      extends: parent,
-      localProperties: {
-        type: 'Child',
-      },
-    });
+      }).localProperties({
+        type: V.hasValue<'Parent'>('Parent'),
+      }).build();
+    const child = V.objectType()
+      .extends(parent)
+      .localProperties({
+        type: V.hasValue<'Child'>('Child'),
+      }).build();
 
     test('valid parent', () => expectValid({ type: 'Parent' }, parent));
 
@@ -672,23 +679,22 @@ describe('object localNext', () => {
     upper?: boolean;
   }
   interface Child extends Parent {}
-  const parent = V.object<Parent>({
-    properties: {
+  const parent = V.objectType()
+    .properties({
       name: V.string(),
       upper: V.optional(V.boolean()),
-    },
-    next: V.map(obj => {
+    }).next(V.map(obj => {
       if (obj.upper) {
         obj.name = (obj.name as string).toUpperCase();
       }
       return obj;
-    }),
-    localNext: V.map(obj => `parent:${obj.name}`),
-  });
-  const child = V.object<Child>({
-    extends: parent,
-    localNext: V.map(obj => `child:${obj.name}`),
-  });
+    }))
+    .localNext(V.map(obj => `parent:${obj.name}`))
+    .build();
+  const child = V.objectType()
+    .extends(parent)
+    .localNext(V.map(obj => `child:${obj.name}`))
+    .build();
 
   test('parent', async () => {
     expect((await parent.validate({ name: 'Darth' })).getValue()).toEqual('parent:Darth');
@@ -929,9 +935,11 @@ describe('number', () => {
   describe('min', () => {
     test('undefined is not allowed', () => expectViolations(undefined, V.min(1), defaultViolations.notNull()));
 
-    test('string is not allowed', () => expectViolations('123', V.min(1), defaultViolations.number('123')));
+    test('string is not allowed', () => expectViolations('123' as any, V.min(1), defaultViolations.number('123')));
 
-    test('min chaining', () => expectValid(2, V.number().min(1).max(3)));
+    test('min/max chaining', () => expectValid(2, V.number().min(1).max(3)));
+
+    test('min/max chaining failure', () => expectViolations('2' as any, V.number().min(1).max(3), new TypeMismatch(ROOT, 'number', '2')));
 
     test('min inclusive equal value', () => expectValid(1.1, V.min(1.1, true)));
 
@@ -949,7 +957,9 @@ describe('number', () => {
   describe('max', () => {
     test('undefined is not allowed', () => expectViolations(undefined, V.max(1), defaultViolations.notNull()));
 
-    test('string is not allowed', () => expectViolations('123', V.max(1), defaultViolations.number('123')));
+    test('string is not allowed', () => expectViolations('123' as any, V.max(1), defaultViolations.number('123')));
+
+    test('max/min chaining', () => expectValid(2, V.number().max(3).min(1)));
 
     test('max inclusive equal value', () => expectValid(1.1, V.max(1.1, true)));
 
@@ -979,11 +989,11 @@ describe('number', () => {
     describe('min', () => {
       test('min inclusive equal value', () => expectValid(0, V.min(0, true)));
 
-      test('min inclusive equal (string) value', () => expectValid('1', V.check(V.toNumber().next(V.min(1, true)))));
+      test('min inclusive equal (string) value', () => expectValid('1', V.check(V.toNumber().min(1, true))));
 
       test('min strict equal value', () => expectViolations(0, V.min(0, false), defaultViolations.min(0, false, 0)));
 
-      test('min strict equal (string) value', () => expectViolations('1', V.toNumber().next(V.min(1, false)), defaultViolations.min(1, false, 1)));
+      test('min strict equal (string) value', () => expectViolations('1', V.toNumber().min(1, false), defaultViolations.min(1, false, 1)));
     });
 
     describe('convert', () => {
@@ -1035,6 +1045,10 @@ describe('async validation', () => {
 
     test('allow conversion', async () => {
       await expectValid('123', V.allOf(V.string(), V.toInteger()), 123);
+    });
+
+    test('return original', async () => {
+      await expectValid('123', V.allOf(V.string(), V.check(V.toInteger())), '123');
     });
 
     test('conflicting conversions not allowed', async () => {
@@ -1175,7 +1189,7 @@ describe('required', () => {
 
   test('undefined is invalid', () => expectViolations(undefined, validator, defaultViolations.notNull()));
 
-  test('value is passed to next', () => expectViolations(123, validator, defaultViolations.string(123)));
+  test('value is passed to next', () => expectViolations(123 as any, validator, defaultViolations.string(123)));
 
   test('valid string', () => expectValid('123', validator));
 
@@ -1191,7 +1205,7 @@ describe('optional', () => {
 
   test('undefined is valid', () => expectValid(undefined, validator));
 
-  test('value is passed to next', () => expectViolations(123, validator, defaultViolations.string(123)));
+  test('value is passed to next', () => expectViolations(123 as any, validator, defaultViolations.string(123)));
 
   test('valid string', () => expectValid('123', validator));
 

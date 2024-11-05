@@ -106,8 +106,8 @@ export abstract class Validator<Out = unknown, In = any> {
 
   abstract validatePath(value: In, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<Out>>;
 
-  next<V extends Validator<any, Out>>(validator: V): Validator<VType<V>, Out> {
-    return new NextValidator<VType<V>, Out>(this, validator);
+  next<V extends Validator<any, Out>>(validator: V): Validator<VType<V>, In> {
+    return new NextValidator<VType<V>, In>(this, validator);
   }
 
   nextMap<XOut>(fn: MappingFn<XOut, Out>): Validator<XOut> {
@@ -682,7 +682,7 @@ export class ArrayNormalizer<T> extends ArrayValidator<T> {
 }
 
 export class NextValidator<Out = unknown, In = any> extends Validator<Out, In> {
-  constructor(public readonly firstValidator: Validator<In>, public readonly nextValidator: Validator<Out>) {
+  constructor(public readonly firstValidator: Validator<any, In>, public readonly nextValidator: Validator<Out>) {
     super();
     Object.freeze(this);
   }
@@ -1092,15 +1092,15 @@ export class IsNullOrUndefinedValidator extends Validator<null | undefined> {
   }
 }
 
-export class NotEmptyValidator<Out extends { length: number}> extends Validator<Out, Out> {
-  validatePath(value: Out, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<Out>> {
+export class NotEmptyValidator<InOut extends { length: number}> extends Validator<InOut, InOut> {
+  validatePath(value: InOut, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<InOut>> {
     return !isNullOrUndefined(value) && isNumber((value as any).length) && (value as any).length > 0
       ? ctx.successPromise(value)
       : ctx.failurePromise(defaultViolations.notEmpty(path), value);
   }
 }
 
-export class SizeValidator<T extends { length: number }> extends Validator<T> {
+export class SizeValidator<InOut extends { length: number }> extends Validator<InOut, InOut> {
   constructor(private readonly min: number, private readonly max: number) {
     super();
     if (max < min) {
@@ -1109,7 +1109,7 @@ export class SizeValidator<T extends { length: number }> extends Validator<T> {
     Object.freeze(this);
   }
 
-  validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<T>> {
+  validatePath(value: InOut, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<InOut>> {
     if (isNullOrUndefined(value)) {
       return ctx.failurePromise(defaultViolations.notNull(path), value);
     }
@@ -1200,11 +1200,11 @@ export abstract class NumberValidatorBase<In> extends Validator<number, In> {
   }
 
   min(min: number, inclusive = true) {
-    return new NextNumberValidator(this, new MinValidator(min, inclusive));
+    return new NextNumberValidator<In>(this, new MinValidator(min, inclusive));
   }
 
   max(max: number, inclusive = true) {
-    return new NextNumberValidator(this, new MaxValidator(max, inclusive));
+    return new NextNumberValidator<In>(this, new MaxValidator(max, inclusive));
   }
 
   protected validateNumberFormat(value: number, format: undefined | NumberFormat, path: Path, ctx: ValidationContext) {
@@ -1219,13 +1219,13 @@ export abstract class NumberValidatorBase<In> extends Validator<number, In> {
   }
 }
 
-export class NextNumberValidator extends NumberValidatorBase<number> {
+export class NextNumberValidator<In> extends NumberValidatorBase<In> {
   constructor(public readonly firstValidator: Validator<number, any>, public readonly nextValidator: Validator<number, any>) {
     super();
     Object.freeze(this);
   }
 
-  validatePath(value: number, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<number>> {
+  validatePath(value: In, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<number>> {
     return this.firstValidator.validatePath(value, path, ctx).then(firstResult => {
       if (firstResult.isSuccess()) {
         return this.nextValidator.validatePath(firstResult.getValue(), path, ctx);
