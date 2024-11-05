@@ -105,7 +105,7 @@ export class SchemaValidator extends Validator {
     }
 
     // 3) Validate value
-    return validator.validatePath(value, path, ctx) as PromiseLike<ValidationResult>;
+    return validator.validatePath(value, path, ctx);
   }
 
   of(name: string): Validator {
