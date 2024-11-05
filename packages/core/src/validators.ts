@@ -1016,7 +1016,7 @@ export class AnyValidator extends Validator<any> {
 }
 
 export function isString(value: any) {
-  return typeof value === 'string' || value instanceof String;
+  return typeof value === 'string';
 }
 
 export function isSimplePrimitive(value: any) {
@@ -1071,6 +1071,9 @@ export class StringNormalizer extends StringValidatorBase<any> {
       return ctx.failurePromise(defaultViolations.notNull(path), value);
     }
     if (isString(value)) {
+      return ctx.successPromise(value);
+    }
+    if (value instanceof String) {
       return ctx.successPromise(value.toString());
     }
     if (isSimplePrimitive(value)) {

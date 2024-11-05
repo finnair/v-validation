@@ -6,7 +6,7 @@ export async function expectViolations<In>(value: In, validator: Validator<any, 
   expect(result).toEqual(new ValidationResult(violations));
 }
 
-export async function expectValid<In>(value: In, validator: Validator<any, In>, convertedValue?: any, ctx?: ValidatorOptions) {
+export async function expectValid<Out, In>(value: In, validator: Validator<Out, In>, convertedValue?: Out, ctx?: ValidatorOptions) {
   const result = await validator.validate(value, ctx);
   return verifyValid(result, value, convertedValue);
 }

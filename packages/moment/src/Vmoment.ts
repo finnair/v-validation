@@ -2,12 +2,12 @@ import { Validator, ValidationContext, ValidationResult, isNullOrUndefined, defa
 import { Path } from '@finnair/path';
 import moment, { Moment, MomentInput } from 'moment';
 
-export class MomentValidator extends Validator {
+export class MomentValidator extends Validator<Moment, string | Moment> {
   constructor(public readonly type: string, public readonly parse: (value?: MomentInput) => Moment) {
     super();
     Object.freeze(this);
   }
-  async validatePath(value: any, path: Path, ctx: ValidationContext): Promise<ValidationResult> {
+  async validatePath(value: string | Moment, path: Path, ctx: ValidationContext): Promise<ValidationResult<Moment>> {
     if (isNullOrUndefined(value)) {
       return ctx.failure(defaultViolations.notNull(path), value);
     }

@@ -14,12 +14,12 @@ import {
 import { DateTime, Duration, FixedOffsetZone, IANAZone, Settings } from 'luxon';
 import { Path } from '@finnair/path';
 
-async function expectViolations(value: any, validator: Validator, ...violations: Violation[]) {
+async function expectViolations<In>(value: In, validator: Validator<any, In>, ...violations: Violation[]) {
   const result = await validator.validate(value);
   expect(result).toEqual(new ValidationResult(violations));
 }
 
-async function expectValid(value: any, validator: Validator, convertedValue?: any, ctx?: ValidatorOptions) {
+async function expectValid<Out, In>(value: In, validator: Validator<Out, In>, convertedValue?: Out, ctx?: ValidatorOptions) {
   const result = await validator.validate(value, ctx);
   verifyValid(result, value, convertedValue);
 }

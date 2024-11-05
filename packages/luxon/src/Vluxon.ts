@@ -14,45 +14,63 @@ import {
 
 export type LuxonInput = string | DateTime | LuxonDateTime;
 
-export interface ValidateLuxonParams {
+export interface DateTimeParams {
   type: string;
   pattern: RegExp;
-  proto?: any;
   parser: (value: string, match: RegExpExecArray) => DateTime;
 }
 
-export class LuxonValidator extends Validator {
-  constructor(public params: ValidateLuxonParams) {
+export interface ValidateLuxonParams<Out extends LuxonDateTime> extends DateTimeParams {
+  proto: new (...args:any[]) => Out;
+}
+
+export class DateTimeValidator extends Validator<DateTime> {
+  constructor(public readonly params: DateTimeParams) {
     super();
     Object.freeze(params);
     Object.freeze(this);
   }
-
-  validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult> {
+  validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<DateTime>> {
     const params = this.params;
     if (isNullOrUndefined(value)) {
       return ctx.failurePromise(defaultViolations.notNull(path), value);
     }
-    if (params.proto && value instanceof params.proto) {
-      return ctx.successPromise(value);
-    } else if (DateTime.isDateTime(value)) {
+    if (DateTime.isDateTime(value)) {
       if (value.isValid) {
-        return success(value);
+        return ctx.successPromise(value as DateTime);
       }
     } else if (isString(value)) {
       const match = params.pattern.exec(value);
       if (match) {
         const dateTime = params.parser(value, match);
         if (dateTime.isValid) {
-          return success(dateTime);
+          return ctx.successPromise(dateTime);
         }
       }
     }
     return ctx.failurePromise(defaultViolations.date(value, path, params.type), value);
+  }
+}
 
-    function success(dateTime: DateTime) {
-      return ctx.successPromise(params.proto ? new params.proto(dateTime) : dateTime);
+export class LuxonValidator<Out extends LuxonDateTime> extends Validator<Out> {
+  private readonly dateTimeValidator: DateTimeValidator;
+  constructor(public readonly params: ValidateLuxonParams<Out>) {
+    super();
+    this.dateTimeValidator = new DateTimeValidator(params);
+    Object.freeze(this);
+  }
+
+  validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<Out>> {
+    if (value instanceof this.params.proto) {
+      return ctx.successPromise(value);
     }
+    return this.dateTimeValidator.validatePath(value, path, ctx).then((result: ValidationResult<DateTime>) => {
+      if (result.isSuccess()) {
+        return ctx.successPromise(new this.params.proto(result.getValue()));
+      } else {
+        return ctx.failurePromise(result.getViolations(), value);
+      }
+    });
   }
 }
 
@@ -112,7 +130,7 @@ function dateTimeUtc(options: DateTimeOptions = { zone: FixedOffsetZone.utcInsta
 const dateTimeMillisPattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}(?:Z|[+-]\d{2}(?::?\d{2})?)$/;
 
 function dateTimeMillis(options: DateTimeOptions = { setZone: true }) {
-  return new LuxonValidator({
+  return new LuxonValidator<DateTimeMillisLuxon>({
     type: 'DateTimeMillis',
     proto: DateTimeMillisLuxon,
     pattern: dateTimeMillisPattern,
@@ -120,7 +138,7 @@ function dateTimeMillis(options: DateTimeOptions = { setZone: true }) {
   });
 }
 
-function dateTimeMillisUtc(options: DateTimeOptions = { zone: FixedOffsetZone.utcInstance }) {
+function dateTimeMillisUtc<DateTimeMillisUtcLuxon>(options: DateTimeOptions = { zone: FixedOffsetZone.utcInstance }) {
   return new LuxonValidator({
     type: 'DateTimeMillis',
     proto: DateTimeMillisUtcLuxon,
@@ -130,7 +148,7 @@ function dateTimeMillisUtc(options: DateTimeOptions = { zone: FixedOffsetZone.ut
 }
 
 function dateTimeFromISO(options: DateTimeOptions = { setZone: true }) {
-  return new LuxonValidator({
+  return new DateTimeValidator({
     type: 'ISODateTime',
     pattern: /./,
     parser: (value: string) => DateTime.fromISO(value, options),
@@ -138,7 +156,7 @@ function dateTimeFromISO(options: DateTimeOptions = { setZone: true }) {
 }
 
 function dateTimeFromRFC2822(options: DateTimeOptions = { setZone: true }) {
-  return new LuxonValidator({
+  return new DateTimeValidator({
     type: 'RFC2822DateTime',
     pattern: /./,
     parser: (value: string) => DateTime.fromRFC2822(value, options),
@@ -146,7 +164,7 @@ function dateTimeFromRFC2822(options: DateTimeOptions = { setZone: true }) {
 }
 
 function dateTimeFromHTTP(options: DateTimeOptions = { setZone: true }) {
-  return new LuxonValidator({
+  return new DateTimeValidator({
     type: 'HTTPDateTime',
     pattern: /./,
     parser: (value: string) => DateTime.fromHTTP(value, options),
@@ -154,7 +172,7 @@ function dateTimeFromHTTP(options: DateTimeOptions = { setZone: true }) {
 }
 
 function dateTimeFromSQL(options: DateTimeOptions = { zone: FixedOffsetZone.utcInstance }) {
-  return new LuxonValidator({
+  return new DateTimeValidator({
     type: 'SQLDateTime',
     pattern: /./,
     parser: (value: string) => DateTime.fromSQL(value, options),

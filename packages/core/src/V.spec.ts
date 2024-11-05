@@ -100,6 +100,11 @@ test('assertTrue', () =>
 describe('strings', () => {
   test('valid value', () => expectValid('str', V.string()));
 
+  test('String is no longer valid string', () => {
+    const str = new String('String');
+    expectViolations(str, V.string(), defaultViolations.string(str))
+  });
+
   test('number is not accepted', () => expectViolations(123 as any, V.string(), defaultViolations.string(123)));
 
   test('null is not accepted', () => expectViolations(null, V.string(), defaultViolations.notNull()));
@@ -114,6 +119,8 @@ describe('strings', () => {
 
   describe('toString', () => {
     test('string as such', () => expectValid('abc', V.toString()));
+
+    test('convert String to string', () => expectValid(new String('String'), V.toString(), 'String'));
 
     test('convert number to string', () => expectValid(123, V.toString(), '123'));
 
@@ -797,13 +804,13 @@ describe('enum', () => {
   });
 
   test('ignoreUnknownEnumValues', () =>
-    expectValid('B', V.enum(StrEnum, 'StrEnum'), 'B', {
+    expectValid('B', V.enum(StrEnum, 'StrEnum'), 'B' as any, {
       ignoreUnknownEnumValues: true,
     }));
 
   test('ignoreUnknownEnumValues with warning', async () => {
     const warnings: Violation[] = [];
-    await expectValid('B', V.enum(StrEnum, 'StrEnum'), 'B', {
+    await expectValid('B', V.enum(StrEnum, 'StrEnum'), 'B' as any, {
       ignoreUnknownEnumValues: true,
       warnLogger: (violation: Violation) => warnings.push(violation),
     });
