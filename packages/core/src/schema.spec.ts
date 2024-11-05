@@ -277,7 +277,7 @@ describe('Recursive object', () => {
     const second: any = { name: 'second', head: first, tail: first };
     first.head = second;
     first.tail = second;
-    const result = (await schema.validate(first, { allowCycles: true })).getValue();
+    const result = (await schema.validate(first, { allowCycles: true })).getValue() as any;
     expect(result).not.toBe(first);
     expect(result.head).not.toBe(second);
     expect(result.head).toBe(result.tail);
@@ -313,7 +313,7 @@ describe('Recursive array', () => {
     array[0] = array;
     array[1] = array;
 
-    const result = (await schema.validate(array, { allowCycles: true })).getValue();
+    const result = (await schema.validate(array, { allowCycles: true })).getValue() as any;
     expect(result).not.toBe(array);
     expect(result[0]).toBe(result);
     expect(result[1]).toBe(result);
