@@ -27,21 +27,21 @@ export interface SchemaModel {
 
 export type ClassParentModel = string | ObjectValidator | (string | ObjectValidator)[];
 
-export interface ClassModel<T = unknown> {
-  readonly properties?: PropertyModel;
-  readonly additionalProperties?: boolean | MapEntryModel | MapEntryModel[];
+export interface ClassModel {
   readonly extends?: ClassParentModel;
   readonly localProperties?: PropertyModel;
-  readonly next?: Validator<T>;
+  readonly properties?: PropertyModel;
+  readonly additionalProperties?: boolean | MapEntryModel | MapEntryModel[];
+  readonly next?: Validator;
   readonly localNext?: Validator;
 }
 
-export class ModelRef<T> extends Validator<T> {
-  constructor(private schema: SchemaValidator<T>, public readonly name: string) {
+export class ModelRef extends Validator {
+  constructor(private schema: SchemaValidator, public readonly name: string) {
     super();
     Object.freeze(this);
   }
-  validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<T>> {
+  validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult> {
     return this.schema.validateClass(value, path, ctx, this.name);
   }
 }
@@ -52,14 +52,14 @@ export class DiscriminatorViolation extends Violation {
   }
 }
 
-export class SchemaValidator<T> extends Validator<T> {
+export class SchemaValidator extends Validator {
   public readonly discriminator: Discriminator;
 
   private readonly proxies = new Map<string, Validator>();
 
   private readonly validators: { [name: string]: Validator } = {};
 
-  constructor(fn: (schema: SchemaValidator<T>) => SchemaModel) {
+  constructor(fn: (schema: SchemaValidator) => SchemaModel) {
     super();
     const schema = fn(this);
     for (const name of this.proxies.keys()) {
@@ -74,11 +74,11 @@ export class SchemaValidator<T> extends Validator<T> {
     Object.freeze(this);
   }
 
-  validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<T>> {
+  validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult> {
     return this.validateClass(value, path, ctx);
   }
 
-  validateClass(value: any, path: Path, ctx: ValidationContext, expectedType?: string): PromiseLike<ValidationResult<T>> {
+  validateClass(value: any, path: Path, ctx: ValidationContext, expectedType?: string): PromiseLike<ValidationResult> {
     if (isNullOrUndefined(value)) {
       return ctx.failurePromise(defaultViolations.notNull(path), value);
     }
@@ -105,7 +105,7 @@ export class SchemaValidator<T> extends Validator<T> {
     }
 
     // 3) Validate value
-    return validator.validatePath(value, path, ctx) as PromiseLike<ValidationResult<T>>;
+    return validator.validatePath(value, path, ctx) as PromiseLike<ValidationResult>;
   }
 
   of(name: string): Validator {
