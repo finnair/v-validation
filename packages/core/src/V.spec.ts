@@ -6,7 +6,6 @@ import {
   defaultViolations,
   ValidationError,
   TypeMismatch,
-  ObjectValidator,
   Group,
   Groups,
   NumberFormat,
@@ -14,7 +13,6 @@ import {
   isString,
   ValidationContext,
   ErrorViolation,
-  ObjectModel,
   IfValidator,
   WhenGroupValidator,
   HasValueViolation,
@@ -23,7 +21,8 @@ import {
   SyncPromise,
   JsonSet,
   VType,
-} from './validators';
+} from './validators.js';
+import { ObjectValidator, ObjectModel } from './objectValidator.js';
 import { V } from './V.js';
 import { Path } from '@finnair/path';
 import { expectUndefined, expectValid, expectViolations, verifyValid } from './testUtil.spec.js';
@@ -528,6 +527,20 @@ describe('objects', () => {
     test('123', () => expectValid(123, V.toObject('value'), { value: 123 }));
 
     test('object', () => expectValid({}, V.toObject('value')));
+  });
+
+  describe('derived validators', () => {
+    const base = V.objectType().properties({ prop1: V.string(), prop2: V.number()}).localProperties({ local: V.boolean() }).build();
+    test('omit', async () => {
+      const omit = base.omit('prop1', 'local');
+      const value = ({ prop2: 123 }) satisfies VType<typeof omit>;
+      expectValid(value, omit);
+    })
+    test('pick', async () => {
+      const pick = base.pick('prop1', 'local');
+      const value = ({ prop1: 'foo', local: true }) satisfies VType<typeof pick>;
+      expectValid(value, pick);
+    })
   });
 });
 

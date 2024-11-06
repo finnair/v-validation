@@ -2,16 +2,18 @@ import {
   Validator,
   ValidationContext,
   ValidationResult,
-  ObjectValidator,
-  PropertyModel,
-  MapEntryModel,
   isNullOrUndefined,
   defaultViolations,
   isString,
   Violation,
   TypeMismatch,
-  ObjectModel,
 } from './validators.js';
+import {
+  ObjectValidator,
+  PropertyModel,
+  MapEntryModel,
+  ObjectModel,
+} from './objectValidator.js';
 import { Path } from '@finnair/path';
 
 export interface DiscriminatorFn {

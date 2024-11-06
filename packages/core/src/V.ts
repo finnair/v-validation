@@ -36,9 +36,6 @@ import {
   BooleanNormalizer,
   MinValidator,
   MaxValidator,
-  ObjectModel,
-  ObjectValidator,
-  ObjectNormalizer,
   MapValidator,
   MapNormalizer,
   ArrayValidator,
@@ -56,6 +53,7 @@ import {
   maybeCompositionOf,
   CompositionParameters,
 } from './validators.js';
+import {ObjectModel, ObjectValidator, ObjectNormalizer } from './objectValidator.js';
 import { ObjectValidatorBuilder } from './objectValidatorBuilder.js';
 
 const ignoreValidator = new IgnoreValidator(),

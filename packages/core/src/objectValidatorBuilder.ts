@@ -1,5 +1,6 @@
-import { V } from "./V";
-import { MapEntryModel, ObjectValidator, PropertyModel, strictUnknownPropertyValidator, Validator } from "./validators";
+import { V } from "./V.js";
+import { Validator } from "./validators.js";
+import { MapEntryModel, ObjectValidator, PropertyModel, strictUnknownPropertyValidator } from "./objectValidator.js";
 
 export class ObjectValidatorBuilder<Props, Next, LocalProps, LocalNext> {
   private _extends: ObjectValidator[] = [];
