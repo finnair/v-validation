@@ -1613,13 +1613,13 @@ const allowNoneMapEntries: MapEntryValidator = new MapEntryValidator({
   values: strictUnknownPropertyValidator,
 });
 
-export class JsonValidator<T> extends Validator<T> {
-  constructor(private readonly validator: Validator<T>) {
+export class JsonValidator<Out> extends Validator<Out, string> {
+  constructor(private readonly validator: Validator<Out>) {
     super();
     Object.freeze(this);
   }
 
-  validatePath(value: unknown, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<T>> {
+  validatePath(value: string, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<Out>> {
     if (isNullOrUndefined(value)) {
       return ctx.failurePromise(defaultViolations.notNull(path), value);
     }

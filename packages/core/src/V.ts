@@ -83,25 +83,20 @@ export const V = {
 
   any: () => anyValidator,
 
-  check: <Out, In, T1, T2, T3, T4, T5>(...validators: CompositionParameters<Out, In, T1, T2, T3, T4, T5>) => {
-    return new CheckValidator<In>(maybeCompositionOf(...validators)); 
-  },
+  check: <Out, In, T1, T2, T3, T4, T5>(...validators: CompositionParameters<Out, In, T1, T2, T3, T4, T5>) => 
+    new CheckValidator<In>(maybeCompositionOf(...validators)),
 
-  optional: <Out, In, T1, T2, T3, T4, T5>(...validators: CompositionParameters<Out, In, T1, T2, T3, T4, T5>) => {
-    return new OptionalValidator<Out, In>(maybeCompositionOf(...validators)); 
-  },
+  optional: <Out, In, T1, T2, T3, T4, T5>(...validators: CompositionParameters<Out, In, T1, T2, T3, T4, T5>) => 
+    new OptionalValidator<Out, In>(maybeCompositionOf(...validators)),
 
-  required: <Out, In, T1, T2, T3, T4, T5>(...validators: CompositionParameters<Out, In, T1, T2, T3, T4, T5>) => {
-    return new RequiredValidator<Out, In>(maybeCompositionOf(...validators)); 
-  },
+  required: <Out, In, T1, T2, T3, T4, T5>(...validators: CompositionParameters<Out, In, T1, T2, T3, T4, T5>) => 
+    new RequiredValidator<Out, In>(maybeCompositionOf(...validators)),
 
-  if: <Out, In, T1, T2, T3, T4, T5>(fn: AssertTrue, ...validators: CompositionParameters<Out, In, T1, T2, T3, T4, T5>) => {
-    return new IfValidator<Out, In>([new Conditional<Out>(fn, maybeCompositionOf(...validators))]); 
-  },
+  if: <Out, In, T1, T2, T3, T4, T5>(fn: AssertTrue, ...validators: CompositionParameters<Out, In, T1, T2, T3, T4, T5>) => 
+    new IfValidator<Out, In>([new Conditional<Out>(fn, maybeCompositionOf(...validators))]),
 
-  whenGroup: <Out, In, T1, T2, T3, T4, T5>(group: GroupOrName, ...validators: CompositionParameters<Out, In, T1, T2, T3, T4, T5>) => {
-    return new WhenGroupValidator([new WhenGroup(group, maybeCompositionOf(...validators))]);
-  },
+  whenGroup: <Out, In, T1, T2, T3, T4, T5>(group: GroupOrName, ...validators: CompositionParameters<Out, In, T1, T2, T3, T4, T5>) => 
+    new WhenGroupValidator([new WhenGroup(group, maybeCompositionOf(...validators))]),
 
   string: () => stringValidator,
 
@@ -167,13 +162,11 @@ export const V = {
 
   nullToArray: () => new ValueMapper((value: any) => (isNullOrUndefined(value) ? [] : value)),
 
-  array: <Out, In, T1, T2, T3, T4, T5>(...items: CompositionParameters<Out, In, T1, T2, T3, T4, T5>) => {
-    return new ArrayValidator<Out>(maybeCompositionOf(...items));
-  },
+  array: <Out, In, T1, T2, T3, T4, T5>(...items: CompositionParameters<Out, In, T1, T2, T3, T4, T5>) => 
+    new ArrayValidator<Out>(maybeCompositionOf(...items)),
 
-  toArray: <Out, In, T1, T2, T3, T4, T5>(...items: CompositionParameters<Out, In, T1, T2, T3, T4, T5>) => {
-    return new ArrayNormalizer<Out>(maybeCompositionOf(...items));
-  },
+  toArray: <Out, In, T1, T2, T3, T4, T5>(...items: CompositionParameters<Out, In, T1, T2, T3, T4, T5>) => 
+    new ArrayNormalizer<Out>(maybeCompositionOf(...items)),
 
   size: <T extends { length: number }>(min: number, max: number) => new SizeValidator<T>(min, max),
 
@@ -185,18 +178,18 @@ export const V = {
 
   oneOf: <A extends Validator<any>, B extends Array<Validator<any>>>(...validators: [A, ...B]) => new OneOfValidator<VType<A> | VType<B[any]>>(validators),
 
-  compositionOf: <Out, In, T1, T2, T3, T4, T5>(...validators: CompositionParameters<Out, In, T1, T2, T3, T4, T5>) => {
-    return maybeCompositionOf(...validators);
-  },
+  compositionOf: <Out, In, T1, T2, T3, T4, T5>(...validators: CompositionParameters<Out, In, T1, T2, T3, T4, T5>) => 
+    maybeCompositionOf(...validators),
 
   date: () => dateValidator,
 
-  enum: <T extends {[key: number]: string | number}>(enumType: T, name: string) => new EnumValidator(enumType, name),
+  enum: <Out extends {[key: number]: string | number}>(enumType: Out, name: string) => new EnumValidator(enumType, name),
 
   assertTrue: <In>(fn: AssertTrue<In>, type: string = 'AssertTrue', path?: Path) => new AssertTrueValidator<In>(fn, type, path),
 
-  hasValue: <T>(expectedValue: T) => new HasValueValidator<T>(expectedValue),
+  hasValue: <InOut>(expectedValue: InOut) => new HasValueValidator<InOut>(expectedValue),
 
-  json: <T>(validator: Validator<T>) => new JsonValidator(validator),
+  json: <Out, T1, T2, T3, T4, T5>(...validators: CompositionParameters<Out, string, T1, T2, T3, T4, T5>) => 
+    new JsonValidator(maybeCompositionOf(...validators)),
 };
 Object.freeze(V);
