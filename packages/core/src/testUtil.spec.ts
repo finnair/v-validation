@@ -17,7 +17,7 @@ export async function expectUndefined(value: any, validator: Validator, converte
   expect(result.getValue()).toBeUndefined();
 }
 
-export function verifyValid(result: ValidationResult, value: any, convertedValue?: any) {
+export function verifyValid<Out>(result: ValidationResult<Out>, value: any, convertedValue?: Out) {
   expect(result.getViolations()).toEqual([]);
   if (convertedValue !== undefined) {
     expect(result.getValue()).toEqual(convertedValue);

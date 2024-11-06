@@ -46,7 +46,6 @@ import {
   AllOfValidator,
   AnyOfValidator,
   OneOfValidator,
-  CompositionValidator,
   EnumValidator,
   HasValueValidator,
   JsonValidator,
@@ -54,6 +53,8 @@ import {
   SetValidator,
   UuidValidator,
   VType,
+  maybeCompositionOf,
+  CompositionParameters,
 } from './validators.js';
 import { ObjectValidatorBuilder } from './objectValidatorBuilder.js';
 
@@ -73,15 +74,6 @@ const ignoreValidator = new IgnoreValidator(),
   toIntegerValidator = new NumberNormalizer(NumberFormat.integer),
   dateValidator = new DateValidator(ValidatorType.Date);
 
-type CompositionParameters<Out, In, T1, T2, T3, T4, T5> = 
-  [Validator<Out, In>] | 
-  [Validator<T1, In>, Validator<Out, T1>] |
-  [Validator<T1, In>, Validator<T2, T1>, Validator<Out, T2>] |
-  [Validator<T1, In>, Validator<T2, T1>, Validator<T3, T2>, Validator<Out, T3>] |
-  [Validator<T1, In>, Validator<T2, T1>, Validator<T3, T2>, Validator<T4, T3>, Validator<Out, T4>] |
-  [Validator<T1, In>, Validator<T2, T1>, Validator<T3, T2>, Validator<T4, T3>, Validator<T5, T4>, Validator<Out, T5>];
-
-
 export const V = {
   fn: <Out>(fn: ValidatorFn<Out>, type?: string) => new ValidatorFnWrapper<Out>(fn, type),
 
@@ -92,32 +84,24 @@ export const V = {
   any: () => anyValidator,
 
   check: <Out, In, T1, T2, T3, T4, T5>(...validators: CompositionParameters<Out, In, T1, T2, T3, T4, T5>) => {
-    if (validators.length > 1) {
-      return new CheckValidator<In>(new CompositionValidator<Out, In>(validators))
-    } else {
-      return new CheckValidator<In>(validators[0]);
-    }
+    return new CheckValidator<In>(maybeCompositionOf(...validators)); 
   },
 
   optional: <Out, In, T1, T2, T3, T4, T5>(...validators: CompositionParameters<Out, In, T1, T2, T3, T4, T5>) => {
-    if (validators.length > 1) {
-      return new OptionalValidator<Out, In>(new CompositionValidator<Out, In>(validators))
-    } else {
-      return new OptionalValidator<Out, In>(validators[0] as Validator<Out, In>);
-    }
+    return new OptionalValidator<Out, In>(maybeCompositionOf(...validators)); 
   },
 
   required: <Out, In, T1, T2, T3, T4, T5>(...validators: CompositionParameters<Out, In, T1, T2, T3, T4, T5>) => {
-    if (validators.length > 1) {
-      return new RequiredValidator<Out, In>(new CompositionValidator<Out, In>(validators))
-    } else {
-      return new RequiredValidator<Out, In>(validators[0] as Validator<Out, In>);
-    }
+    return new RequiredValidator<Out, In>(maybeCompositionOf(...validators)); 
   },
 
-  if: <Out>(fn: AssertTrue, validator: Validator<Out>) => new IfValidator<Out>([new Conditional<Out>(fn, validator)]),
+  if: <Out, In, T1, T2, T3, T4, T5>(fn: AssertTrue, ...validators: CompositionParameters<Out, In, T1, T2, T3, T4, T5>) => {
+    return new IfValidator<Out, In>([new Conditional<Out>(fn, maybeCompositionOf(...validators))]); 
+  },
 
-  whenGroup: <Out>(group: GroupOrName, validator: Validator<Out>) => new WhenGroupValidator([new WhenGroup(group, validator)]),
+  whenGroup: <Out, In, T1, T2, T3, T4, T5>(group: GroupOrName, ...validators: CompositionParameters<Out, In, T1, T2, T3, T4, T5>) => {
+    return new WhenGroupValidator([new WhenGroup(group, maybeCompositionOf(...validators))]);
+  },
 
   string: () => stringValidator,
 
@@ -183,9 +167,13 @@ export const V = {
 
   nullToArray: () => new ValueMapper((value: any) => (isNullOrUndefined(value) ? [] : value)),
 
-  array: <T>(items: Validator<T>) => new ArrayValidator<T>(items),
+  array: <Out, In, T1, T2, T3, T4, T5>(...items: CompositionParameters<Out, In, T1, T2, T3, T4, T5>) => {
+    return new ArrayValidator<Out>(maybeCompositionOf(...items));
+  },
 
-  toArray: <T>(items: Validator<T>) => new ArrayNormalizer<T>(items),
+  toArray: <Out, In, T1, T2, T3, T4, T5>(...items: CompositionParameters<Out, In, T1, T2, T3, T4, T5>) => {
+    return new ArrayNormalizer<Out>(maybeCompositionOf(...items));
+  },
 
   size: <T extends { length: number }>(min: number, max: number) => new SizeValidator<T>(min, max),
 
@@ -197,7 +185,9 @@ export const V = {
 
   oneOf: <A extends Validator<any>, B extends Array<Validator<any>>>(...validators: [A, ...B]) => new OneOfValidator<VType<A> | VType<B[any]>>(validators),
 
-  compositionOf: <Out, In, T1, T2, T3, T4, T5>(...validators: CompositionParameters<Out, In, T1, T2, T3, T4, T5>) => new CompositionValidator<Out, In>(validators),
+  compositionOf: <Out, In, T1, T2, T3, T4, T5>(...validators: CompositionParameters<Out, In, T1, T2, T3, T4, T5>) => {
+    return maybeCompositionOf(...validators);
+  },
 
   date: () => dateValidator,
 

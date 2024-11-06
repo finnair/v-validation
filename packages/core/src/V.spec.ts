@@ -508,6 +508,9 @@ describe('objects', () => {
         type: V.hasValue<'Child'>('Child'),
       }).build();
 
+    ({ type: 'Parent' }) satisfies VType<typeof parent>;
+    ({ type: 'Child' }) satisfies VType<typeof child>;
+
     test('valid parent', () => expectValid({ type: 'Parent' }, parent));
 
     test('valid child', () => expectValid({ type: 'Child' }, child));
@@ -640,6 +643,29 @@ describe('inheritance', () => {
     ).getValue();
     expect(Object.keys(value)).toEqual(['id', 'name', 'anything', 'firstAdditional', 'additionalProperty', 'thirdAdditional']);
   });
+
+  describe('allOf parent next validators', async () => {
+    const parent1 = V.objectType().properties({
+        pwd1: V.string(),
+        pwd2: V.string(), 
+      }).next(V.assertTrue(obj => obj.pwd1 === obj.pwd2, 'PasswordsMatch'))
+      .build();
+
+      const parent2 = V.objectType().properties({
+        min: V.number(),
+        max: V.number(), 
+      }).next(V.assertTrue(obj => obj.min <= obj.max, 'MinLoeMax'))
+      .build();
+
+    const child = V.objectType()
+      .extends(parent1)
+      .extends(parent2)
+      .build();
+    
+    test('valid child', () => expectValid({ pwd1: 'pwd', pwd2: 'pwd', min: 1, max: 2} satisfies VType<typeof child>, child))
+
+    test('invalid child', () => expectViolations({ pwd1: 'pwd1', pwd2: 'pwd2', min: 2, max: 1}, child, new Violation(ROOT, 'PasswordsMatch'), new Violation(ROOT, 'MinLoeMax')));
+  }); 
 });
 
 describe('object next', () => {
@@ -681,11 +707,6 @@ describe('object next', () => {
 });
 
 describe('object localNext', () => {
-  interface Parent {
-    name: string;
-    upper?: boolean;
-  }
-  interface Child extends Parent {}
   const parent = V.objectType()
     .properties({
       name: V.string(),
@@ -702,7 +723,7 @@ describe('object localNext', () => {
     .extends(parent)
     .localNext(V.map(obj => `child:${obj.name}`))
     .build();
-
+  
   test('parent', async () => {
     expect((await parent.validate({ name: 'Darth' })).getValue()).toEqual('parent:Darth');
   });
@@ -724,7 +745,7 @@ describe('object localNext', () => {
       properties: {
         name: V.string(),
       },
-      localNext: V.map(obj => `parent:${obj.name}`),
+      localNext: V.map((obj: any) => `parent:${obj.name}`),
     });
     await expectViolations({}, model, defaultViolations.notNull(property('name')));
   });
@@ -732,11 +753,11 @@ describe('object localNext', () => {
 
 describe('Date', () => {
   const now = new Date();
-  const validator = V.object({
-    properties: {
-      date: V.date(),
-    },
-  });
+  const validator = V.objectType().properties({
+    date: V.date(),
+  }).build();
+
+  ({ date: new Date() }) satisfies VType<typeof validator>;
 
   test('null is not allowed', () => expectViolations(null, V.date(), defaultViolations.notNull()));
 
@@ -1194,6 +1215,8 @@ describe('groups', () => {
 describe('required', () => {
   const validator = V.required(V.string());
 
+  const dateInPast = (date: Date) => date.valueOf() < Date.now();
+
   test('null is invalid', () => expectViolations(null, validator, defaultViolations.notNull()));
 
   test('undefined is invalid', () => expectViolations(undefined, validator, defaultViolations.notNull()));
@@ -1202,13 +1225,17 @@ describe('required', () => {
 
   test('valid string', () => expectValid('123', validator));
 
-  test('type conversion with allOf', () => expectValid(validDateString, V.required(V.date(), V.hasValue(validDate)), validDate));
+  test('type conversion with compositionOf', () => 
+    expectValid(validDateString, V.required(V.hasValue(validDateString), V.date(), V.assertTrue(dateInPast)), validDate));
 
-  test('type validation with allOf', () => expectValid(validDateString, V.check(V.required(V.date(), V.hasValue(validDate)))));
+  test('type validation with compositionOf', () => 
+    expectValid(validDateString, V.check(V.hasValue(validDateString), V.date(), V.assertTrue(dateInPast))));
 });
 
 describe('optional', () => {
   const validator = V.optional(V.string());
+
+  const dateInPast = (date: Date) => date.valueOf() < Date.now();
 
   test('null is valid', () => expectValid(null, validator));
 
@@ -1218,9 +1245,9 @@ describe('optional', () => {
 
   test('valid string', () => expectValid('123', validator));
 
-  test('type conversion with allOf', () => expectValid(validDateString, V.optional(V.date(), V.hasValue(validDate)), validDate));
+  test('type conversion with compositionOf', () => expectValid(validDateString, V.optional(V.hasValue(validDateString), V.date(), V.assertTrue(dateInPast)), validDate));
 
-  test('type validation with allOf', () => expectValid(validDateString, V.check(V.optional(V.date(), V.hasValue(validDate)))));
+  test('type validation with compositionOf', () => expectValid(validDateString, V.check(V.optional(V.hasValue(validDateString), V.date(), V.assertTrue(dateInPast)))));
 
   test('chained validation rules', () => expectViolations('0', V.optional(V.toInteger(), V.min(1)), defaultViolations.min(1, true, 0)));
 });
@@ -1244,7 +1271,7 @@ describe('isNumber', () => {
 
 describe('if', () => {
   const validator = V.if((value: any) => typeof value === 'number', V.min(1))
-    .elseIf((value: any) => typeof value === 'boolean', V.hasValue(true))
+    .elseIf((value: unknown) => typeof value === 'boolean', V.hasValue(true))
     .else(V.string());
 
   test('if matches valid', () => expectValid(123, validator));

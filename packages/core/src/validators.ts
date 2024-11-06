@@ -313,7 +313,7 @@ export const defaultViolations = {
   cycle: (path: Path) => new Violation(path, 'Cycle'),
 };
 
-export interface AssertTrue<In = any> {
+export interface AssertTrue<In = unknown> {
   (value: In, path: Path, ctx: ValidationContext): boolean;
 }
 
@@ -441,6 +441,7 @@ export class ObjectValidator<LocalType = unknown, InheritableType = unknown> ext
     super();
     let properties: Properties = {};
     let additionalProperties: MapEntryValidator[] = [];
+    let parentNextValidators: Validator[] = [];
     let nextValidators: Validator[] = [];
 
     this.parentValidators = model.extends ? ([] as ObjectValidator[]).concat(model.extends) : [];
@@ -449,8 +450,11 @@ export class ObjectValidator<LocalType = unknown, InheritableType = unknown> ext
       additionalProperties = additionalProperties.concat(parent.additionalProperties);
       properties = mergeProperties(parent.properties, properties);
       if (parent.nextValidator) {
-        nextValidators.push(parent.nextValidator);
+        parentNextValidators.push(parent.nextValidator);
       }
+    }
+    if (parentNextValidators.length > 0) {
+      nextValidators.push(maybeAllOfValidator(parentNextValidators as [Validator, ...Validator[]]));
     }
     if (model.next) {
       nextValidators = nextValidators.concat(model.next);
@@ -458,9 +462,13 @@ export class ObjectValidator<LocalType = unknown, InheritableType = unknown> ext
     this.additionalProperties = additionalProperties.concat(getMapEntryValidators(model.additionalProperties));
     this.properties = mergeProperties(getPropertyValidators(model.properties), properties);
     this.localProperties = getPropertyValidators(model.localProperties);
-    this.nextValidator = nextValidators.length ? nextValidators.length === 1 ? nextValidators[0] : new CompositionValidator(nextValidators as [Validator, ...Validator[], Validator]) : undefined;
+    this.nextValidator = nextValidators.length > 0 ? maybeCompositionOf(...(nextValidators as CompositionParameters)) : undefined;
     if (model.localNext) {
-      this.localNextValidator = Array.isArray(model.localNext) ? new CompositionValidator(model.localNext) : model.localNext;
+      if (!Array.isArray(model.localNext)) {
+        this.localNextValidator = model.localNext;
+      } else if (model.localNext.length > 0) {
+        this.localNextValidator = maybeCompositionOf(...(model.localNext as CompositionParameters));
+      }
     }
 
     Object.freeze(this.properties);
@@ -625,13 +633,13 @@ export class MapEntryValidator {
   }
 }
 
-export class ArrayValidator<T = unknown> extends Validator<T[]> {
-  constructor(public readonly itemsValidator: Validator<T>) {
+export class ArrayValidator<Out = unknown> extends Validator<Out[]> {
+  constructor(public readonly itemsValidator: Validator<Out>) {
     super();
     Object.freeze(this);
   }
 
-  validatePath(value: unknown, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<T[]>> {
+  validatePath(value: unknown, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<Out[]>> {
     if (isNullOrUndefined(value)) {
       return ctx.failurePromise(defaultViolations.notNull(path), value);
     }
@@ -785,14 +793,14 @@ export class AnyOfValidator<T = unknown> extends Validator<T> {
   }
 }
 
-export class IfValidator<If = unknown, Else = unknown> extends Validator<If | Else> {
-  constructor(public readonly conditionals: Conditional<If>[], public readonly elseValidator?: Validator<Else>) {
+export class IfValidator<If = unknown, In = unknown, Else = unknown> extends Validator<If | Else, In> {
+  constructor(public readonly conditionals: Conditional<If, In>[], public readonly elseValidator?: Validator<Else, In>) {
     super();
     Object.freeze(this.conditionals);
     Object.freeze(this);
   }
 
-  validatePath(value: unknown, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<If | Else>> {
+  validatePath(value: In, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<If | Else>> {
     for (let i = 0; i < this.conditionals.length; i++) {
       const conditional = this.conditionals[i];
       if (conditional.fn(value, path, ctx)) {
@@ -805,23 +813,26 @@ export class IfValidator<If = unknown, Else = unknown> extends Validator<If | El
     return ctx.successPromise(value as If | Else);
   }
 
-  elseIf<EIf>(fn: AssertTrue, validator: Validator<EIf>): IfValidator<If | EIf, Else> {
+  elseIf<ElIf, ElIn>(fn: AssertTrue, validator: Validator<ElIf, ElIn>): IfValidator<If | ElIf, In | ElIn, Else> {
     if (this.elseValidator) {
       throw new Error('Else is already defined. Define elseIfs first.');
     }
-    return new IfValidator<If | EIf, Else>([...this.conditionals, new Conditional(fn, validator)], this.elseValidator);
+    return new IfValidator<If | ElIf, In | ElIn, Else>(
+      [...this.conditionals, new Conditional(fn, validator)] as Conditional<If | ElIf, In | ElIn>[], 
+      this.elseValidator
+    );
   }
 
-  else<Else>(validator: Validator<Else>): IfValidator<If, Else> {
+  else<Else>(validator: Validator<Else>): IfValidator<If, In, Else> {
     if (this.elseValidator) {
       throw new Error('Else is already defined.');
     }
-    return new IfValidator<If, Else>(this.conditionals, validator);
+    return new IfValidator<If, In, Else>(this.conditionals, validator);
   }
 }
 
-export class Conditional<Out = unknown> {
-  constructor(public readonly fn: AssertTrue, public readonly validator: Validator<Out>) {
+export class Conditional<Out = unknown, In = unknown> {
+  constructor(public readonly fn: AssertTrue<In>, public readonly validator: Validator<Out, In>) {
     Object.freeze(this.validator);
     Object.freeze(this);
   }
@@ -1084,8 +1095,12 @@ export class StringNormalizer extends StringValidatorBase<unknown> {
   }
 }
 
-export class NotNullOrUndefinedValidator<InOut> extends Validator<InOut extends null ? never : InOut extends undefined ? never : InOut> {
-  validatePath(value: unknown, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<InOut extends null ? never : InOut extends undefined ? never : InOut>> {
+export class NotNullOrUndefinedValidator<InOut> extends Validator<
+    InOut extends null ? never : InOut extends undefined ? never : InOut, 
+    InOut extends null ? never : InOut extends undefined ? never : InOut
+  > {
+  validatePath(value: InOut extends null ? never : InOut extends undefined ? never : InOut, path: Path, ctx: ValidationContext): 
+      PromiseLike<ValidationResult<InOut extends null ? never : InOut extends undefined ? never : InOut>> {
     return isNullOrUndefined(value) ? ctx.failurePromise(defaultViolations.notNull(path), value) : ctx.successPromise(value);
   }
 }
@@ -1402,14 +1417,14 @@ export class HasValueValidator<InOut> extends Validator<InOut> {
   }
 }
 
-export class AllOfValidator extends Validator {
-  constructor(public readonly validators: [Validator, ...Validator[]]) {
+export class AllOfValidator<Out, In> extends Validator<Out, In> {
+  constructor(public readonly validators: [Validator<Out, In>, ...Validator<Out, In>[]]) {
     super();
     Object.freeze(this.validators);
     Object.freeze(this);
   }
 
-  validatePath(value: unknown, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult> {
+  validatePath(value: In, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<Out>> {
     let violations: Violation[] = [];
     let convertedValue: any;
     const promises: PromiseLike<any>[] = [];
@@ -1420,11 +1435,12 @@ export class AllOfValidator extends Validator {
           violations = violations.concat(result.getViolations());
         } else {
           const resultValue = result.getValue();
-          if (resultValue !== value) {
+          if (resultValue !== value as any) {
             if (convertedValue !== undefined && !deepEqual(resultValue, convertedValue)) {
-              throw new Error('Conflicting conversions');
+              violations.push(new Violation(path, 'ConflictingConversions', value));
+            } else {
+              convertedValue = resultValue;
             }
-            convertedValue = resultValue;
           }
         }
       });
@@ -1617,4 +1633,27 @@ export class JsonValidator<T> extends Validator<T> {
       return ctx.failurePromise(new TypeMismatch(path, 'JSON', value), value);
     }
   }
+}
+
+export type CompositionParameters<Out = unknown, In = unknown, T1 = unknown, T2 = unknown, T3 = unknown, T4 = unknown, T5 = unknown> = 
+  [Validator<Out, In>] | 
+  [Validator<T1, In>, Validator<Out, T1>] |
+  [Validator<T1, In>, Validator<T2, T1>, Validator<Out, T2>] |
+  [Validator<T1, In>, Validator<T2, T1>, Validator<T3, T2>, Validator<Out, T3>] |
+  [Validator<T1, In>, Validator<T2, T1>, Validator<T3, T2>, Validator<T4, T3>, Validator<Out, T4>] |
+  [Validator<T1, In>, Validator<T2, T1>, Validator<T3, T2>, Validator<T4, T3>, Validator<T5, T4>, Validator<Out, T5>];
+
+export function maybeCompositionOf<Out = unknown, In = unknown, T1 = unknown, T2 = unknown, T3 = unknown, T4 = unknown, T5 = unknown>(...validators: CompositionParameters<Out, In, T1, T2, T3, T4, T5>) {
+  if (validators.length === 1) {
+    return validators[0];
+  } else {
+    return new CompositionValidator<Out, In>(validators);
+  }
+}
+
+export function maybeAllOfValidator<Out, In>(validators: [Validator<Out, In>, ...Validator<Out, In>[]]): Validator<Out, In> {
+  if (validators.length === 1) {
+    return validators[0];
+  }
+  return new AllOfValidator<Out, In>(validators);
 }

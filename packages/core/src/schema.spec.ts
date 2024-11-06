@@ -139,7 +139,7 @@ describe('schema', () => {
           extends: { type: 'Object' },
           type: 'ObjectNormalizer',
         })
-      ).getValue();
+      ).getValue() as any;
       expect(Object.keys(value)).toEqual(['type', 'extends', 'properties', 'property']);
       expect(Object.keys(value.properties)).toEqual(['first', 'second']);
     });
@@ -211,14 +211,14 @@ describe('ClassModel.next', () => {
           pw1: V.string(),
           pw2: V.string(),
         },
-        next: V.assertTrue(user => user.pw1 === user.pw2, 'PasswordVerification', Path.of('pw2')),
+        next: V.assertTrue((user: any) => user.pw1 === user.pw2, 'PasswordVerification', Path.of('pw2')),
       },
       NewUserRequest: {
         extends: 'PasswordChangeRequest',
         properties: {
           name: V.string(),
         },
-        next: V.assertTrue(user => user.pw1.indexOf(user.name) < 0, 'BadPassword', Path.of('pw1')),
+        next: V.assertTrue((user: any) => user.pw1.indexOf(user.name) < 0, 'BadPassword', Path.of('pw1')),
       },
     },
   }));
@@ -244,7 +244,7 @@ describe('ClassModel.localNext', () => {
         properties: {
           name: V.string(),
         },
-        localNext: V.map(obj => `${obj.name}`),
+        localNext: V.map((obj: any) => `${obj.name}`),
       },
     },
   }));
