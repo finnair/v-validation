@@ -116,7 +116,8 @@ export const V = {
 
   undefinedToNull: () => undefinedToNullValidator,
 
-  emptyTo: <T extends { length: number }>(defaultValue: T) => new ValueMapper<T>((value: T) => (isNullOrUndefined(value) || value.length === 0 ? defaultValue : value)),
+  emptyTo: <InOut extends { length: number }>(defaultValue: InOut) => 
+    new ValueMapper<InOut, InOut>((value: InOut) => (isNullOrUndefined(value) || value.length === 0 ? defaultValue : value)),
 
   uuid: (version?: number) => new UuidValidator(version),
 
@@ -156,11 +157,12 @@ export const V = {
 
   setType: (values: Validator, jsonSafeSet: boolean = true) => new SetValidator(values, jsonSafeSet),
 
-  nullTo: (defaultValue: string | number | bigint | boolean | symbol) => new ValueMapper(value => (isNullOrUndefined(value) ? defaultValue : value)),
+  nullTo: <Out extends string | number | bigint | boolean | symbol, In = unknown>(defaultValue: Out) => 
+    new ValueMapper<Out | In, In>((value: In) => (isNullOrUndefined(value) ? defaultValue : value)),
 
-  nullToObject: () => new ValueMapper((value: any) => (isNullOrUndefined(value) ? {} : value)),
+  nullToObject: <In>() => new ValueMapper<{} | In, In>(value => (isNullOrUndefined(value) ? {} : value)),
 
-  nullToArray: () => new ValueMapper((value: any) => (isNullOrUndefined(value) ? [] : value)),
+  nullToArray: <In>() => new ValueMapper<[] | In, In>(value => (isNullOrUndefined(value) ? [] : value)),
 
   array: <Out, In, T1, T2, T3, T4, T5>(...items: CompositionParameters<Out, In, T1, T2, T3, T4, T5>) => 
     new ArrayValidator<Out>(maybeCompositionOf(...items)),

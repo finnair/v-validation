@@ -1505,7 +1505,7 @@ describe('json', () => {
 
   test('Invalid JSON', () => expectViolations('["foo", "bar"', validator, new TypeMismatch(Path.of(), 'JSON', '["foo", "bar"')));
 
-  test('Non-string input is invalid', () => expectViolations(123, validator, new TypeMismatch(Path.of(), 'string', 123)));
+  test('Non-string input is invalid', () => expectViolations(123 as any, validator, new TypeMismatch(Path.of(), 'string', 123)));
 });
 
 describe('SyncPromise', () => {

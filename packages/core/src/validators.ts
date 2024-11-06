@@ -1556,7 +1556,7 @@ export class RequiredValidator<Out, In> extends Validator<Out, In> {
   }
 }
 
-export class ValueMapper<Out = unknown, In = any> extends Validator<Out, In> {
+export class ValueMapper<Out = unknown, In = unknown> extends Validator<Out, In> {
   constructor(public readonly fn: MappingFn<Out, In>, public readonly error?: any) {
     super();
     Object.freeze(this);
