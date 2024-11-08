@@ -24,7 +24,7 @@ export function verifyValid<Out>(result: ValidationResult<Out>, value: any, conv
   } else {
     expect(result.getValue()).toEqual(value);
   }
-  return result;
+  return result.getValue();
 }
 
 test.skip('do not fail build because of no tests found', () => { });

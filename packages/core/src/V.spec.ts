@@ -417,7 +417,12 @@ describe('objects', () => {
     await expectViolations({ property: 'string' }, validator, defaultViolations.unknownPropertyDenied(ROOT.property('property')));
   });
 
-  test('properties', () => expectValid({ foo: 'bar' }, V.properties(V.string(), V.string())));
+  describe('properties', () => {
+    test('valid properties', async () => {
+      const validator = V.properties(V.string(), V.string());
+      (await expectValid({ foo: 'bar' } satisfies Record<string, string>, validator)) satisfies Record<string, string>;
+    });
+  });
 
   describe('cross-property rules', () => {
     interface IPasswordRequest {

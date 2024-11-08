@@ -186,7 +186,8 @@ export const V = {
 
   size: <T extends { length: number }>(min: number, max: number) => new SizeValidator<T>(min, max),
 
-  properties: (keys: Validator, values: Validator) => new ObjectValidator({ additionalProperties: { keys, values } }),
+  properties: <Key extends keyof any, Value>(keys: Validator<Key>, values: Validator<Value>) => 
+    new ObjectValidator<Record<Key, Value>>({ additionalProperties: { keys, values } }),
 
   allOf: (...validators: [Validator, ...Validator[]]) => new AllOfValidator(validators),
 
