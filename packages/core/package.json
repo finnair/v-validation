@@ -45,9 +45,9 @@
     "uuid": "10.0.0"
   },
   "peerDependencies": {
-    "@finnair/path": "~6.0"
+    "@finnair/path": ">=6"
   },
   "devDependencies": {
-    "@finnair/path": "^6.1.0"
+    "@finnair/path": "~6.1.0"
   }
 }

@@ -43,7 +43,7 @@
     "nearley": "2.20.1"
   },
   "peerDependencies": {
-    "@finnair/path": "~6.0"
+    "@finnair/path": ">=6"
   },
   "devDependencies": {
     "@finnair/path": "^6.1.0"

@@ -40,8 +40,8 @@
     "build:esm": "tsc -b . && cp ../../package.esm.json dist/esm/package.json"
   },
   "peerDependencies": {
-    "@finnair/path": "~6.0",
-    "@finnair/v-validation": "~6.0",
+    "@finnair/path": "=>6",
+    "@finnair/v-validation": ">=6",
     "moment": "^2.30.0"
   },
   "devDependencies": {
