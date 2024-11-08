@@ -52,12 +52,13 @@ import {
   VType,
   maybeCompositionOf,
   CompositionParameters,
+  OptionalUndefinedValidator,
+  NullableValidator,
 } from './validators.js';
 import {ObjectModel, ObjectValidator, ObjectNormalizer } from './objectValidator.js';
 import { ObjectValidatorBuilder } from './objectValidatorBuilder.js';
 
 const ignoreValidator = new IgnoreValidator(),
-  anyValidator = new AnyValidator(),
   stringValidator = new StringValidator(),
   toStringValidator = new StringNormalizer(),
   nullOrUndefinedValidator = new IsNullOrUndefinedValidator(),
@@ -73,19 +74,34 @@ const ignoreValidator = new IgnoreValidator(),
   dateValidator = new DateValidator(ValidatorType.Date);
 
 export const V = {
-  fn: <Out>(fn: ValidatorFn<Out>, type?: string) => new ValidatorFnWrapper<Out>(fn, type),
+  fn: <Out, In>(fn: ValidatorFn<Out, In>, type?: string) => new ValidatorFnWrapper<Out, In>(fn, type),
 
   map: <Out, In>(fn: MappingFn<Out, In>, error?: any) => new ValueMapper<Out, In>(fn, error),
 
   ignore: () => ignoreValidator,
 
-  any: () => anyValidator,
+  any: <InOut = any>() => new AnyValidator<InOut>(),
 
   check: <Out, In, T1, T2, T3, T4, T5>(...validators: CompositionParameters<Out, In, T1, T2, T3, T4, T5>) => 
     new CheckValidator<In>(maybeCompositionOf(...validators)),
 
+  /**
+   * Allows only undefined, null or valid value. 
+   */
   optional: <Out, In, T1, T2, T3, T4, T5>(...validators: CompositionParameters<Out, In, T1, T2, T3, T4, T5>) => 
     new OptionalValidator<Out, In>(maybeCompositionOf(...validators)),
+    
+  /**
+   * Allows only undefined or valid value. 
+   */
+  optionalStrict: <Out, In, T1, T2, T3, T4, T5>(...validators: CompositionParameters<Out, In, T1, T2, T3, T4, T5>) => 
+    new OptionalUndefinedValidator<Out, In>(maybeCompositionOf(...validators)),
+
+  /**
+   * Allows only null or valid value. 
+   */
+  nullable: <Out, In, T1, T2, T3, T4, T5>(...validators: CompositionParameters<Out, In, T1, T2, T3, T4, T5>) => 
+    new NullableValidator<Out, In>(maybeCompositionOf(...validators)),
 
   required: <Out, In, T1, T2, T3, T4, T5>(...validators: CompositionParameters<Out, In, T1, T2, T3, T4, T5>) => 
     new RequiredValidator<Out, In>(maybeCompositionOf(...validators)),

@@ -1,5 +1,20 @@
 import { Path } from "@finnair/path";
-import { AnyValidator, CompositionParameters, defaultViolations, HasValueValidator, isNullOrUndefined, isNumber, isString, maybeAllOfValidator, maybeCompositionOf, ValidationContext, ValidationResult, Validator, ValidatorFnWrapper, Violation } from "./validators";
+import { 
+  AnyValidator, 
+  CompositionParameters, 
+  defaultViolations, 
+  HasValueValidator, 
+  isNullOrUndefined, 
+  isNumber, 
+  isString, 
+  maybeAllOfValidator, 
+  maybeCompositionOf, 
+  ValidationContext, 
+  Validator, 
+  ValidatorFnWrapper, 
+  Violation, 
+  violationsOf,
+} from "./validators";
 
 export type PropertyModel = { [s: string]: string | number | Validator };
 
@@ -100,16 +115,16 @@ export class ObjectValidator<LocalType = unknown, InheritableType = unknown> ext
     Object.freeze(this);
   }
 
-  validatePath(value: unknown, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<LocalType>> {
+  validatePath(value: unknown, path: Path, ctx: ValidationContext): PromiseLike<LocalType> {
     return this.validateFilteredPath(value, path, ctx, _ => true);
   }
 
-  validateFilteredPath(value: unknown, path: Path, ctx: ValidationContext, filter: PropertyFilter): PromiseLike<ValidationResult<LocalType>> {
+  validateFilteredPath(value: any, path: Path, ctx: ValidationContext, filter: PropertyFilter): PromiseLike<LocalType> {
     if (value === null || value === undefined) {
-      return ctx.failurePromise(defaultViolations.notNull(path), value);
+      return Promise.reject(defaultViolations.notNull(path));
     }
     if (typeof value !== 'object' || Array.isArray(value)) {
-      return ctx.failurePromise(defaultViolations.object(path), value);
+      return Promise.reject(defaultViolations.object(path));
     }
     const anyValue = value as any;
     const context: ObjectValidationContext = {
@@ -121,9 +136,9 @@ export class ObjectValidator<LocalType = unknown, InheritableType = unknown> ext
     };
     const cycleResult = ctx.registerObject<LocalType>(value, path, context.convertedObject);
     if (cycleResult) {
-      return ctx.promise(cycleResult);
+      return cycleResult;
     }
-    const propertyResults: PromiseLike<ValidationResult>[] = [];
+    const propertyResults: PromiseLike<any>[] = [];
 
     for (const key in this.properties) {
       propertyResults.push(validateProperty(key, anyValue[key], this.properties[key], context));
@@ -137,19 +152,27 @@ export class ObjectValidator<LocalType = unknown, InheritableType = unknown> ext
       }
     }
 
-    let validationChain = Promise.all(propertyResults).then(_ => {
+    let validationChain = Promise.allSettled(propertyResults).then(_ => {
       if (context.violations.length === 0) {
-        return ctx.successPromise(context.convertedObject);
+        return Promise.resolve(context.convertedObject);
       }
-      return ctx.failurePromise(context.violations, context.convertedObject);
+      return Promise.reject(context.violations);
     });
     if (this.nextValidator) {
       const validator = this.nextValidator;
-      validationChain = validationChain.then(result => (result.isSuccess() ? validator.validatePath(result.getValue(), path, ctx) : result));
+      validationChain = validationChain.then(
+        result => {
+          return validator.validatePath(result, path, ctx);
+        }
+      );
     }
     if (this.localNextValidator) {
       const validator = this.localNextValidator;
-      validationChain = validationChain.then(result => (result.isSuccess() ? validator.validatePath(result.getValue(), path, ctx) : result));
+      validationChain = validationChain.then(
+        result => {
+          return validator.validatePath(result, path, ctx);
+        }
+      );
     }
     return validationChain;
   }
@@ -188,24 +211,25 @@ interface ObjectValidationContext {
 
 function validateProperty(key: string, currentValue: any, validator: Validator, context: ObjectValidationContext) {
   if (!context.filter(key)) {
-    return context.ctx.successPromise(undefined);
+    return Promise.resolve();
   }
   // Assign for property order
   context.convertedObject[key] = undefined;
-  return validator.validatePath(currentValue, context.path.property(key), context.ctx).then(result => {
-    if (result.isSuccess()) {
-      const newValue = result.getValue();
-      if (newValue !== undefined) {
-        context.convertedObject[key] = newValue;
+  return validator.validatePath(currentValue, context.path.property(key), context.ctx).then(
+    result => {
+      if (result !== undefined) {
+        context.convertedObject[key] = result;
       } else {
         delete context.convertedObject[key];
       }
-    } else {
+      return result;
+    },
+    error => {
       delete context.convertedObject[key];
-      context.violations = context.violations.concat(result.getViolations());
+      context.violations = context.violations.concat(violationsOf(error));
+      return Promise.reject(context.violations);
     }
-    return result;
-  });
+  );
 }
 
 async function validateAdditionalProperty(
@@ -215,29 +239,30 @@ async function validateAdditionalProperty(
   context: ObjectValidationContext,
 ): Promise<any> {
   if (!context.filter(key)) {
-    return Promise.resolve(context.ctx.success(undefined));
+    return Promise.resolve();
   }
   const keyPath = context.path.property(key);
   let currentValue = originalValue;
   let validKey = false;
-  let result: undefined | ValidationResult;
+  let keyViolations: undefined | Violation[];
   for (let i = 0; i < additionalProperties.length; i++) {
     const entryValidator = additionalProperties[i];
-    result = await entryValidator.keyValidator.validatePath(key, keyPath, context.ctx);
-    if (result.isSuccess()) {
+    try {
+      await entryValidator.keyValidator.validatePath(key, keyPath, context.ctx);
       validKey = true;
-      result = await validateProperty(key, currentValue, entryValidator.valueValidator, context);
-      if (result.isSuccess()) {
-        currentValue = result.getValue();
-      } else {
-        return result;
+      try {
+        currentValue = await validateProperty(key, currentValue, entryValidator.valueValidator, context);
+      } catch (error) {
+        return Promise.reject(violationsOf(error));
       }
+    } catch (error) {
+      keyViolations = violationsOf(error);
     }
   }
   if (!validKey) {
-    if (additionalProperties.length == 1 && result) {
+    if (additionalProperties.length == 1 && keyViolations) {
       // Only one kind of key accepted -> give out violations related to that
-      context.violations = context.violations.concat(result!.getViolations());
+      context.violations = context.violations.concat(keyViolations);
     } else {
       return validateProperty(key, originalValue, lenientUnknownPropertyValidator, context);
     }
@@ -262,21 +287,21 @@ export function mergeProperties(from: Properties, to: Properties): Properties {
  * to e.g. preprocess the results of an XML parser and a schema having textual elements with optional attributes
  * where an element without attributes would be simple string and an element with attributes would be an object.
  */
-export class ObjectNormalizer extends Validator {
+export class ObjectNormalizer<InOut> extends Validator<undefined | InOut | {}> {
   constructor(public readonly property: string) {
     super();
     Object.freeze(this);
   }
-  validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult> {
+  validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<undefined | {}> {
     if (value === undefined) {
-      return ctx.successPromise(undefined);
+      return Promise.resolve(undefined);
     }
     if (typeof value !== 'object' || value === null) {
       const object: any = {};
       object[this.property] = value;
-      return ctx.successPromise(object);
+      return Promise.resolve(object);
     }
-    return ctx.successPromise(value);
+    return Promise.resolve(value);
   }
 }
 
@@ -324,12 +349,10 @@ function getMapEntryValidators(additionalProperties?: boolean | MapEntryModel | 
 }
 
 export const lenientUnknownPropertyValidator = new ValidatorFnWrapper((value: any, path: Path, ctx: ValidationContext) =>
-  ctx.failurePromise(defaultViolations.unknownProperty(path), value),
-);
+  ctx.failure(defaultViolations.unknownProperty(path), value));
 
-export const strictUnknownPropertyValidator = new ValidatorFnWrapper((value: any, path: Path, ctx: ValidationContext) =>
-  ctx.failurePromise(defaultViolations.unknownPropertyDenied(path), value),
-);
+export const strictUnknownPropertyValidator = new ValidatorFnWrapper((value: any, path: Path, ctx: ValidationContext) => 
+  Promise.reject(defaultViolations.unknownPropertyDenied(path)));
 
 const allowAllMapEntries: MapEntryValidator = new MapEntryValidator({
   keys: new AnyValidator(),

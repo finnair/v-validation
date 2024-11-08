@@ -18,7 +18,6 @@ import {
   HasValueViolation,
   SizeViolation,
   EnumMismatch,
-  SyncPromise,
   JsonSet,
   VType,
 } from './validators.js';
@@ -57,8 +56,8 @@ class DeferredValidator<T> extends Validator<T> {
     super();
   }
 
-  async validatePath(value: any, path: Path, ctx: ValidationContext): Promise<ValidationResult<T>> {
-    return new Promise<ValidationResult<T>>((resolve, reject) => {
+  async validatePath(value: any, path: Path, ctx: ValidationContext): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
       setTimeout(() => {
         this.validator.validatePath(value, path, ctx).then(resolve, reject);
       }, this.ms);
@@ -89,6 +88,21 @@ describe('ValidationResult', () => {
       .toThrow('both violations and success value defined');
   })
 });
+
+describe('getValid', () => {
+  test('valid string', async () => {
+    const value = await V.string().getValid('string');
+    expect(value).toEqual('string');
+  });
+  test('invalid string', async () => {
+    try {
+      await V.string().getValid(123 as any);
+      fail('Expected getValue to throw an error')
+    } catch (error) {
+      // as expected
+    }
+  });
+})
 
 test('assertTrue', () =>
   expectValid(
@@ -440,10 +454,10 @@ describe('objects', () => {
       first: string;
       next?: RecursiveModel;
     }
-    const validator: Validator<RecursiveModel> = V.object<RecursiveModel>({
+    const validator = V.object<RecursiveModel>({
       properties: {
         first: V.string(),
-        next: V.optional(V.fn((value: any, path: Path, ctx: ValidationContext) => validator.validatePath(value, path, ctx))),
+        next: V.optionalStrict(V.fn((value: any, path: Path, ctx: ValidationContext): PromiseLike<RecursiveModel> => validator.validatePath(value, path, ctx))),
       },
     });
 
@@ -462,7 +476,7 @@ describe('objects', () => {
       constructor(model: ObjectModel) {
         super(model);
       }
-      validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<Partial<T>>> {
+      validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<Partial<T>> {
         return this.validateFilteredPath(value, path, ctx, _ => false);
       }
     }
@@ -622,9 +636,9 @@ describe('inheritance', () => {
     expectViolations(
       { additionalProperty: 123, name: '' },
       multiParentChild,
+      defaultViolations.notNull(property('anything')),
       defaultViolations.notNull(property('id')),
       defaultViolations.notEmpty(property('name')),
-      defaultViolations.notNull(property('anything')),
     ));
 
   test("child's extended property validators are only run after successful parent property validation", async () => {
@@ -664,7 +678,7 @@ describe('inheritance', () => {
       }).next(V.assertTrue(obj => obj.pwd1 === obj.pwd2, 'PasswordsMatch'))
       .build();
 
-      const parent2 = V.objectType().properties({
+    const parent2 = V.objectType().properties({
         min: V.number(),
         max: V.number(), 
       }).next(V.assertTrue(obj => obj.min <= obj.max, 'MinLoeMax'))
@@ -790,12 +804,12 @@ describe('Date', () => {
   test('invalid date format', () => expectViolations('23.10.2019T09:10:00Z', V.date(), defaultViolations.date('23.10.2019T09:10:00Z')));
 
   test('subsequent validators get to work on Date', () => {
-    async function notInstanceOfDate(value: any, path: Path, ctx: ValidationContext): Promise<ValidationResult> {
+    async function notInstanceOfDate(value: any, path: Path, ctx: ValidationContext) {
       // Return violation of expected case to verify that this validator is actually run
       if (value instanceof Date) {
-        return ctx.failure(new Violation(path, 'NotInstanceOfDate'), value);
+        throw new Violation(path, 'NotInstanceOfDate');
       }
-      return ctx.success(value);
+      return Promise.resolve(value);
     }
     const validator = V.object({
       properties: {
@@ -1047,13 +1061,13 @@ describe('number', () => {
   });
 
   describe('async', () => {
-    class WaitValidator extends Validator {
+    class WaitValidator<InOut> extends Validator<InOut, InOut> {
       public executionOrder: any[] = [];
-      async validatePath(value: any, path: Path, ctx: ValidationContext): Promise<ValidationResult> {
-        return new Promise<ValidationResult>((resolve, reject) => {
+      async validatePath(value: InOut, path: Path, ctx: ValidationContext) {
+        return new Promise<InOut>((resolve, reject) => {
           setTimeout(() => {
             this.executionOrder.push(value);
-            resolve(ctx.success(value));
+            resolve(value);
           }, value as number);
         });
       }
@@ -1173,7 +1187,7 @@ describe('groups', () => {
     expect(groups.get('grandchild')).toEqual(grandchild);
   });
 
-  test('default not included in parent', () => expectGroupValid(null, DEFAULT, V.whenGroup(parent, failAlways)));
+  test('default not included in parent', () => expectGroupValid(null, DEFAULT, V.whenGroup(parent, failAlways).otherwise(V.any())));
 
   test('group includes itself', () => expectGroupViolations(null, parent, V.whenGroup('parent', failAlways), failAlwaysViolation()));
 
@@ -1181,11 +1195,13 @@ describe('groups', () => {
 
   test('grandhild includes parent', () => expectGroupViolations(null, grandchild, V.whenGroup('parent', failAlways), failAlwaysViolation()));
 
-  test('child does not include grandchild', () => expectGroupValid(null, child, V.whenGroup(grandchild, failAlways)));
+  test('child does not include grandchild', () => expectGroupViolations(null, child, V.whenGroup(grandchild, failAlways), new Violation(ROOT, 'NoMatchingGroup', null)));
 
   test('grandchild indluces default', () => expectGroupViolations(null, grandchild, V.whenGroup(DEFAULT, failAlways), failAlwaysViolation()));
 
   test('non-grouped validations run always', () => expectGroupViolations(null, DEFAULT, V.notNull(), defaultViolations.notNull()));
+
+  test('both parent and child validators are executed', () => expectGroupValid('123', child, V.whenGroup(parent, V.string()).whenGroup(child, V.toNumber()), 123));
 
   test('referencing unknown groups not allowed', () => {
     const groups = new Groups();
@@ -1215,7 +1231,9 @@ describe('groups', () => {
   });
 
   describe('chaining', () => {
-    const whenChainValidator = V.whenGroup(DEFAULT, V.notNull()).whenGroup(parent, V.notEmpty()).otherwise(V.string());
+    const whenChainValidator = V.whenGroup(DEFAULT, V.notNull())
+      .whenGroup(parent, V.notEmpty())
+      .otherwise(V.string());
 
     test('chain first match', () => expectGroupViolations(null, withDefault, whenChainValidator, defaultViolations.notNull()));
 
@@ -1265,6 +1283,16 @@ describe('optional', () => {
   test('chained validation rules', () => expectViolations('0', V.optional(V.toInteger(), V.min(1)), defaultViolations.min(1, true, 0)));
 });
 
+describe('nullable', () => {
+  const validator = V.nullable(V.string());
+
+  test('valid null', () => expectValid(null, validator));
+
+  test('valid string', () => expectValid('string', validator));
+
+  test('undefined is invalid', () => expectViolations(undefined, validator, defaultViolations.notUndefined()));
+});
+
 describe('isNumber', () => {
   describe('positive cases', () => {
     test('123', () => expect(isNumber(123)).toBe(true));
@@ -1307,7 +1335,11 @@ describe('if', () => {
     expect(() => (V.if(_ => true, V.any()).else(V.any()) as IfValidator).else(V.any())).toThrow();
   });
 
-  test('no-conditional anomaly', () => expectValid({}, new IfValidator([])));
+  test('no-conditional anomaly', () => {
+    expect(() => new IfValidator([])).toThrow('At least one conditional required');
+  });
+
+  test('no matching conditional', () => expectViolations("foo", V.if(() => false, V.boolean()), new Violation(ROOT, 'NoMatchingCondition', "foo")));
 });
 
 describe('ignore', () => {
@@ -1442,7 +1474,7 @@ describe('Map', () => {
       const map = new Map<MapKeyType, String>(mapArray);
       expect(map.get(key)).toEqual('value');
       let result = await validator.validate(map);
-      expect(result.isSuccess()).toBe(true);
+      expect(result.isFailure()).toBe(false);
 
       // Serializes to JSON as array
       const jsonString = JSON.stringify(result.getValue());
@@ -1519,51 +1551,4 @@ describe('json', () => {
   test('Invalid JSON', () => expectViolations('["foo", "bar"', validator, new TypeMismatch(Path.of(), 'JSON', '["foo", "bar"')));
 
   test('Non-string input is invalid', () => expectViolations(123 as any, validator, new TypeMismatch(Path.of(), 'string', 123)));
-});
-
-describe('SyncPromise', () => {
-  test('onfullfilled is wrapped in a new SyncPromise', () => {
-    const promise = new SyncPromise('result').then(_ => 'new result');
-    expect(promise).toBeInstanceOf(SyncPromise);
-    promise.then(value => expect(value).toBe('new result'));
-  });
-
-  test('promise returned by onfulfilled is retuned as such', async () => {
-    const promise = Promise.resolve('promised result');
-    const result = await new SyncPromise('result').then(_ => promise);
-    expect(result).toBe('promised result');
-  });
-
-  test('call onrejected on error', async () => {
-    let thrownError: undefined | any;
-    // Awaiting for SyncPromise is optional
-    const result = await new SyncPromise('result').then(
-      () => {
-        throw 'error';
-      },
-      error => {
-        thrownError = error;
-        return 'handled';
-      },
-    );
-    expect(result).toBe('handled');
-    expect(thrownError).toBe('error');
-  });
-
-  test('throw error if onrejected is missing', () => {
-    try {
-      new SyncPromise('result').then(() => {
-        throw 'error';
-      });
-      fail('expected an error');
-    } catch (thrownError) {
-      expect(thrownError).toBe('error');
-      // as expected
-    }
-  });
-
-  test('return this if both callbacks are missing', () => {
-    const promise = new SyncPromise('result');
-    expect(promise.then()).toBe(promise);
-  });
 });

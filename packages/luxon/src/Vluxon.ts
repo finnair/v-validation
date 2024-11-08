@@ -1,4 +1,4 @@
-import { ValidationContext, isNullOrUndefined, defaultViolations, isString, V, Validator, ValidationResult, TypeMismatch } from '@finnair/v-validation';
+import { ValidationContext, isNullOrUndefined, defaultViolations, isString, V, Validator, TypeMismatch } from '@finnair/v-validation';
 import { Path } from '@finnair/path';
 import { DateTime, DateTimeJSOptions, DateTimeOptions, Duration, FixedOffsetZone } from 'luxon';
 import {
@@ -30,25 +30,25 @@ export class DateTimeValidator extends Validator<DateTime> {
     Object.freeze(params);
     Object.freeze(this);
   }
-  validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<DateTime>> {
+  validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<DateTime> {
     const params = this.params;
     if (isNullOrUndefined(value)) {
-      return ctx.failurePromise(defaultViolations.notNull(path), value);
+      throw defaultViolations.notNull(path);
     }
     if (DateTime.isDateTime(value)) {
       if (value.isValid) {
-        return ctx.successPromise(value as DateTime);
+        return Promise.resolve(value as DateTime);
       }
     } else if (isString(value)) {
       const match = params.pattern.exec(value);
       if (match) {
         const dateTime = params.parser(value, match);
         if (dateTime.isValid) {
-          return ctx.successPromise(dateTime);
+          return Promise.resolve(dateTime);
         }
       }
     }
-    return ctx.failurePromise(defaultViolations.date(value, path, params.type), value);
+    throw defaultViolations.date(value, path, params.type);
   }
 }
 
@@ -60,17 +60,15 @@ export class LuxonValidator<Out extends LuxonDateTime> extends Validator<Out> {
     Object.freeze(this);
   }
 
-  validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<Out>> {
+  validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<Out> {
     if (value instanceof this.params.proto) {
-      return ctx.successPromise(value);
+      return Promise.resolve(value);
     }
-    return this.dateTimeValidator.validatePath(value, path, ctx).then((result: ValidationResult<DateTime>) => {
-      if (result.isSuccess()) {
-        return ctx.successPromise(new this.params.proto(result.getValue()));
-      } else {
-        return ctx.failurePromise(result.getViolations(), value);
+    return this.dateTimeValidator.validatePath(value, path, ctx).then(
+      (result: DateTime) => {
+        return new this.params.proto(result);
       }
-    });
+    );
   }
 }
 
@@ -187,20 +185,20 @@ export interface ValidateLuxonNumberParams {
   parser: (value: number) => DateTime;
 }
 
-export async function validateLuxonNumber({ value, path, ctx, type, parser }: ValidateLuxonNumberParams): Promise<ValidationResult> {
+export async function validateLuxonNumber({ value, path, ctx, type, parser }: ValidateLuxonNumberParams): Promise<DateTime> {
   if (isNullOrUndefined(value)) {
-    return ctx.failure(defaultViolations.notNull(path), value);
+    throw defaultViolations.notNull(path);
   } else if (DateTime.isDateTime(value)) {
     if (value.isValid) {
-      return ctx.success(value);
+      return Promise.resolve(value);
     }
   } else if (typeof value === 'number' && !Number.isNaN(value)) {
     const dateTime = parser(value);
     if (dateTime.isValid) {
-      return ctx.success(dateTime);
+      return Promise.resolve(dateTime);
     }
   }
-  return ctx.failure(defaultViolations.date(value, path, type), value);
+  throw defaultViolations.date(value, path, type);
 }
 
 function dateTimeFromMillis(options: DateTimeJSOptions = { zone: FixedOffsetZone.utcInstance }) {
@@ -230,32 +228,32 @@ function dateTimeFromSeconds(options: DateTimeJSOptions = { zone: FixedOffsetZon
 const durationPattern =
   /^P(?!$)(\d+(?:\.\d+)?Y)?(\d+(?:\.\d+)?M)?(\d+(?:\.\d+)?W)?(\d+(?:\.\d+)?D)?(T(?=\d)(\d+(?:\.\d+)?H)?(\d+(?:\.\d+)?M)?(\d+(?:\.\d+)?S)?)?$/;
 
-export class DurationValidator extends Validator {
-  async validatePath(value: any, path: Path, ctx: ValidationContext): Promise<ValidationResult> {
+export class DurationValidator extends Validator<Duration> {
+  async validatePath(value: any, path: Path, ctx: ValidationContext): Promise<Duration> {
     if (isNullOrUndefined(value)) {
-      return ctx.failure(defaultViolations.notNull(path), value);
+      throw defaultViolations.notNull(path);
     } else if (Duration.isDuration(value)) {
-      return ctx.success(value);
+      return Promise.resolve(value);
     } else if (isString(value) && durationPattern.test(value)) {
       const duration = Duration.fromISO(value);
       if (duration.isValid) {
-        return ctx.success(duration);
+        return Promise.resolve(duration);
       }
     }
-    return ctx.failure(new TypeMismatch(path, 'Duration', value), value);
+    throw new TypeMismatch(path, 'Duration', value);
   }
 }
 
-export class TimeDurationValidator extends Validator {
-  async validatePath(value: any, path: Path, ctx: ValidationContext): Promise<ValidationResult> {
+export class TimeDurationValidator extends Validator<Duration> {
+  async validatePath(value: any, path: Path, ctx: ValidationContext): Promise<Duration> {
     if (isNullOrUndefined(value)) {
       return ctx.failure(defaultViolations.notNull(path), value);
     } else if (Duration.isDuration(value)) {
-      return ctx.success(value);
+      return Promise.resolve(value);
     } else if (isString(value)) {
       const duration = Duration.fromISOTime(value);
       if (duration.isValid) {
-        return ctx.success(duration);
+        return Promise.resolve(duration);
       }
     }
     return ctx.failure(new TypeMismatch(path, 'TimeDuration', value), value);

@@ -4,11 +4,11 @@ import { validate as uuidValidate, version as uuidVersion } from 'uuid';
 
 const ROOT = Path.ROOT;
 
-export interface ValidatorFn<Out = unknown, In = any>{
-  (value: In, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<Out>>;
+export interface ValidatorFn<Out = unknown, In = unknown>{
+  (value: In, path: Path, ctx: ValidationContext): PromiseLike<Out>;
 }
 
-export interface MappingFn<Out = unknown, In = any> {
+export interface MappingFn<Out = unknown, In = unknown> {
   (value: In, path: Path, ctx: ValidationContext): Out | PromiseLike<Out>;
 }
 
@@ -25,36 +25,25 @@ export class ValidationContext {
 
   private readonly objects = new Map<any, any>();
 
-  failure(violation: Violation | Violation[], value: any) {
+  /**
+   * Optionally ignore an error for backwards compatible changes (enum values, new properties).
+   */
+  failure<Out = unknown, In = unknown>(violation: Violation | Violation[], value: In) {
     const violations: Violation[] = ([] as Violation[]).concat(violation);
-    if (violations.length === 1) {
-      if (this.ignoreViolation(violations[0])) {
-        if (this.options.warnLogger) {
-          this.options.warnLogger(violations[0], this.options);
-        }
-        return this.success(value);
+    if (violations.length === 1 && this.ignoreViolation(violations[0])) {
+      if (this.options.warnLogger) {
+        this.options.warnLogger(violations[0], this.options);
       }
+      return Promise.resolve(value as unknown as Out);
     }
-    return new ValidationResult(violations);
+    return Promise.reject(violations);
   }
-  success<T = unknown>(value: T) {
-    return new ValidationResult<T>(undefined, value);
-  }
-  failurePromise(violation: Violation | Violation[], value: any) {
-    return this.promise(this.failure(violation, value));
-  }
-  successPromise<T = unknown>(value: T) {
-    return this.promise(this.success(value));
-  }
-  promise<T = unknown>(result: ValidationResult<T>) {
-    return new SyncPromise(result);
-  }
-  registerObject<T = unknown>(value: any, path: Path, convertedValue: T): undefined | ValidationResult<T> {
+  registerObject<T = unknown>(value: any, path: Path, convertedValue: T): undefined | PromiseLike<T> {
     if (this.objects.has(value)) {
       if (this.options.allowCycles) {
-        return this.success(this.objects.get(value));
+        return Promise.resolve(this.objects.get(value));
       }
-      return this.failure(defaultViolations.cycle(path), value);
+      return Promise.reject(defaultViolations.cycle(path));
     }
     this.objects.set(value, convertedValue);
     return undefined;
@@ -67,49 +56,56 @@ export class ValidationContext {
   }
 }
 
-export class SyncPromise<T> implements PromiseLike<T> {
-  constructor(private readonly value: T) {}
-  then<TResult1 = T, TResult2 = never>(
-    onfulfilled?: ((value: T) => TResult1 | PromiseLike<TResult1>) | undefined | null,
-    onrejected?: ((reason: any) => TResult2 | PromiseLike<TResult2>) | undefined | null,
-  ): PromiseLike<TResult1 | TResult2> {
-    if (onfulfilled) {
-      let result: any;
-      try {
-        result = onfulfilled(this.value);
-      } catch (reason) {
-        if (onrejected) {
-          result = onrejected(reason);
-        } else {
-          throw reason;
-        }
-      }
-      if (result && result.then) {
-        return result;
-      }
-      return new SyncPromise(result);
-    }
-    return this as unknown as PromiseLike<TResult1>;
-  }
-}
-
 export abstract class Validator<Out = unknown, In = unknown> {
   validateGroup(value: In, group: Group): Promise<ValidationResult<Out>> {
     return this.validate(value, { group });
   }
 
-  validate(value: In, options?: ValidatorOptions): Promise<ValidationResult<Out>> {
-    return Promise.resolve(this.validatePath(value, ROOT, new ValidationContext(options || {})));
+  /**
+   * Returns a valid value directly or throws a ValidationError with Violations.
+   * 
+   * @param value value to be validated
+   * @param options validation options
+   * @returns a valid, possibly converted value
+   */
+  async getValid(value: In, options?: ValidatorOptions): Promise<Out> {
+    try {
+      return await this.validatePath(value, ROOT, new ValidationContext(options || {}));
+    } catch (error) {
+      throw new ValidationError(violationsOf(error));
+    }
   }
 
-  abstract validatePath(value: In, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<Out>>;
-
-  next<V extends Validator<any, Out>>(validator: V): Validator<VType<V>, In> {
-    return new NextValidator<VType<V>, In>(this, validator);
+  /**
+   * Returns a ValidationResult of value. 
+   * 
+   * @param value value to be validated
+   * @param options validation options
+   * @returns ValidationResult of either valid, possibly converted value or Violations
+   */
+  async validate(value: In, options?: ValidatorOptions): Promise<ValidationResult<Out>> {
+    try {
+      const result = await this.validatePath(value, ROOT, new ValidationContext(options || {}));
+      return new ValidationResult(undefined, result);
+    } catch (error) {
+      return new ValidationResult<Out>(violationsOf(error));
+    }
   }
 
-  nextMap<XOut>(fn: MappingFn<XOut, Out>): Validator<XOut> {
-    return this.next<Validator<XOut>>(new ValueMapper<XOut, Out>(fn));
+  /**
+   * Validate `value` and return either resolved of valid/converted value or rejected of Violation or Violation[] Promise.
+   * @param value 
+   * @param path 
+   * @param ctx 
+   */
+  abstract validatePath(value: In, path: Path, ctx: ValidationContext): PromiseLike<Out>;
+
+  next<NextOut = unknown, T1 = unknown, T2 = unknown, T3 = unknown, T4 = unknown>(...validators: NextCompositionParameters<NextOut, Out, T1, T2, T3, T4>) {
+    return maybeCompositionOf(this, ...validators);
+  }
+
+  nextMap<NextOut>(fn: MappingFn<NextOut, Out>): Validator<NextOut, In> {
+    return this.next<NextOut, In>(new ValueMapper<NextOut, Out>(fn));
   }
 }
 
@@ -135,6 +131,10 @@ export class ValidationResult<T = unknown> {
     return !this.isSuccess();
   }
 
+  /**
+   * Either returns a valid, possibly converted value or throws a ValidationError with Violations.
+   * @returns 
+   */
   getValue(): T {
     if (!this.isSuccess()) {
       throw new ValidationError(this.getViolations());
@@ -150,6 +150,7 @@ export class ValidationResult<T = unknown> {
 export class ValidationError extends Error {
   constructor(public readonly violations: Violation[]) {
     super(`ValidationError: ${JSON.stringify(violations, undefined, 2)}`);
+    this.violations = violations;
     Object.setPrototypeOf(this, ValidationError.prototype);
   }
 }
@@ -272,7 +273,7 @@ export class Groups {
   }
 }
 
-export function isNullOrUndefined(value: any) {
+export function isNullOrUndefined(value: any): value is null | undefined {
   return value === null || value === undefined;
 }
 
@@ -289,6 +290,7 @@ export enum ValidatorType {
   AnyOf = 'AnyOf',
   OneOf = 'OneOf',
   Pattern = 'Pattern',
+  NotUndefined = "NotUndefined",
 }
 
 export const defaultViolations = {
@@ -301,6 +303,7 @@ export const defaultViolations = {
   max: (max: number, inclusive: boolean, invalidValue: any, path: Path = ROOT) => new MaxViolation(path, max, inclusive, invalidValue),
   size: (min: number, max: number, path: Path = ROOT) => new SizeViolation(path, min, max),
   notNull: (path: Path = ROOT) => new Violation(path, ValidatorType.NotNull),
+  notUndefined: (path: Path = ROOT) => new Violation(path, ValidatorType.NotUndefined),
   notEmpty: (path: Path = ROOT) => new Violation(path, ValidatorType.NotEmpty),
   notBlank: (path: Path = ROOT) => new Violation(path, ValidatorType.NotBlank),
   oneOf: (matches: number, path: Path = ROOT) => new OneOfMismatch(path, matches),
@@ -315,13 +318,13 @@ export interface AssertTrue<In = unknown> {
   (value: In, path: Path, ctx: ValidationContext): boolean;
 }
 
-export class ValidatorFnWrapper<Out = unknown> extends Validator<Out> {
-  constructor(private readonly fn: ValidatorFn<Out>, public readonly type?: string) {
+export class ValidatorFnWrapper<Out = unknown, In = unknown> extends Validator<Out, In> {
+  constructor(private readonly fn: ValidatorFn<Out, In>, public readonly type?: string) {
     super();
     Object.freeze(this);
   }
 
-  validatePath(value: unknown, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<Out>> {
+  validatePath(value: In, path: Path, ctx: ValidationContext): PromiseLike<Out> {
     return this.fn(value, path, ctx);
   }
 }
@@ -332,38 +335,34 @@ export class ArrayValidator<Out = unknown> extends Validator<Out[]> {
     Object.freeze(this);
   }
 
-  validatePath(value: unknown, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<Out[]>> {
+  validatePath(value: unknown, path: Path, ctx: ValidationContext): PromiseLike<Out[]> {
     if (isNullOrUndefined(value)) {
-      return ctx.failurePromise(defaultViolations.notNull(path), value);
+      return Promise.reject(defaultViolations.notNull(path));
     }
     if (!Array.isArray(value)) {
-      return ctx.failurePromise(new TypeMismatch(path, 'array', value), value);
+      return Promise.reject(new TypeMismatch(path, 'array', value));
     }
     const convertedArray: Array<any> = [];
     const cycleResult = ctx.registerObject(value, path, convertedArray);
     if (cycleResult) {
-      return ctx.promise(cycleResult);
+      return cycleResult;
     }
 
-    const promises: PromiseLike<ValidationResult>[] = [];
+    const promises: PromiseLike<any>[] = [];
     let violations: Violation[] = [];
     for (let i = 0; i < value.length; i++) {
       const item = value[i];
-      promises[i] = this.itemsValidator.validatePath(item, path.index(i), ctx).then(result => {
-        if (result.isSuccess()) {
-          convertedArray[i] = result.getValue();
-        } else {
-          violations = violations.concat(result.getViolations());
-        }
-        return result;
-      });
+      promises[i] = this.itemsValidator.validatePath(item, path.index(i), ctx).then(
+        result => convertedArray[i] = result, 
+        reject => violations = violations.concat(violationsOf(reject))
+      );
     }
 
-    return Promise.all(promises).then(_ => {
+    return Promise.allSettled(promises).then(_ => {
       if (violations.length == 0) {
-        return ctx.successPromise(convertedArray);
+        return Promise.resolve(convertedArray);
       }
-      return ctx.failurePromise(violations, value);
+      return Promise.reject(violations);
     });
   }
 }
@@ -372,7 +371,7 @@ export class ArrayNormalizer<T> extends ArrayValidator<T> {
   constructor(itemsValidator: Validator<T>) {
     super(itemsValidator);
   }
-  validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<T[]>> {
+  validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<T[]> {
     if (value === undefined) {
       return super.validatePath([], path, ctx);
     }
@@ -383,35 +382,15 @@ export class ArrayNormalizer<T> extends ArrayValidator<T> {
   }
 }
 
-export class NextValidator<Out = unknown, In = any> extends Validator<Out, In> {
-  constructor(public readonly firstValidator: Validator<any, In>, public readonly nextValidator: Validator<Out>) {
-    super();
-    Object.freeze(this);
-  }
-
-  validatePath(value: In, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<Out>> {
-    return this.firstValidator.validatePath(value, path, ctx).then(firstResult => {
-      if (firstResult.isSuccess()) {
-        return this.nextValidator.validatePath(firstResult.getValue(), path, ctx);
-      }
-      // Violations without value is essentially same for both
-      return firstResult as unknown as ValidationResult<Out>;
-    });
-  }
-}
-
 export class CheckValidator<In> extends Validator<In, In> {
   constructor(public readonly validator: Validator<any, In>) {
     super();
     Object.freeze(this);
   }
 
-  validatePath(value: In, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<In>> {
-    return this.validator.validatePath(value, path, ctx).then(result => {
-      if (result.isSuccess()) {
-        return ctx.successPromise(value);
-      }
-      return result;
+  validatePath(value: In, path: Path, ctx: ValidationContext): PromiseLike<In> {
+    return this.validator.validatePath(value, path, ctx).then(() => {
+      return value;
     });
   }
 }
@@ -425,75 +404,85 @@ export class CompositionValidator<Out = unknown, In = any> extends Validator<Out
     Object.freeze(this);
   }
 
-  async validatePath(value: In, path: Path, ctx: ValidationContext): Promise<ValidationResult<Out>> {
+  async validatePath(value: In, path: Path, ctx: ValidationContext): Promise<Out> {
     let currentValue: any = value;
     for (let i = 0; i < this.validators.length; i++) {
-      const result = await this.validators[i].validatePath(currentValue, path, ctx);
-      if (result.isSuccess()) {
-        currentValue = result.getValue();
-      } else {
-        return result as ValidationResult<Out>;
-      }
+      currentValue = await this.validators[i].validatePath(currentValue, path, ctx);
     }
-    return ctx.success(currentValue);
+    return Promise.resolve(currentValue);
   }
 }
 
-export class OneOfValidator<T = unknown> extends Validator<T> {
-  constructor(public readonly validators: [Validator<T>, ...Validator<T>[]]) {
+export class OneOfValidator<Out = unknown> extends Validator<Out> {
+  constructor(public readonly validators: [Validator<Out>, ...Validator<Out>[]]) {
     super();
     Object.freeze(this.validators);
     Object.freeze(this);
   }
 
-  async validatePath(value: unknown, path: Path, ctx: ValidationContext): Promise<ValidationResult<T>> {
+  async validatePath(value: unknown, path: Path, ctx: ValidationContext): Promise<Out> {
     let matches = 0;
     let newValue: any = null;
-    const promises: PromiseLike<ValidationResult>[] = [];
+    const promises: PromiseLike<void>[] = [];
     for (let i = 0; i < this.validators.length; i++) {
-      promises[i] = this.validators[i].validatePath(value, path, ctx).then(result => {
-        if (result.isSuccess()) {
+      promises[i] = this.validators[i].validatePath(value, path, ctx).then(
+        result => {
           matches++;
-          newValue = result.getValue();
-        }
-        return result;
-      });
+          newValue = result;
+        },
+        error => {}
+      );
     }
-    await Promise.all(promises);
+    await Promise.allSettled(promises);
     if (matches === 1) {
-      return ctx.successPromise(newValue);
+      return Promise.resolve(newValue);
     }
-    return ctx.failurePromise(defaultViolations.oneOf(matches, path), value);
+    return Promise.reject(defaultViolations.oneOf(matches, path));
   }
 }
 
-export class AnyOfValidator<T = unknown> extends Validator<T> {
-  constructor(public readonly validators: Validator<T>[]) {
+export class AnyOfValidator<Out = unknown, In = unknown> extends Validator<Out, In> {
+  constructor(public readonly validators: Validator<Out>[]) {
     super();
     Object.freeze(this.validators);
     Object.freeze(this);
   }
-  async validatePath(value: unknown, path: Path, ctx: ValidationContext): Promise<ValidationResult<T>> {
-    const passes: T[] = [];
-    const failures: Violation[] = [];
-
+  validatePath(value: In, path: Path, ctx: ValidationContext): PromiseLike<Out> {
+    let passes: Out[] = [];
+    let violations: Violation[] = [];
+    const promises = [] as PromiseLike<void>[];
     for (const validator of this.validators) {
-      const result = await validator.validatePath(value, path, ctx);
-      result.isSuccess() ? passes.push(result.getValue()) : failures.push(...result.getViolations());
+      promises.push(
+        validator.validatePath(value, path, ctx).then(
+          result => { 
+            passes.push(result);
+          },
+          (error) => {
+            violations = violations.concat(violationsOf(error));
+          }
+        )
+      );
     }
-
-    return passes.length > 0 ? ctx.success(passes.pop()) : ctx.failure(failures, value);
+    return Promise.allSettled(promises).then(() => {
+      if (passes.length > 0) {
+        return Promise.resolve(passes[passes.length - 1]);
+      }
+      return Promise.reject(violations);
+    })
   }
 }
 
 export class IfValidator<If = unknown, In = unknown, Else = unknown> extends Validator<If | Else, In> {
   constructor(public readonly conditionals: Conditional<If, In>[], public readonly elseValidator?: Validator<Else, In>) {
     super();
+    if (conditionals.length === 0) {
+      throw new Error('At least one conditional required');
+    }
     Object.freeze(this.conditionals);
     Object.freeze(this);
   }
 
-  validatePath(value: In, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<If | Else>> {
+  validatePath(value: In, path: Path, ctx: ValidationContext): PromiseLike<If | Else> {
     for (let i = 0; i < this.conditionals.length; i++) {
       const conditional = this.conditionals[i];
       if (conditional.fn(value, path, ctx)) {
@@ -503,7 +492,7 @@ export class IfValidator<If = unknown, In = unknown, Else = unknown> extends Val
     if (this.elseValidator) {
       return this.elseValidator.validatePath(value, path, ctx);
     }
-    return ctx.successPromise(value as If | Else);
+    return Promise.reject(new Violation(path, 'NoMatchingCondition', value));
   }
 
   elseIf<ElIf, ElIn>(fn: AssertTrue, validator: Validator<ElIf, ElIn>): IfValidator<If | ElIf, In | ElIn, Else> {
@@ -538,19 +527,37 @@ export class WhenGroupValidator<When = unknown, Otherwise = unknown> extends Val
     Object.freeze(this);
   }
 
-  validatePath(value: unknown, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<When | Otherwise>>{
+  validatePath(value: unknown, path: Path, ctx: ValidationContext): PromiseLike<When | Otherwise>{
     if (ctx.options.group) {
+      let passes: When[] = [];
+      let violations: Violation[] = [];
+      const promises = [] as PromiseLike<void>[];
       for (let i = 0; i < this.whenGroups.length; i++) {
         const whenGroup = this.whenGroups[i];
         if (ctx.options.group.includes(whenGroup.group)) {
-          return whenGroup.validator.validatePath(value, path, ctx);
+          promises.push(whenGroup.validator.validatePath(value, path, ctx).then(
+            result => {
+              passes.push(result);
+            },
+            error => {
+              violations = violations.concat(violationsOf(error));
+            }
+          ));
         }
+      }
+      if (promises.length) {
+        return Promise.allSettled(promises).then(() => {
+          if (violations.length > 0) {
+            return Promise.reject(violations);
+          }
+          return passes[passes.length - 1];
+        });
       }
     }
     if (this.otherwiseValidator) {
       return this.otherwiseValidator.validatePath(value, path, ctx);
     }
-    return ctx.successPromise(value as When | Otherwise);
+    return Promise.reject(new Violation(path, 'NoMatchingGroup', value));
   }
 
   whenGroup<W = unknown>(group: GroupOrName, validator: Validator<W>): WhenGroupValidator<When | W, Otherwise> {
@@ -581,12 +588,12 @@ export class MapValidator<K extends unknown, V extends unknown> extends Validato
     super();
     Object.freeze(this);
   }
-  validatePath(value: unknown, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<Map<K, V>>>{
+  validatePath(value: unknown, path: Path, ctx: ValidationContext): PromiseLike<Map<K, V>>{
     if (isNullOrUndefined(value)) {
-      return ctx.failurePromise(defaultViolations.notNull(path), value);
+      return Promise.reject(defaultViolations.notNull(path));
     }
     if (!(value instanceof Map)) {
-      return ctx.failurePromise(new TypeMismatch(path, 'Map'), value);
+      return Promise.reject(new TypeMismatch(path, 'Map'));
     }
     const map: Map<any, any> = value as Map<any, any>;
     const convertedMap: Map<K, V> = this.jsonSafeMap ? new JsonMap<K, V>() : new Map<K, V>();
@@ -597,32 +604,29 @@ export class MapValidator<K extends unknown, V extends unknown> extends Validato
       const entryPath = path.index(i);
       const keyPromise = this.keys.validatePath(key, entryPath.index(0), ctx);
       const valuePromise = this.values.validatePath(value, entryPath.index(1), ctx);
-      promises[i] = Promise.all([keyPromise, valuePromise]).then(results => {
+      promises[i] = Promise.allSettled([keyPromise, valuePromise]).then(results => {
         const keyResult = results[0];
         const valueResult = results[1];
-        const keySuccess = handleResult(keyResult);
-        const valueSuccess = handleResult(valueResult);
-        if (keySuccess && valueSuccess) {
-          convertedMap.set(keyResult.getValue(), valueResult.getValue());
+        if (keyResult.status === 'fulfilled' && valueResult.status === 'fulfilled') {
+          convertedMap.set(keyResult.value, valueResult.value);
+        } else {
+          if (keyResult.status === 'rejected') {
+            violations = violations.concat(violationsOf(keyResult.reason));
+          }
+          if (valueResult.status === 'rejected') {
+            violations = violations.concat(violationsOf(valueResult.reason));
+          }
         }
       });
       ++i;
     }
 
-    return Promise.all(promises).then(_ => {
+    return Promise.allSettled(promises).then(_ => {
       if (violations.length > 0) {
-        return ctx.failurePromise(violations, value);
+        return Promise.reject(violations);
       }
-      return ctx.successPromise(convertedMap);
+      return Promise.resolve(convertedMap);
     });
-
-    function handleResult(result: ValidationResult) {
-      if (result.isFailure()) {
-        violations = violations.concat(result.getViolations());
-        return false;
-      }
-      return true;
-    }
   }
 }
 
@@ -630,7 +634,7 @@ export class MapNormalizer<K = unknown, V = unknown> extends MapValidator<K, V> 
   constructor(keys: Validator<K>, values: Validator<V>, jsonSafeMap: boolean = true) {
     super(keys, values, jsonSafeMap);
   }
-  validatePath(value: unknown, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<Map<K, V>>> {
+  validatePath(value: unknown, path: Path, ctx: ValidationContext): PromiseLike<Map<K, V>> {
     if (value instanceof Map) {
       return super.validatePath(value, path, ctx);
     }
@@ -650,11 +654,11 @@ export class MapNormalizer<K = unknown, V = unknown> extends MapValidator<K, V> 
         }
       }
       if (violations.length > 0) {
-        return ctx.failurePromise(violations, value);
+        return Promise.reject(violations);
       }
       return super.validatePath(map, path, ctx);
     }
-    return ctx.failurePromise(new TypeMismatch(path, 'Map OR array of [key, value] arrays'), value);
+    return Promise.reject(new TypeMismatch(path, 'Map OR array of [key, value] arrays'));
   }
 }
 
@@ -668,16 +672,16 @@ export class JsonMap<K, V> extends Map<K, V> {
 }
 
 export class SetValidator<T = unknown> extends Validator<Set<T>> {
-  constructor(public readonly values: Validator, public readonly jsonSafeSet: boolean) {
+  constructor(public readonly values: Validator<T>, public readonly jsonSafeSet: boolean) {
     super();
     Object.freeze(this);
   }
-  validatePath(value: unknown, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<Set<T>>> {
+  validatePath(value: unknown, path: Path, ctx: ValidationContext): PromiseLike<Set<T>> {
     if (isNullOrUndefined(value)) {
-      return ctx.failurePromise(defaultViolations.notNull(path), value);
+      return Promise.reject(defaultViolations.notNull(path));
     }
     if (!(value instanceof Set || Array.isArray(value))) {
-      return ctx.failurePromise(new TypeMismatch(path, 'Set'), value);
+      return Promise.reject(new TypeMismatch(path, 'Set'));
     }
     const convertedSet: Set<any> = this.jsonSafeSet ? new JsonSet() : new Set<any>();
     const promises: PromiseLike<void>[] = [];
@@ -685,21 +689,22 @@ export class SetValidator<T = unknown> extends Validator<Set<T>> {
     let i = 0;
     for (const entry of value) {
       const entryPath = path.index(i);
-      promises[i] = this.values.validatePath(entry, entryPath, ctx).then((result: ValidationResult) => {
-        if (result.isFailure()) {
-          violations = violations.concat(result.getViolations());
-        } else {
-          convertedSet.add(result.getValue());
+      promises[i] = this.values.validatePath(entry, entryPath, ctx).then(
+        result => {
+          convertedSet.add(result);
+        },
+        error => {
+          violations = violations.concat(violationsOf(error));
         }
-      });
+      );
       ++i;
     }
 
-    return Promise.all(promises).then(_ => {
+    return Promise.allSettled(promises).then(_ => {
       if (violations.length > 0) {
-        return ctx.failurePromise(violations, value);
+        return Promise.reject(violations);
       }
-      return ctx.successPromise(convertedSet);
+      return Promise.resolve(convertedSet);
     });
   }
 }
@@ -714,9 +719,9 @@ export class JsonSet<K> extends Set<K> {
 }
 
 
-export class AnyValidator extends Validator<any> {
-  validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<any>> {
-    return ctx.successPromise(value);
+export class AnyValidator<InOut = any> extends Validator<InOut> {
+  validatePath(value: InOut, path: Path, ctx: ValidationContext): PromiseLike<InOut> {
+    return Promise.resolve(value);
   }
 }
 
@@ -747,44 +752,38 @@ export class NextStringValidator extends StringValidatorBase<string> {
     Object.freeze(this);
   }
 
-  validatePath(value: string, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<string>> {
-    return this.firstValidator.validatePath(value, path, ctx).then(firstResult => {
-      if (firstResult.isSuccess()) {
-        return this.nextValidator.validatePath(firstResult.getValue(), path, ctx);
-      }
-      // Violations without value is essentially same for both
-      return firstResult;
-    });
+  validatePath(value: string, path: Path, ctx: ValidationContext): PromiseLike<string> {
+    return this.firstValidator.validatePath(value, path, ctx).then(firstResult => this.nextValidator.validatePath(firstResult, path, ctx));
   }
 }
 
 export class StringValidator extends StringValidatorBase<string> {
-  validatePath(value: string, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<string>> {
+  validatePath(value: string, path: Path, ctx: ValidationContext): PromiseLike<string> {
     if (isNullOrUndefined(value)) {
-      return ctx.failurePromise(defaultViolations.notNull(path), value);
+      return Promise.reject(defaultViolations.notNull(path));
     }
     if (isString(value)) {
-      return ctx.successPromise(value);
+      return Promise.resolve(value);
     }
-    return ctx.failurePromise(defaultViolations.string(value, path), value);
+    return Promise.reject(defaultViolations.string(value, path));
   }
 }
 
 export class StringNormalizer extends StringValidatorBase<unknown> {
-  validatePath(value: unknown, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<string>> {
+  validatePath(value: unknown, path: Path, ctx: ValidationContext): PromiseLike<string> {
     if (isNullOrUndefined(value)) {
-      return ctx.failurePromise(defaultViolations.notNull(path), value);
+      return Promise.reject(defaultViolations.notNull(path));
     }
     if (isString(value)) {
-      return ctx.successPromise(value);
+      return Promise.resolve(value);
     }
     if (value instanceof String) {
-      return ctx.successPromise(value.valueOf());
+      return Promise.resolve(value.valueOf());
     }
     if (isSimplePrimitive(value)) {
-      return ctx.successPromise(String(value));
+      return Promise.resolve(String(value));
     }
-    return ctx.failurePromise(new TypeMismatch(path, 'primitive value', value), value);
+    return Promise.reject(new TypeMismatch(path, 'primitive value', value));
   }
 }
 
@@ -793,22 +792,29 @@ export class NotNullOrUndefinedValidator<InOut> extends Validator<
     InOut extends null ? never : InOut extends undefined ? never : InOut
   > {
   validatePath(value: InOut extends null ? never : InOut extends undefined ? never : InOut, path: Path, ctx: ValidationContext): 
-      PromiseLike<ValidationResult<InOut extends null ? never : InOut extends undefined ? never : InOut>> {
-    return isNullOrUndefined(value) ? ctx.failurePromise(defaultViolations.notNull(path), value) : ctx.successPromise(value);
+      PromiseLike<InOut extends null ? never : InOut extends undefined ? never : InOut> {
+    if (isNullOrUndefined(value)) {
+      return Promise.reject(defaultViolations.notNull(path));
+    }
+    return Promise.resolve(value);
   }
 }
 
 export class IsNullOrUndefinedValidator extends Validator<null | undefined> {
-  validatePath(value: unknown, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<null | undefined>> {
-    return isNullOrUndefined(value) ? ctx.successPromise(value) : ctx.failurePromise(new TypeMismatch(path, 'NullOrUndefined', value), value);
+  validatePath(value: unknown, path: Path, ctx: ValidationContext): PromiseLike<null | undefined> {
+    if (isNullOrUndefined(value)) {
+      return Promise.resolve(value);
+    }
+    return Promise.reject(new TypeMismatch(path, 'NullOrUndefined', value));
   }
 }
 
 export class NotEmptyValidator<InOut extends { length: number}> extends Validator<InOut, InOut> {
-  validatePath(value: InOut, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<InOut>> {
-    return !isNullOrUndefined(value) && isNumber((value as any).length) && (value as any).length > 0
-      ? ctx.successPromise(value)
-      : ctx.failurePromise(defaultViolations.notEmpty(path), value);
+  validatePath(value: InOut, path: Path, ctx: ValidationContext): PromiseLike<InOut> {
+    if (!isNullOrUndefined(value) && isNumber((value as any).length) && (value as any).length > 0) {
+      return Promise.resolve(value);
+    }
+    return Promise.reject(defaultViolations.notEmpty(path));
   }
 }
 
@@ -821,45 +827,45 @@ export class SizeValidator<InOut extends { length: number }> extends Validator<I
     Object.freeze(this);
   }
 
-  validatePath(value: InOut, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<InOut>> {
+  validatePath(value: InOut, path: Path, ctx: ValidationContext): PromiseLike<InOut> {
     if (isNullOrUndefined(value)) {
-      return ctx.failurePromise(defaultViolations.notNull(path), value);
+      return Promise.reject(defaultViolations.notNull(path));
     }
     if (!isNumber(value.length)) {
-      return ctx.failurePromise(new TypeMismatch(path, 'value with numeric length field'), value);
+      return Promise.reject(new TypeMismatch(path, 'value with numeric length field'));
     }
     if (value.length < this.min || value.length > this.max) {
-      return ctx.failurePromise(defaultViolations.size(this.min, this.max, path), value);
+      return Promise.reject(defaultViolations.size(this.min, this.max, path));
     }
-    return ctx.successPromise(value);
+    return Promise.resolve(value);
   }
 }
 
 export class NotBlankValidator extends Validator<string, string> {
-  validatePath(value: unknown, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<string>> {
+  validatePath(value: unknown, path: Path, ctx: ValidationContext): PromiseLike<string> {
     if (isNullOrUndefined(value)) {
-      return ctx.failurePromise(defaultViolations.notBlank(path), value);
+      return Promise.reject(defaultViolations.notBlank(path));
     }
     if (!isString(value)) {
-      return ctx.failurePromise(defaultViolations.string(value, path), value);
+      return Promise.reject(defaultViolations.string(value, path));
     }
     const trimmed = (value as String).trim();
     if (trimmed === '') {
-      return ctx.failurePromise(defaultViolations.notBlank(path), value);
+      return Promise.reject(defaultViolations.notBlank(path));
     }
-    return ctx.successPromise(value);
+    return Promise.resolve(value);
   }
 }
 
 export class BooleanValidator extends Validator<boolean> {
-  validatePath(value: unknown, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<boolean>> {
+  validatePath(value: unknown, path: Path, ctx: ValidationContext): PromiseLike<boolean> {
     if (isNullOrUndefined(value)) {
-      return ctx.failurePromise(defaultViolations.notNull(path), value);
+      return Promise.reject(defaultViolations.notNull(path));
     }
     if (typeof value === 'boolean') {
-      return ctx.successPromise(value);
+      return Promise.resolve(value);
     }
-    return ctx.failurePromise(defaultViolations.boolean(value, path), value);
+    return Promise.reject(defaultViolations.boolean(value, path));
   }
 }
 
@@ -871,28 +877,28 @@ export class BooleanNormalizer extends Validator<boolean> {
     Object.freeze(this);
   }
 
-  validatePath(value: unknown, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<boolean>> {
+  validatePath(value: unknown, path: Path, ctx: ValidationContext): PromiseLike<boolean> {
     if (isNullOrUndefined(value)) {
-      return ctx.failurePromise(defaultViolations.notNull(path), value);
+      return Promise.reject(defaultViolations.notNull(path));
     }
     if (typeof value === 'boolean') {
-      return ctx.successPromise(value);
+      return Promise.resolve(value);
     }
     if (value instanceof Boolean) {
-      return ctx.successPromise(value.valueOf());
+      return Promise.resolve(value.valueOf());
     }
     if (isString(value)) {
       if (this.truePattern.test(value)) {
-        return ctx.successPromise(true);
+        return Promise.resolve(true);
       }
       if (this.falsePattern.test(value)) {
-        return ctx.successPromise(false);
+        return Promise.resolve(false);
       }
-      return ctx.failurePromise(defaultViolations.boolean(value, path), value);
+      return Promise.reject(defaultViolations.boolean(value, path));
     } else if (isNumber(value)) {
-      return ctx.successPromise(!!value);
+      return Promise.resolve(!!value);
     }
-    return ctx.failurePromise(defaultViolations.boolean(value, path), value);
+    return Promise.reject(defaultViolations.boolean(value, path));
   }
 }
 
@@ -922,11 +928,11 @@ export abstract class NumberValidatorBase<In> extends Validator<number, In> {
     switch (format) {
       case NumberFormat.integer:
         if (!Number.isInteger(value)) {
-          return ctx.failurePromise(defaultViolations.number(value, format, path), value);
+          return Promise.reject(defaultViolations.number(value, format, path));
         }
         break;
     }
-    return ctx.successPromise(value);
+    return Promise.resolve(value);
   }
 }
 
@@ -936,14 +942,9 @@ export class NextNumberValidator<In> extends NumberValidatorBase<In> {
     Object.freeze(this);
   }
 
-  validatePath(value: In, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<number>> {
-    return this.firstValidator.validatePath(value, path, ctx).then(firstResult => {
-      if (firstResult.isSuccess()) {
-        return this.nextValidator.validatePath(firstResult.getValue(), path, ctx);
-      }
-      // Violations without value is essentially same for both
-      return firstResult;
-    });
+  validatePath(value: In, path: Path, ctx: ValidationContext): PromiseLike<number> {
+    return this.firstValidator.validatePath(value, path, ctx).then(
+      firstResult => this.nextValidator.validatePath(firstResult, path, ctx));
   }
 }
 
@@ -953,12 +954,12 @@ export class NumberValidator extends NumberValidatorBase<number> {
     Object.freeze(this);
   }
 
-  validatePath(value: number, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<number>> {
+  validatePath(value: number, path: Path, ctx: ValidationContext): PromiseLike<number> {
     if (isNullOrUndefined(value)) {
-      return ctx.failurePromise(defaultViolations.notNull(path), value);
+      return Promise.reject(defaultViolations.notNull(path));
     }
     if (!isNumber(value)) {
-      return ctx.failurePromise(defaultViolations.number(value, this.format, path), value);
+      return Promise.reject(defaultViolations.number(value, this.format, path));
     }
     return super.validateNumberFormat(value, this.format, path, ctx);
   }
@@ -970,9 +971,9 @@ export class NumberNormalizer extends NumberValidatorBase<any> {
     Object.freeze(this);
   }
 
-  validatePath(value: unknown, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<number>> {
+  validatePath(value: unknown, path: Path, ctx: ValidationContext): PromiseLike<number> {
     if (isNullOrUndefined(value)) {
-      return ctx.failurePromise(defaultViolations.notNull(path), value);
+      return Promise.reject(defaultViolations.notNull(path));
     }
     if (isNumber(value)) {
       return super.validateNumberFormat(value, this.format, path, ctx);
@@ -982,15 +983,15 @@ export class NumberNormalizer extends NumberValidatorBase<any> {
     }
     if (isString(value)) {
       if (value.trim() === '') {
-        return ctx.failurePromise(defaultViolations.number(value, this.format, path), value);
+        return Promise.reject(defaultViolations.number(value, this.format, path));
       }
       const nbr = Number(value);
       if (isNumber(nbr)) {
         return super.validateNumberFormat(nbr, this.format, path, ctx);
       }
-      return ctx.failurePromise(defaultViolations.number(value, this.format, path), value);
+      return Promise.reject(defaultViolations.number(value, this.format, path));
     }
-    return ctx.failurePromise(defaultViolations.number(value, this.format, path), value);
+    return Promise.reject(defaultViolations.number(value, this.format, path));
   }
 }
 
@@ -1000,21 +1001,21 @@ export class MinValidator extends Validator<number, number> {
     Object.freeze(this);
   }
 
-  validatePath(value: number, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<number>> {
+  validatePath(value: number, path: Path, ctx: ValidationContext): PromiseLike<number> {
     if (isNullOrUndefined(value)) {
-      return ctx.failurePromise(defaultViolations.notNull(path), value);
+      return Promise.reject(defaultViolations.notNull(path));
     }
     if (!isNumber(value)) {
-      return ctx.failurePromise(defaultViolations.number(value, NumberFormat.number, path), value);
+      return Promise.reject(defaultViolations.number(value, NumberFormat.number, path));
     }
     if (this.inclusive) {
       if (value < this.min) {
-        return ctx.failurePromise(defaultViolations.min(this.min, this.inclusive, value, path), value);
+        return Promise.reject(defaultViolations.min(this.min, this.inclusive, value, path));
       }
     } else if (value <= this.min) {
-      return ctx.failurePromise(defaultViolations.min(this.min, this.inclusive, value, path), value);
+      return Promise.reject(defaultViolations.min(this.min, this.inclusive, value, path));
     }
-    return ctx.successPromise(value);
+    return Promise.resolve(value);
   }
 }
 
@@ -1024,21 +1025,21 @@ export class MaxValidator extends Validator<number, number> {
     Object.freeze(this);
   }
 
-  validatePath(value: number, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<number>> {
+  validatePath(value: number, path: Path, ctx: ValidationContext): PromiseLike<number> {
     if (isNullOrUndefined(value)) {
-      return ctx.failurePromise(defaultViolations.notNull(path), value);
+      return Promise.reject(defaultViolations.notNull(path));
     }
     if (!isNumber(value)) {
-      return ctx.failurePromise(defaultViolations.number(value, NumberFormat.number, path), value);
+      return Promise.reject(defaultViolations.number(value, NumberFormat.number, path));
     }
     if (this.inclusive) {
       if (value > this.max) {
-        return ctx.failurePromise(defaultViolations.max(this.max, this.inclusive, value, path), value);
+        return Promise.reject(defaultViolations.max(this.max, this.inclusive, value, path));
       }
     } else if (value >= this.max) {
-      return ctx.failurePromise(defaultViolations.max(this.max, this.inclusive, value, path), value);
+      return Promise.reject(defaultViolations.max(this.max, this.inclusive, value, path));
     }
-    return ctx.successPromise(value);
+    return Promise.resolve(value);
   }
 }
 
@@ -1048,17 +1049,17 @@ export class EnumValidator<T extends {[key: number]: string | number}> extends V
     Object.freeze(this);
   }
 
-  validatePath(value: unknown, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<T>> {
+  validatePath(value: unknown, path: Path, ctx: ValidationContext): PromiseLike<T> {
     if (isNullOrUndefined(value)) {
-      return ctx.failurePromise(defaultViolations.notNull(path), value);
+      return Promise.reject(defaultViolations.notNull(path));
     }
     if (typeof value === 'string' || typeof value === 'number') {
       const isValid = Object.values(this.enumType).includes(value);
       if (isValid) {
-        return ctx.successPromise(value as T);
+        return Promise.resolve(value as T);
       }
     }
-    return ctx.failurePromise(defaultViolations.enum(this.name, value, path), value);
+    return ctx.failure(defaultViolations.enum(this.name, value, path), value);
   }
 }
 
@@ -1068,11 +1069,11 @@ export class AssertTrueValidator<In> extends Validator<In, In> {
     Object.freeze(this);
   }
 
-  validatePath(value: In, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<In>> {
+  validatePath(value: In, path: Path, ctx: ValidationContext): PromiseLike<In> {
     if (!this.fn(value, path, ctx)) {
-      return ctx.failurePromise(new Violation(this.path ? this.path.connectTo(path) : path, this.type), value);
+      return Promise.reject(new Violation(this.path ? this.path.connectTo(path) : path, this.type));
     }
-    return ctx.successPromise(value);
+    return Promise.resolve(value);
   }
 }
 
@@ -1080,20 +1081,20 @@ export class UuidValidator extends Validator<string> {
   constructor(public readonly version?: number) {
     super();
   }
-  validatePath(value: unknown, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<string>> {
+  validatePath(value: unknown, path: Path, ctx: ValidationContext): PromiseLike<string> {
     if (isNullOrUndefined(value)) {
-      return ctx.failurePromise(defaultViolations.notNull(path), value);
+      return Promise.reject(defaultViolations.notNull(path));
     }
     if (!isString(value)) {
-      return ctx.failurePromise(defaultViolations.string(value, path), value);
+      return Promise.reject(defaultViolations.string(value, path));
     }
     if (!uuidValidate(value)) {
-      return ctx.failurePromise(new Violation(path, 'UUID', value), value);
+      return Promise.reject(new Violation(path, 'UUID', value));
     }
     if (this.version && uuidVersion(value) !== this.version) {
-      return ctx.failurePromise(new Violation(path, `UUIDv${this.version}`, value), value);
+      return Promise.reject(new Violation(path, `UUIDv${this.version}`, value));
     }
-    return ctx.successPromise(value);
+    return Promise.resolve(value);
   }
 }
 
@@ -1102,11 +1103,11 @@ export class HasValueValidator<InOut> extends Validator<InOut> {
     super();
     Object.freeze(this);
   }
-  validatePath(value: unknown, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<InOut>> {
+  validatePath(value: unknown, path: Path, ctx: ValidationContext): PromiseLike<InOut> {
     if (deepEqual(value, this.expectedValue)) {
-      return ctx.successPromise(value as InOut);
+      return Promise.resolve(value as InOut);
     }
-    return ctx.failurePromise(new HasValueViolation(path, this.expectedValue, value), value);
+    return Promise.reject(new HasValueViolation(path, this.expectedValue, value));
   }
 }
 
@@ -1117,32 +1118,32 @@ export class AllOfValidator<Out, In> extends Validator<Out, In> {
     Object.freeze(this);
   }
 
-  validatePath(value: In, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<Out>> {
+  validatePath(value: In, path: Path, ctx: ValidationContext): PromiseLike<Out> {
     let violations: Violation[] = [];
     let convertedValue: any;
     const promises: PromiseLike<any>[] = [];
     for (let i = 0; i < this.validators.length; i++) {
       const validator = this.validators[i];
-      promises[i] = validator.validatePath(value, path, ctx).then(result => {
-        if (!result.isSuccess()) {
-          violations = violations.concat(result.getViolations());
-        } else {
-          const resultValue = result.getValue();
-          if (resultValue !== value as any) {
-            if (convertedValue !== undefined && !deepEqual(resultValue, convertedValue)) {
+      promises[i] = validator.validatePath(value, path, ctx).then(
+        result => {
+          if (result !== value as any) {
+            if (convertedValue !== undefined && !deepEqual(result, convertedValue)) {
               violations.push(new Violation(path, 'ConflictingConversions', value));
             } else {
-              convertedValue = resultValue;
+              convertedValue = result;
             }
           }
+        },
+        error => {
+          violations = violations.concat(violationsOf(error));
         }
-      });
+      );
     }
-    return Promise.all(promises).then(_ => {
+    return Promise.allSettled(promises).then(_ => {
       if (violations.length == 0) {
-        return ctx.successPromise(convertedValue !== undefined ? convertedValue : value);
+        return Promise.resolve(convertedValue !== undefined ? convertedValue : value);
       }
-      return ctx.failurePromise(violations, value);
+      return Promise.reject(violations);
     });
   }
 }
@@ -1153,9 +1154,9 @@ export class DateValidator extends Validator<Date> {
     Object.freeze(this);
   }
 
-  validatePath(value: unknown, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<Date>> {
+  validatePath(value: unknown, path: Path, ctx: ValidationContext): PromiseLike<Date> {
     if (isNullOrUndefined(value)) {
-      return ctx.failurePromise(defaultViolations.notNull(path), value);
+      return Promise.reject(defaultViolations.notNull(path));
     }
     let dateValue: any;
     if (isString(value) || isNumber(value)) {
@@ -1165,11 +1166,11 @@ export class DateValidator extends Validator<Date> {
     }
     if (dateValue instanceof Date) {
       if (isNaN((dateValue as Date).getTime())) {
-        return ctx.failurePromise(defaultViolations.date(value, path), value);
+        return Promise.reject(defaultViolations.date(value, path));
       }
-      return ctx.successPromise(dateValue);
+      return Promise.resolve(dateValue);
     }
-    return ctx.failurePromise(defaultViolations.date(value, path, this.dateType), value);
+    return Promise.reject(defaultViolations.date(value, path, this.dateType));
   }
 }
 
@@ -1183,17 +1184,17 @@ export class PatternValidator extends StringValidatorBase<string> {
     Object.freeze(this);
   }
 
-  validatePath(value: unknown, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<string>> {
+  validatePath(value: unknown, path: Path, ctx: ValidationContext): PromiseLike<string> {
     if (isNullOrUndefined(value)) {
-      return ctx.failurePromise(defaultViolations.notNull(path), value);
+      return Promise.reject(defaultViolations.notNull(path));
     }
     if (!isString(value)) {
-      return ctx.failurePromise(defaultViolations.string(value, path), value);
+      return Promise.reject(defaultViolations.string(value, path));
     }
     if (this.regExp.test(value)) {
-      return ctx.successPromise(value);
+      return Promise.resolve(value);
     }
-    return ctx.failurePromise(defaultViolations.pattern(this.regExp, value, path), value);
+    return Promise.reject(defaultViolations.pattern(this.regExp, value, path));
   }
 
   toJSON() {
@@ -1207,9 +1208,9 @@ export class PatternNormalizer extends PatternValidator {
   constructor(pattern: string | RegExp, flags?: string) {
     super(pattern, flags);
   }
-  validatePath(value: unknown, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<string>> {
+  validatePath(value: unknown, path: Path, ctx: ValidationContext): PromiseLike<string> {
     if (isNullOrUndefined(value)) {
-      return ctx.failurePromise(defaultViolations.notNull(path), value);
+      return Promise.reject(defaultViolations.notNull(path));
     }
     if (isString(value)) {
       return super.validatePath(value, path, ctx);
@@ -1217,7 +1218,7 @@ export class PatternNormalizer extends PatternValidator {
     if (isSimplePrimitive(value)) {
       return super.validatePath(String(value), path, ctx);
     }
-    return ctx.failurePromise(new TypeMismatch(path, 'primitive value', value), value);
+    return Promise.reject(new TypeMismatch(path, 'primitive value', value));
   }
 }
 
@@ -1227,11 +1228,42 @@ export class OptionalValidator<Out, In> extends Validator<null | undefined | Out
     Object.freeze(this);
   }
 
-  validatePath(value: null | undefined | In, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<null | undefined | Out>> {
+  validatePath(value: null | undefined | In, path: Path, ctx: ValidationContext): PromiseLike<null | undefined | Out> {
     if (isNullOrUndefined(value)) {
-      return ctx.successPromise(value as null | undefined);
+      return Promise.resolve(value as null | undefined);
     }
     return this.validator.validatePath(value as In, path, ctx);
+  }
+}
+
+export class OptionalUndefinedValidator<Out, In> extends Validator<undefined | Out, undefined | In> {
+  constructor(private readonly validator: Validator<Out, In>) {
+    super();
+    Object.freeze(this);
+  }
+
+  validatePath(value: undefined | In, path: Path, ctx: ValidationContext): PromiseLike<undefined | Out> {
+    if (value === undefined) {
+      return Promise.resolve(undefined);
+    }
+    return this.validator.validatePath(value, path, ctx);
+  }
+}
+
+export class NullableValidator<Out, In> extends Validator<null | Out, null | In> {
+  constructor(private readonly validator: Validator<Out, In>) {
+    super();
+    Object.freeze(this);
+  }
+
+  validatePath(value: null | In, path: Path, ctx: ValidationContext): PromiseLike<null | Out> {
+    if (value === null) {
+      return Promise.resolve(null);
+    }
+    if (value === undefined) {
+      return Promise.reject(defaultViolations.notUndefined(path));
+    }
+    return this.validator.validatePath(value, path, ctx);
   }
 }
 
@@ -1241,9 +1273,9 @@ export class RequiredValidator<Out, In> extends Validator<Out, In> {
     Object.freeze(this);
   }
 
-  validatePath(value: In, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<Out>> {
+  validatePath(value: In, path: Path, ctx: ValidationContext): PromiseLike<Out> {
     if (isNullOrUndefined(value)) {
-      return ctx.failurePromise(defaultViolations.notNull(path), value);
+      return Promise.reject(defaultViolations.notNull(path));
     }
     return this.validator.validatePath(value, path, ctx);
   }
@@ -1255,34 +1287,27 @@ export class ValueMapper<Out = unknown, In = unknown> extends Validator<Out, In>
     Object.freeze(this);
   }
 
-  validatePath(value: In, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<Out>> {
+  validatePath(value: In, path: Path, ctx: ValidationContext): PromiseLike<Out> {
     try {
       const maybePromise = this.fn(value, path, ctx);
       if (isPromise(maybePromise)) {
         return maybePromise.then(
           (result: any) => this.handleResult(result, value, ctx),
-          (error: any) => this.handleError(error, value, path, ctx),
+          (error: any) => Promise.reject(violationsOf(error)),
         );
       } else {
         return this.handleResult(maybePromise, value, ctx);
       }
     } catch (error) {
-      return this.handleError(error, value, path, ctx);
+      return Promise.reject(violationsOf(error));
     }
-  }
-
-  private handleError(error: any, value: any, path: Path, ctx: ValidationContext) {
-    if (error instanceof ValidationError) {
-      return ctx.failurePromise(error.violations, value);
-    }
-    return ctx.failurePromise(new ErrorViolation(path, this.error || error), value);
   }
 
   private handleResult(result: any, value: any, ctx: ValidationContext) {
     if (result instanceof Violation) {
-      return ctx.failurePromise(result as Violation, value);
+      return ctx.failure(result, value);
     }
-    return ctx.successPromise(result);
+    return Promise.resolve(result);
   }
 }
 
@@ -1291,8 +1316,8 @@ export function isPromise(value: any): value is PromiseLike<any> {
 }
 
 export class IgnoreValidator extends Validator<undefined> {
-  validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<undefined>> {
-    return ctx.successPromise(undefined);
+  validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<undefined> {
+    return Promise.resolve(undefined);
   }
 }
 
@@ -1302,31 +1327,34 @@ export class JsonValidator<Out> extends Validator<Out, string> {
     Object.freeze(this);
   }
 
-  validatePath(value: string, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult<Out>> {
+  validatePath(value: string, path: Path, ctx: ValidationContext): PromiseLike<Out> {
     if (isNullOrUndefined(value)) {
-      return ctx.failurePromise(defaultViolations.notNull(path), value);
+      return Promise.reject(defaultViolations.notNull(path));
     }
     if (!isString(value)) {
-      return ctx.failurePromise(defaultViolations.string(value, path), value);
+      return Promise.reject(defaultViolations.string(value, path));
     }
     try {
       const parsedValue = JSON.parse(value);
       return this.validator.validatePath(parsedValue, path, ctx);
     } catch (e) {
-      return ctx.failurePromise(new TypeMismatch(path, 'JSON', value), value);
+      return Promise.reject(new TypeMismatch(path, 'JSON', value));
     }
   }
 }
 
+export type NextCompositionParameters<Out = unknown, In = unknown, T1 = unknown, T2 = unknown, T3 = unknown, T4 = unknown> = 
+[Validator<Out, In>] | 
+[Validator<T1, In>, Validator<Out, T1>] |
+[Validator<T1, In>, Validator<T2, T1>, Validator<Out, T2>] |
+[Validator<T1, In>, Validator<T2, T1>, Validator<T3, T2>, Validator<Out, T3>] |
+[Validator<T1, In>, Validator<T2, T1>, Validator<T3, T2>, Validator<T4, T3>, Validator<Out, T4>];
+
 export type CompositionParameters<Out = unknown, In = unknown, T1 = unknown, T2 = unknown, T3 = unknown, T4 = unknown, T5 = unknown> = 
-  [Validator<Out, In>] | 
-  [Validator<T1, In>, Validator<Out, T1>] |
-  [Validator<T1, In>, Validator<T2, T1>, Validator<Out, T2>] |
-  [Validator<T1, In>, Validator<T2, T1>, Validator<T3, T2>, Validator<Out, T3>] |
-  [Validator<T1, In>, Validator<T2, T1>, Validator<T3, T2>, Validator<T4, T3>, Validator<Out, T4>] |
+  NextCompositionParameters<Out, In, T1, T2, T3, T4> |
   [Validator<T1, In>, Validator<T2, T1>, Validator<T3, T2>, Validator<T4, T3>, Validator<T5, T4>, Validator<Out, T5>];
 
-export function maybeCompositionOf<Out = unknown, In = unknown, T1 = unknown, T2 = unknown, T3 = unknown, T4 = unknown, T5 = unknown>(...validators: CompositionParameters<Out, In, T1, T2, T3, T4, T5>) {
+export function maybeCompositionOf<Out = unknown, In = unknown, T1 = unknown, T2 = unknown, T3 = unknown, T4 = unknown, T5 = unknown>(...validators: CompositionParameters<Out, In, T1, T2, T3, T4, T5>): Validator<Out, In> {
   if (validators.length === 1) {
     return validators[0];
   } else {
@@ -1339,4 +1367,17 @@ export function maybeAllOfValidator<Out, In>(validators: [Validator<Out, In>, ..
     return validators[0];
   }
   return new AllOfValidator<Out, In>(validators);
+}
+
+export function violationsOf<Out>(error: any): Violation[] {
+  if (error instanceof Violation) {
+    return [ error ];
+  }
+  if (error instanceof ValidationError) {
+    return error.violations;
+  }
+  if (Array.isArray(error) && error[0] instanceof Violation) {
+    return error as Violation[];
+  }
+  return [ new ErrorViolation(ROOT, error) ];
 }

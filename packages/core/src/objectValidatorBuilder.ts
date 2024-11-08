@@ -2,6 +2,16 @@ import { V } from "./V.js";
 import { Validator } from "./validators.js";
 import { MapEntryModel, ObjectValidator, PropertyModel, strictUnknownPropertyValidator } from "./objectValidator.js";
 
+type KeysOfType<T, SelectedType> = {
+  [key in keyof T]: SelectedType extends T[key] ? key : never;
+}[keyof T];
+
+type Optional<T> = Partial<Pick<T, KeysOfType<T, undefined>>>;
+
+type Required<T> = Omit<T, KeysOfType<T, undefined>>;
+
+type OptionalUndefined<T> = Optional<T> & Required<T>;
+
 export class ObjectValidatorBuilder<Props, Next, LocalProps, LocalNext> {
   private _extends: ObjectValidator[] = [];
   private _properties: PropertyModel = {};
@@ -28,25 +38,25 @@ export class ObjectValidatorBuilder<Props, Next, LocalProps, LocalNext> {
   }
   allowAdditionalProperties(allow: boolean) {
     if (allow) {
-      return this.additionalProperties(V.any(), V.any());
+      return this.additionalProperties(V.any<keyof any>(), V.any());
     } else {
-      return this.additionalProperties(V.any(), strictUnknownPropertyValidator);
+      return this.additionalProperties(V.any<keyof any>(), strictUnknownPropertyValidator);
     }
   }
   additionalProperties<K extends keyof any, V>(keys: Validator<K>, values: Validator<V>) {
     this._additionalProperties.push({ keys, values });
     return this as ObjectValidatorBuilder<Props & Record<K, V>, Next, LocalProps, LocalNext>;
   }
-  next<X>(validator: Validator<X, Next extends {} ? Next : Props>) {
+  next<NextOut>(validator: Validator<NextOut, Next extends {} ? Next : Props>) {
     this._next?.push(validator);
-    return this as unknown as ObjectValidatorBuilder<Props, X, LocalProps, LocalNext>;
+    return this as unknown as ObjectValidatorBuilder<Props, NextOut, LocalProps, LocalNext>;
   }
-  localNext<X>(validator: Validator<X, LocalNext extends {} ? LocalNext : Next extends {} ? Next : Props & LocalProps>) {
+  localNext<NextOut>(validator: Validator<NextOut, LocalNext extends {} ? LocalNext : Next extends {} ? Next : Props & LocalProps>) {
     this._localNext?.push(validator);
-    return this as unknown as ObjectValidatorBuilder<Props, Next, LocalProps, X>;
+    return this as unknown as ObjectValidatorBuilder<Props, Next, LocalProps, NextOut>;
   }
   build() {
-    return new ObjectValidator<LocalNext extends {} ? LocalNext : Next extends {} ? Next : Props & LocalProps, Next extends {} ? Next : Props>({
+    return new ObjectValidator<OptionalUndefined<LocalNext extends {} ? LocalNext : Next extends {} ? Next : Props & LocalProps>, OptionalUndefined<Next extends {} ? Next : Props>>({
       extends: this._extends,
       properties: this._properties,
       additionalProperties: this._additionalProperties,
