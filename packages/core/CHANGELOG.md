@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [7.0.0-alpha.2](https://github.com/finnair/v-validation/compare/v7.0.0-alpha.1...v7.0.0-alpha.2) (2024-11-08)
+
+### Features
+
+- string size and number between validator chaining ([507f171](https://github.com/finnair/v-validation/commit/507f17124b28e295ecc7f1eef0359729b523076a))
+
 # [7.0.0-alpha.1](https://github.com/finnair/v-validation/compare/v7.0.0-alpha.0...v7.0.0-alpha.1) (2024-11-08)
 
 ### Bug Fixes
