@@ -6,11 +6,11 @@ type KeysOfType<T, SelectedType> = {
   [key in keyof T]: SelectedType extends T[key] ? key : never;
 }[keyof T];
 
-type Optional<T> = Partial<Pick<T, KeysOfType<T, undefined>>>;
+type OptionalProperties<T> = Partial<Pick<T, KeysOfType<T, undefined>>>;
 
-type Required<T> = Omit<T, KeysOfType<T, undefined>>;
+type RequiredProperties<T> = Omit<T, KeysOfType<T, undefined>>;
 
-type OptionalUndefined<T> = Optional<T> & Required<T>;
+type UndefinedAsOptionalProperties<T> = OptionalProperties<T> & RequiredProperties<T>;
 
 export class ObjectValidatorBuilder<Props, Next, LocalProps, LocalNext> {
   private _extends: ObjectValidator[] = [];
@@ -28,13 +28,13 @@ export class ObjectValidatorBuilder<Props, Next, LocalProps, LocalNext> {
     for (const key in properties) {
       this._properties[key] = properties[key];
     }
-    return this as ObjectValidatorBuilder<Props & OptionalUndefined<X>, Next, LocalProps, LocalNext>;
+    return this as ObjectValidatorBuilder<Props & UndefinedAsOptionalProperties<X>, Next, LocalProps, LocalNext>;
   }
   localProperties<X>(localProperties: { [K in keyof X]: Validator<X[K]> }) {
     for (const key in localProperties) {
       this._localProperties[key] = localProperties[key];
     }
-    return this as ObjectValidatorBuilder<Props, Next, LocalProps & OptionalUndefined<X>, LocalNext>;
+    return this as ObjectValidatorBuilder<Props, Next, LocalProps & UndefinedAsOptionalProperties<X>, LocalNext>;
   }
   allowAdditionalProperties(allow: boolean) {
     if (allow) {
