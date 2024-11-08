@@ -29,8 +29,8 @@ npm install @finnair/v-validation
 * `V.objectType()` builder can be used to build an ObjectValidator with inferred type.
 * Validator (output/result) type can be acquired with `VType<typeof validator>`. 
 * Direct, chainable support for most used "next" validation rules, e.g. `V.number().min(1).max(2)`: 
-  * `V.string()` supports `notEmpty`, `notBlank` and `pattern`.
-  * `V.number()` supports `min` and `max`.
+  * `V.string()` supports `notEmpty`, `notBlank`, `pattern` and `size`.
+  * `V.number()` supports `min`, `max` and `between`.
 * Use `Validator#validateValue` to get valid a valid value or an exception directly
 
 ### Breaking changes: 
@@ -224,6 +224,22 @@ All validators can be chained using `Validator.next(...compositionOf: Validator[
 ```typescript
 V.toInteger().next(V.min(1), V.max(1000), V.assertTrue(isPrime));
 ```
+### Validator Chaining in Version >= 7
+
+Version 7 offers shortcuts for most common validator chaining cases: 
+```typescript
+V.integer()
+  .min(1)
+  .max(1000)
+  .between(1, 1000);
+
+V.string()
+  .notEmpty()
+  .notBlank()
+  .pattern(/.+/)
+  .size(1, 10)
+```
+
 
 ## Combining Validators
 
