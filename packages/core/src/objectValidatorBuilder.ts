@@ -28,13 +28,13 @@ export class ObjectValidatorBuilder<Props, Next, LocalProps, LocalNext> {
     for (const key in properties) {
       this._properties[key] = properties[key];
     }
-    return this as ObjectValidatorBuilder<Props & X, Next, LocalProps, LocalNext>;
+    return this as ObjectValidatorBuilder<Props & OptionalUndefined<X>, Next, LocalProps, LocalNext>;
   }
   localProperties<X>(localProperties: { [K in keyof X]: Validator<X[K]> }) {
     for (const key in localProperties) {
       this._localProperties[key] = localProperties[key];
     }
-    return this as ObjectValidatorBuilder<Props, Next, LocalProps & X, LocalNext>;
+    return this as ObjectValidatorBuilder<Props, Next, LocalProps & OptionalUndefined<X>, LocalNext>;
   }
   allowAdditionalProperties(allow: boolean) {
     if (allow) {
@@ -56,7 +56,7 @@ export class ObjectValidatorBuilder<Props, Next, LocalProps, LocalNext> {
     return this as unknown as ObjectValidatorBuilder<Props, Next, LocalProps, NextOut>;
   }
   build() {
-    return new ObjectValidator<OptionalUndefined<LocalNext extends {} ? LocalNext : Next extends {} ? Next : Props & LocalProps>, OptionalUndefined<Next extends {} ? Next : Props>>({
+    return new ObjectValidator<LocalNext extends {} ? LocalNext : Next extends {} ? Next : Props & LocalProps, Next extends {} ? Next : Props>({
       extends: this._extends,
       properties: this._properties,
       additionalProperties: this._additionalProperties,
