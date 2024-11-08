@@ -149,7 +149,7 @@ describe('strings', () => {
   });
 
   describe('string validator chaining', () => {
-    test('notBlank > notEmpty > pattern', () => expectValid('A', V.string().notBlank().notEmpty().pattern(/^[A-Z]$/)));
+    test('notBlank > notEmpty > pattern > size', () => expectValid('A', V.string().notBlank().notEmpty().pattern(/^[A-Z]$/).size(1, 2)));
     
     test('first validator failure', () => {
       expectViolations(123 as any, V.string().notBlank(), new TypeMismatch(ROOT, 'string', 123));
@@ -1042,6 +1042,18 @@ describe('number', () => {
       expectViolations('1.1', V.check(V.toNumber().next(V.max(1.1, false))), defaultViolations.max(1.1, false, 1.1)));
 
     test('invalid max inclusive', () => expectViolations(2, V.max(1, true), defaultViolations.max(1, true, 2)));
+  });
+
+  describe('between', () => {
+    test('min <= max when both are inclusive', () => expect(() => V.number().between(2, 1)).toThrow());
+
+    test('min < max when either is exclusive', () => expect(() => V.number().between(2, 2, false)).toThrow());
+
+    test('2 is between(2, 2)', () => expectValid(2, V.number().between(2, 2)));
+
+    test('2 is not between(2, 3, false)', () => expectViolations(2, V.number().between(2, 3, false), defaultViolations.min(2, false, 2)));
+
+    test('3 is not between(2, 3, true, false)', () => expectViolations(3, V.number().between(2, 3, true, false), defaultViolations.max(3, false, 3)));
   });
 
   describe('integer', () => {

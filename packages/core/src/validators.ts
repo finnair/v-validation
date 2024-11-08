@@ -735,14 +735,21 @@ export function isSimplePrimitive(value: any) {
 }
 
 export abstract class StringValidatorBase<In> extends Validator<string, In> {
+  
   notEmpty() {
     return new NextStringValidator(this, new NotEmptyValidator<string>());
   }
+  
   notBlank() {
     return new NextStringValidator(this, new NotBlankValidator());
   }
+  
   pattern(pattern: string | RegExp, flags?: string) {
     return new NextStringValidator(this, new PatternValidator(pattern, flags));
+  }
+  
+  size(min: number, max: number) {
+    return new NextStringValidator(this, new SizeValidator<string>(min, max));
   }
 }
 
@@ -922,6 +929,17 @@ export abstract class NumberValidatorBase<In> extends Validator<number, In> {
 
   max(max: number, inclusive = true) {
     return new NextNumberValidator<In>(this, new MaxValidator(max, inclusive));
+  }
+  
+  between(min: number, max: number, minInclusive = true, maxInclusive = true) {
+    if (minInclusive && maxInclusive) {
+      if (!(min <= max)) {
+        throw new Error('Between: min shuold be <= max when both are inclusive (i.e. min <= max)');
+      }
+    } else if (!(min < max)) {
+      throw new Error('Between: min should be < max when either min or max is exclusive');
+    }
+    return new NextNumberValidator<In>(this, new CompositionValidator<number, number>([new MinValidator(min, minInclusive), new MaxValidator(max, maxInclusive)]))
   }
 
   protected validateNumberFormat(value: number, format: undefined | NumberFormat, path: Path, ctx: ValidationContext) {
