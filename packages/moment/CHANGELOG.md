@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [7.0.0-alpha.1](https://github.com/finnair/v-validation/compare/v7.0.0-alpha.0...v7.0.0-alpha.1) (2024-11-08)
+
+### Bug Fixes
+
+- V.properties typing ([757b676](https://github.com/finnair/v-validation/commit/757b6762b9191790b29b5634c92078b25af294cb))
+
 # [7.0.0-alpha.0](https://github.com/finnair/v-validation/compare/v6.1.0...v7.0.0-alpha.0) (2024-11-08)
 
 **Note:** Version bump only for package @finnair/v-validation-moment
