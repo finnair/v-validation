@@ -200,7 +200,7 @@ export const V = {
 
   date: () => dateValidator,
 
-  enum: <Out extends {[key: number]: string | number}>(enumType: Out, name: string) => new EnumValidator(enumType, name),
+  enum: <Out extends Record<string, string | number>>(enumType: Out, name: string) => new EnumValidator<Out>(enumType, name),
 
   assertTrue: <In>(fn: AssertTrue<In>, type: string = 'AssertTrue', path?: Path) => new AssertTrueValidator<In>(fn, type, path),
 

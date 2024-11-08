@@ -1043,20 +1043,20 @@ export class MaxValidator extends Validator<number, number> {
   }
 }
 
-export class EnumValidator<T extends {[key: number]: string | number}> extends Validator<T> {
-  constructor(public readonly enumType: T, public readonly name: string) {
+export class EnumValidator<Out extends Record<string, string | number>> extends Validator<Out[keyof Out]> {
+  constructor(public readonly enumType: Out, public readonly name: string) {
     super();
     Object.freeze(this);
   }
 
-  validatePath(value: unknown, path: Path, ctx: ValidationContext): PromiseLike<T> {
+  validatePath(value: unknown, path: Path, ctx: ValidationContext): PromiseLike<Out[keyof Out]> {
     if (isNullOrUndefined(value)) {
       return Promise.reject(defaultViolations.notNull(path));
     }
     if (typeof value === 'string' || typeof value === 'number') {
       const isValid = Object.values(this.enumType).includes(value);
       if (isValid) {
-        return Promise.resolve(value as T);
+        return Promise.resolve(value as Out[keyof Out]);
       }
     }
     return ctx.failure(defaultViolations.enum(this.name, value, path), value);

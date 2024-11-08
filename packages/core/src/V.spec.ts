@@ -843,10 +843,11 @@ describe('enum', () => {
   test('null is not allowed', () => expectViolations(null, V.enum(StrEnum, 'StrEnum'), defaultViolations.notNull()));
 
   describe('String', () => {
-    const valiator = V.enum(StrEnum, 'StrEnum');
-    test('valid reference', () => expectValid(StrEnum.A, valiator));
-    test('valid strign', () => expectValid('A', valiator));
-    test('invalid', () => expectViolations('B', valiator, defaultViolations.enum('StrEnum', 'B')));
+    const validator = V.enum(StrEnum, 'StrEnum');
+    test('valid reference', async() => 
+      (await expectValid(StrEnum.A satisfies VType<typeof validator>, validator)) satisfies VType<typeof validator>);
+    test('valid strign', () => expectValid('A', validator));
+    test('invalid', () => expectViolations('B', validator, defaultViolations.enum('StrEnum', 'B')));
   });
 
   describe('int', () => {
