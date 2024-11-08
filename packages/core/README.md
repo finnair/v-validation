@@ -23,6 +23,25 @@ Or [`npm`](https://www.npmjs.com/):
 npm install @finnair/v-validation
 ```
 
+## Major Changes Comming in Version 7
+### New Features
+* **Typing**: Validators may have a specific input and especially output type.
+* `V.objectType()` builder can be used to build an ObjectValidator with inferred type.
+* Validator (output/result) type can be acquired with `VType<typeof validator>`. 
+* Direct, chainable support for most used "next" validation rules, e.g. `V.number().min(1).max(2)`: 
+  * `V.string()` supports `notEmpty`, `notBlank` and `pattern`.
+  * `V.number()` supports `min` and `max`.
+* Use `Validator#validateValue` to get valid a valid value or an exception directly
+
+### Breaking changes: 
+* V.string() and some other validators do not support String object as input any more.
+* V.number() does not support Number object as input any more.
+* Validators that accept multiple subvalidators (`V.optional`, `V.required`, `V.check`, `V.if`, `V.whenGroup`, `V.json` and `ObjectModel#next`) are combined using `V.compositionOf` instead of `V.allOf` as composition makes more sense in general. However, if there are multiple parents with next validators, those are still combined with `V.allOf` as they are not aware of each other.
+* More straightforward internal architecture:
+  * Internal Validator#validatePath returns now a Promise of valid value or reject of Violation(s) directly instead of ValidationResult
+  * Custom SyncPromise is removed in favor of Promise.resolve and reject.
+  * ValidatorContext no longer has `success`, `successPromise`, `failurePromise` and `promise` functions - use `Promise.resolve(value)` or `Promise.reject(new Violation(...))` with single violation or an array of violations. 
+
 ## Show Me the Code!
 
 ```typescript
@@ -46,7 +65,7 @@ npm install @finnair/v-validation
 Validators can be chained and combined.
 
 ```typescript
-const percentageValidator = V.integer().next(V.min(0), V.max(100));
+const percentageValidator = V.integer().min(0).max(100));
 (await percentageValidator.validate(123)).getValue();
 // ValidationError: [
 //   {
@@ -114,30 +133,30 @@ const base64json = V.map(value => JSON.parse(new Buffer(value, 'base64').toStrin
 Even complex custom validators can be implemented as simple anonymous functions.
 
 ```typescript
-// 1) MODEL
-interface UserRegistration {
-  password1: string;
-  password2: string;
-}
-
-// 2) VALIDATION RULES
+// 1) VALIDATION RULES
 // A custom validator to check that password1 === password2 with failures targeted at password2 field
-const checkPassword = V.fn(async (value: UserRegistration, path: Path, ctx: ValidationContext) => {
-  if (value.password1 !== value.password2) {
-    return ctx.failure(new Violation(path.property('password2'), 'PasswordsMustMatch'), value);
-  }
-  return ctx.success(value);
-});
 
-const UserRegistrationValidator = V.object({
-  properties: {
+// Use V.objectType() to build typed ObjectValidator. The inferred type is accesseible with Vtype<typeof UserRegistrationValidator>
+const UserRegistrationValidator = V.objectType()
+  .properties({
     password1: V.string().next(V.pattern(/[A-Z]/), V.pattern(/[a-z]/), V.pattern(/[0-9]/), V.size(8, 32)),
     password2: V.string(),
-  },
-  // next: checkPassword, /* An alternative way of defining cross-property rules. This allows extending UserRegistrationValidator. */
-}).next(checkPassword); // Because of this, UserRegistrationValidator is actually a NextValidator, which cannot be extended by V.object().
+  })
+  .next(V.fn(async (value, path: Path, ctx: ValidationContext) => {
+    if (value.password1 !== value.password2) {
+      return Promise.reject(new Violation(path.property('password2'), 'PasswordsMustMatch'));
+    }
+    return Promise.resolve(value);
+  }))
+  .build();
+
+// 2) Derived type
+type UserRegistration = VType<typeof UserRegistrationValidator>;
 
 // 3) INPUT VALIDATION
+// Valid object
+(await UserRegistrationValidator.validate({ password1: 'foo', password2: 'foo' })).getValue() satisfies UserRegistration;
+
 (await UserRegistrationValidator.validate({ password1: 'FooBar' })).getValue();
 // ValidationError: ValidationError: [
 //   {
@@ -199,7 +218,7 @@ Conversions are always applied internally as in validation rule combinations lat
 
 ## <a name="next">Validator Chaining</a>
 
-All validators can be chained using `Validator.next(...allOf: Validator[])` function. Next-validators are only run for successful results with the converted value. Often occurring pattern is to first verify/convert the type and then run the rest of the validations, e.g. validating a prime number between 1 and 1000:
+All validators can be chained using `Validator.next(...compositionOf: Validator[])` function. Next-validators are only run for successful results with the converted value. Often occurring pattern is to first verify/convert the type and then run the rest of the validations, e.g. validating a prime number between 1 and 1000:
 
 ```typescript
 V.toInteger().next(V.min(1), V.max(1000), V.assertTrue(isPrime));
@@ -209,12 +228,13 @@ V.toInteger().next(V.min(1), V.max(1000), V.assertTrue(isPrime));
 
 `V` supports
 
+- All validators have [`Validator.next`](#next) function to chain validator rules,. 
+- `compositionOf` - validators are run one after another against the (current) converted value (a shortcut for [`Validator.next`](#next))
 - `allOf` - value must satisfy all the validators
   - validators are run in parallel and the results are combined
   - if conversion happens, all the validators must return the same value (deepEquals)
 - `anyOf` - at least one of the validators must match
 - `oneOf` - exactly one validator must match while others should return false
-- `compositionOf` - validators are run one after another against the (current) converted value (a shortcut for [`Validator.next`](#next))
 
 ## <a name="object">V.object</a>
 
@@ -234,45 +254,57 @@ An object may have any named property defined in a parent `properties`, it's own
 A child model may extend the validation rules of any inherited properties. In such a case inherited property validators are executed first and, if success, the converted value is validated against child's property validators. A child may only further restrict parent's property rules.
 
 ```typescript
-const vehicle = V.object({
-  properties: {
+  const vehicle = V.objectType()
+  .properties({
     wheelCount: V.required(V.toInteger(), V.min(0)),
-    ownerName: V.optional(V.string()),
-  },
-  localProperties: {
-    type: 'Vehicle', // This rule is not inherited! A string or number value is a shortcur for V.hasValue(...).
-  },
-});
-
-const bike = V.object({
-  extends: vehicle,
-  properties: {
+    ownerName: V.optionalStrict(V.string()),
+  })
+  .localProperties({
+    // This rule is not inherited! "as const" for 'Vehicle' instead of string type
+    type: V.hasValue('Vehicle' as const), 
+  })
+  .build();
+  
+  const bike = V.objectType()
+  .extends(vehicle)
+  .properties({
     wheelCount: V.allOf(V.min(1), V.max(3)), // Extend parent rules
     sideBags: V.boolean(), // Add a property
-  },
-  localProperties: {
-    type: 'Bike',
-  },
-});
-
-const abike = { type: 'Bike', wheelCount: 2, sideBags: false };
-
-(await bike.validate(abike)).isSuccess();
-// true
-
-(await vehicle.validate(abike)).getValue();
-// ValidationError: [
-//   {
-//     "path": "$.type",
-//     "type": "HasValue",
-//     "invalidValue": "Bike",
-//     "expectedValue": "Vehicle"
-//   },
-//   {
-//     "path": "$.sideBags",
-//     "type": "UnknownProperty"
-//   }
-// ]
+  })
+  .localProperties({
+    type: V.hasValue('Bike' as const),
+  })
+  .build();
+  
+  const abike1 = { type: 'Bike', wheelCount: 2, sideBags: false } satisfies VType<typeof bike>;  
+  (await bike.validate(abike1)).isSuccess();
+  // true
+ 
+  const abike2 = { type: 'Bike', wheelCount: 4, sideBags: false } satisfies VType<typeof bike>;
+  (await bike.validate(abike2)).getValue();
+  // ValidationError: [
+  //   {
+  //     "path": "$.wheelCount",
+  //     "type": "Max",
+  //     "invalidValue": 4,
+  //     "max": 3,
+  //     "inclusive": true
+  //   }
+  // ]
+  
+  (await vehicle.validate(abike1)).getValue();
+  // ValidationError: [
+  //   {
+  //     "path": "$.type",
+  //     "type": "HasValue",
+  //     "invalidValue": "Bike",
+  //     "expectedValue": "Vehicle"
+  //   },
+  //   {
+  //     "path": "$.sideBags",
+  //     "type": "UnknownProperty"
+  //   }
+  // ]
 ```
 
 ### Optional Properties
@@ -468,7 +500,7 @@ Options are passed to to `validate` function as optional second argument.
 | ignoreUnknownEnumValues?: boolean | Unknown enum values allowed by default     |
 | warnLogger?: WarnLogger           | A reporter function for ignored Violations |
 | group?: Group                     | A group used to activate validation rules  |
-| allowCycles?: boolean             | Multiple references to same object allowed |
+| allowCycles?: boolean             | Multiple references to same object allowed |
 
 \*) Note that this option has no effect in cases where additional properties are explicitly denied.
 
@@ -494,8 +526,10 @@ V.map(...)
 
 
 // 3) If a validator doesn't have any parameters, but needs access to path and context,
-// it can be defined as a simple anonymous function:
-V.fn((value: any, path: Path, ctx: ValidationContext): Promise<ValidationResult> => {...})
+// it can be defined as a simple anonymous function
+V.fn((value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult> => {
+  // return either successful or rejected Promise or throw an error
+})
 
 
 // 4) Full parametrizable validators extend Validator
@@ -506,9 +540,9 @@ class MyValidator extends Validator {
   }
   async validatePath(value: any, path: Path, ctx: ValidationContext) {
     if (isOK(value)) {
-      return ctx.success(value);
+      return Promise.resolve(value);
     } else {
-      return ctx.failure(new MyViolation(path, myParameter, value));
+      return Promise.reject(new MyViolation(path, myParameter, value));
     }
   }
 }
@@ -527,13 +561,16 @@ Unless otherwise stated, all validators require non-null and non-undefined value
 
 | V.                      | Arguments                                                        | Description                                                                                                                                |
 | ----------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| fn                      |  fn: ValidatorFn, type?: string                                  | Function reference as a validator. A short cut for extending Validator class.                                                              |
+| fn                      | fn: ValidatorFn, type?: string                                   | Function reference as a validator. A short cut for extending Validator class.                                                              |
 | ignore                  |                                                                  | Converts any input value to undefined.                                                                                                     |
 | any                     |                                                                  | Accepts any value, including undefined and null.                                                                                           |
-| check                   | ...allOf: Validator[]                                            | Runs all the validators and, if successful, returns the original value discarding any conversions.                                         |
 | map                     | fn: MappingFn, error?: any                                       | Mapping function to convert a value. Catches and converts errors to Violations                                                             |
-| optional                | type: Validator, ...allOf: Validator[]                           | Allows null and undefined. For other values, runs first the `type` validator and then `allOf` the rest validators.                         |
-| required                | type: Validator, ...allOf: Validator[]                           | 1) Requires a non-null and non-undefined value, 2) runs `type` validator and 3) then `allOf` the rest validators.                          |
+| compositionOf           | ...validators: Validator[]                                       | Runs given the validators one after another, chaining the result.                                                                          |
+| check                   | ...validators: Validator[]                                       | Runs all the validators as `compositionOf` and, if successful, returns the original value discarding any conversions.                      |
+| required                | ...validators: Validator[]                                       | A non-null and non-undefined valid `compositionOf` of validators.                                                                          |
+| optional                | ...validators: Validator[]                                       | Null, undefined or valid `compositionOf` validators.                                                                                       |
+| optionalStrict          | ...validators: Validator[]                                       | Undefined or valid `compositionOf` validators.                                                                                             |
+| nullable                | ...validators: Validator[]                                       | Null or valid `compositionOf` validators.                                                                                                  |
 | string                  |                                                                  | Requires string or String.                                                                                                                 |
 | toString                |                                                                  | Converts primitive values to (primitive) strings.                                                                                          |
 | notNull                 |                                                                  | Requires non-null and non-undefined value.                                                                                                 |
@@ -547,11 +584,11 @@ Unless otherwise stated, all validators require non-null and non-undefined value
 | toBoolean               | truePattern?: RegExp, falsePattern?: RegExp                      | Converts strings and numbers to boolean. Patterns for true and false can be configured using regexp, defaults to true and false.           |
 | number                  |                                                                  | Requires that input is either primitive number or Number and not NaN.                                                                      |
 | toNumber                |                                                                  | Converts numeric strings to numbers.                                                                                                       |
-| integer                 |                                                                  |  Requires that input is integer.                                                                                                           |
+| integer                 |                                                                  | Requires that input is integer.                                                                                                            |
 | toInteger               |                                                                  | Converts numeric strings to integers.                                                                                                      |
 | min                     | min: number, inclusive = true                                    | Asserts that numeric input is greater than or equal (if inclusive = true) than `min`.                                                      |
 | max                     | max: number, inclusive = true                                    | Asserts that numeric input is less than or equal (if inclusive = true) than `max`.                                                         |
-| date                    |                                                                  | Reqruires a valid date. Converts string to Date.                                                                                           |
+| date                    |                                                                  | Reqruires a valid date. Converts string to Date.                                                                                           |
 | enum                    | enumType: object, name: string                                   | Requires that the input is one of given enumType. Name of the enum provided for error message.                                             |
 | assertTrue              | fn: AssertTrue, type: string = 'AssertTrue', path?: Path         | Requires that the input passes `fn`. Type can be provided for error messages and path to target a sub property                             |
 | hasValue                | expectedValue: any                                               | Requires that the input matches `expectedValue`. Uses `node-deep-equal` library.                                                           |
@@ -563,18 +600,17 @@ Unless otherwise stated, all validators require non-null and non-undefined value
 | toMapType(keys, values) | keys: Validator, values: Validator                               | Converts an array-of-arrays representation of a Map into a JsonSafeMap instance.                                                           |
 | array                   | ...items: Validator[]                                            | [Array validator](#array)                                                                                                                  |
 | toArray                 | items: Validator                                                 | Converts undefined to an empty array and non-arrays to single-valued arrays.                                                               |
-| size                    | min: number, max: number                                         |  Asserts that input's numeric `length` property is between min and max (both inclusive).                                                   |
+| size                    | min: number, max: number                                         | Asserts that input's numeric `length` property is between min and max (both inclusive).                                                    |
 | allOf                   | ...validators: Validator[]                                       | Requires that all given validators match. Validators are run in parallel and in case they convert the input, all must provide same output. |
 | anyOf                   | ...validators: Validator[]                                       | Requires minimum one of given validators matches. Validators are run in parallel and in case of failure, all violations will be returned.  |
 | oneOf                   | ...validators: Validator[]                                       | Requires that exactly one of the given validators match.                                                                                   |
-| compositionOf           | ...validators: Validator[]                                       | Runs given the validators one after another, chaining the result.                                                                          |
 | emptyToUndefined        |                                                                  | Converts null or empty string to undefined. Does not touch any other values.                                                               |
 | emptyToNull             |                                                                  | Converts undefined or empty string to null. Does not touch any other values.                                                               |
 | emptyTo                 | defaultValue: string                                             | Uses given `defaultValue` in place of null, undefined or empty string. Does not touch any other values.                                    |
 | nullTo                  | defaultValue: string                                             | Uses given `defaultValue` in place of null. Does not touch any other values.                                                               |
 | undefinedToNull         |                                                                  | Convets undefined to null. Does not touch any other values.                                                                                |
-| if...elseif...else      | fn: AssertTrue, ...allOf: Validator[]                            | Configures validators (`allOf`) to be executed for cases where if/elseif AssertTrue fn returns true.                                       |
-| whenGroup...otherwise   | group: GroupOrName, ...allOf: Validator[]                        | Defines validation rules (`allOf`) to be executed for given `ValidatorOptions.group`.                                                      |
+| if...elseif...else      | fn: AssertTrue, ...validators: Validator[]                       | Configures validators (`compositionOf`) to be executed for cases where if/elseif AssertTrue fn returns true.                               |
+| whenGroup...otherwise   | group: GroupOrName, ...validators: Validator[]                   | Defines validation rules (`compositionOf`) to be executed for given `ValidatorOptions.group`.                                              |
 | json                    | ...validators: Validator[]                                       | Parse JSON input and validate it against given validators.                                                                                 |
 
 ## Violations
@@ -591,23 +627,23 @@ All `Violations` have following propertie in common:
 
 ### Built-in Violations
 
-| Class                  | Type                  | Properties                       | Description                                                                         |
-| ---------------------- | --------------------- | -------------------------------- | ----------------------------------------------------------------------------------- |
-| TypeMismatch           | TypeMismatch          | expected: string                 | Type mismatch: `expected` is a description of expected type.                        |
-| EnumMismatch           | EnumMismatch          | enumType: string                 | Invalid enum value: `enumType` is the name of the expected enumeration.             |
-| ErrorViolation         | Error                 | error: any                       | An unspecified Error that was thrown and caught.                                    |
-| HasValueViolation      | HasValue              | expectedValue: any               | Input does not match (deepEqual) expectedValue.                                     |
-| PatternViolationi      | Pattern               | pattern: string                  | Input does not match the regular expression (pattern).                              |
-| OneOfMismatch          | OneOf                 | matches: number                  | Input matches 0 or >= 2 of the configured validators.                               |
-| MaxViolation           | Max                   | max: number, inclusive: boolean  | Input is greater-than or greater-than-or-equal, if `inclusive=true`, than `max`.    |
-| MinViolation           | Min                   |  min: number, inclusive: boolean | Input is less-than or less-than-or-equal if inclusive=true than `min`.              |
-| SizeViolation          | Size                  | min: number, max: number         | Input `length` (required numeric property) is less-than `min` or grater-than `max`. |
-| Violation              | NotNull               |                                  | Input is `null` or `undefined`.                                                     |
-| Violation              | NotEmpty              |                                  | Input is `null`, `undefined` or empty (i.e. input.length === 0).                    |
-| Violation              | NotBlank              |                                  | Input (string) is `null`, `undefined` or empty when trimmed.                        |
-| Violation              | UnknownProperty       |                                  | Additional property that is denied by default (see ignoreUnknownProperties).        |
-| Violation              | UnknownPropertyDenied |                                  | Explicitly denied additional property.                                              |
-| DiscriminatorViolation | Discriminator         | expectedOneOf: string[]          | Invalid discriminator value: `expectedOneOf` is a list of known types.              |
+| Class                  | Type                  | Properties                      | Description                                                                         |
+| ---------------------- | --------------------- | ------------------------------- | ----------------------------------------------------------------------------------- |
+| TypeMismatch           | TypeMismatch          | expected: string                | Type mismatch: `expected` is a description of expected type.                        |
+| EnumMismatch           | EnumMismatch          | enumType: string                | Invalid enum value: `enumType` is the name of the expected enumeration.             |
+| ErrorViolation         | Error                 | error: any                      | An unspecified Error that was thrown and caught.                                    |
+| HasValueViolation      | HasValue              | expectedValue: any              | Input does not match (deepEqual) expectedValue.                                     |
+| PatternViolationi      | Pattern               | pattern: string                 | Input does not match the regular expression (pattern).                              |
+| OneOfMismatch          | OneOf                 | matches: number                 | Input matches 0 or >= 2 of the configured validators.                               |
+| MaxViolation           | Max                   | max: number, inclusive: boolean | Input is greater-than or greater-than-or-equal, if `inclusive=true`, than `max`.    |
+| MinViolation           | Min                   | min: number, inclusive: boolean | Input is less-than or less-than-or-equal if inclusive=true than `min`.              |
+| SizeViolation          | Size                  | min: number, max: number        | Input `length` (required numeric property) is less-than `min` or grater-than `max`. |
+| Violation              | NotNull               |                                 | Input is `null` or `undefined`.                                                     |
+| Violation              | NotEmpty              |                                 | Input is `null`, `undefined` or empty (i.e. input.length === 0).                    |
+| Violation              | NotBlank              |                                 | Input (string) is `null`, `undefined` or empty when trimmed.                        |
+| Violation              | UnknownProperty       |                                 | Additional property that is denied by default (see ignoreUnknownProperties).        |
+| Violation              | UnknownPropertyDenied |                                 | Explicitly denied additional property.                                              |
+| DiscriminatorViolation | Discriminator         | expectedOneOf: string[]         | Invalid discriminator value: `expectedOneOf` is a list of known types.              |
 
 ## Roadmap
 

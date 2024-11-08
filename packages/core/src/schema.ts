@@ -2,16 +2,18 @@ import {
   Validator,
   ValidationContext,
   ValidationResult,
-  ObjectValidator,
-  PropertyModel,
-  MapEntryModel,
   isNullOrUndefined,
   defaultViolations,
   isString,
   Violation,
   TypeMismatch,
-  ObjectModel,
 } from './validators.js';
+import {
+  ObjectValidator,
+  PropertyModel,
+  MapEntryModel,
+  ObjectModel,
+} from './objectValidator.js';
 import { Path } from '@finnair/path';
 
 export interface DiscriminatorFn {
@@ -28,10 +30,10 @@ export interface SchemaModel {
 export type ClassParentModel = string | ObjectValidator | (string | ObjectValidator)[];
 
 export interface ClassModel {
-  readonly properties?: PropertyModel;
-  readonly additionalProperties?: boolean | MapEntryModel | MapEntryModel[];
   readonly extends?: ClassParentModel;
   readonly localProperties?: PropertyModel;
+  readonly properties?: PropertyModel;
+  readonly additionalProperties?: boolean | MapEntryModel | MapEntryModel[];
   readonly next?: Validator;
   readonly localNext?: Validator;
 }
@@ -78,9 +80,9 @@ export class SchemaValidator extends Validator {
     return this.validateClass(value, path, ctx);
   }
 
-  validateClass(value: any, path: Path, ctx: ValidationContext, expectedType?: string): PromiseLike<ValidationResult> {
+  validateClass(value: any, path: Path, ctx: ValidationContext, expectedType?: string): PromiseLike<any> {
     if (isNullOrUndefined(value)) {
-      return ctx.failurePromise(defaultViolations.notNull(path), value);
+      throw defaultViolations.notNull(path)
     }
     // 1) Validate discriminator
     let type: string;
@@ -93,14 +95,14 @@ export class SchemaValidator extends Validator {
     }
     const validator = this.validators[type];
     if (!validator) {
-      return ctx.failurePromise(new DiscriminatorViolation(typePath, type, Object.keys(this.validators)), type);
+      throw new DiscriminatorViolation(typePath, type, Object.keys(this.validators))
     }
 
     // 2) Validate that the type is assignable to the expected type (polymorphism)
     if (expectedType) {
       const expectedParent = this.validators[expectedType];
       if (!this.isSubtypeOf(validator, expectedParent)) {
-        return ctx.failurePromise(new TypeMismatch(path, expectedType, type), type);
+        throw new TypeMismatch(path, expectedType, type)
       }
     }
 

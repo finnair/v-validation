@@ -15,6 +15,7 @@ describe('schema', () => {
         type: V.string(),
       },
     });
+    V.compositionOf(V.string())
     const schema = new SchemaValidator((schema: SchemaValidator) => ({
       discriminator: 'type', // or (value: any) => string function
       models: {
@@ -138,7 +139,7 @@ describe('schema', () => {
           extends: { type: 'Object' },
           type: 'ObjectNormalizer',
         })
-      ).getValue();
+      ).getValue() as any;
       expect(Object.keys(value)).toEqual(['type', 'extends', 'properties', 'property']);
       expect(Object.keys(value.properties)).toEqual(['first', 'second']);
     });
@@ -161,7 +162,7 @@ describe('schema', () => {
 
     test('valid object', () => expectValid({ number: 123, string: 'string' }, schema));
 
-    test('valid string reference', () => expectViolations({ number: 123, string: 123 }, schema, new TypeMismatch(property('string'), 'string', 'number')));
+    test('invalid string reference', () => expectViolations({ number: 123, string: 123 }, schema, new TypeMismatch(property('string'), 'string', 'number')));
   });
 
   test('parent must be ObjectValidator', () => {
@@ -210,14 +211,14 @@ describe('ClassModel.next', () => {
           pw1: V.string(),
           pw2: V.string(),
         },
-        next: V.assertTrue(user => user.pw1 === user.pw2, 'PasswordVerification', Path.of('pw2')),
+        next: V.assertTrue((user: any) => user.pw1 === user.pw2, 'PasswordVerification', Path.of('pw2')),
       },
       NewUserRequest: {
         extends: 'PasswordChangeRequest',
         properties: {
           name: V.string(),
         },
-        next: V.assertTrue(user => user.pw1.indexOf(user.name) < 0, 'BadPassword', Path.of('pw1')),
+        next: V.assertTrue((user: any) => user.pw1.indexOf(user.name) < 0, 'BadPassword', Path.of('pw1')),
       },
     },
   }));
@@ -243,7 +244,7 @@ describe('ClassModel.localNext', () => {
         properties: {
           name: V.string(),
         },
-        localNext: V.map(obj => `${obj.name}`),
+        localNext: V.map((obj: any) => `${obj.name}`),
       },
     },
   }));
@@ -276,7 +277,7 @@ describe('Recursive object', () => {
     const second: any = { name: 'second', head: first, tail: first };
     first.head = second;
     first.tail = second;
-    const result = (await schema.validate(first, { allowCycles: true })).getValue();
+    const result = (await schema.validate(first, { allowCycles: true })).getValue() as any;
     expect(result).not.toBe(first);
     expect(result.head).not.toBe(second);
     expect(result.head).toBe(result.tail);
@@ -312,7 +313,7 @@ describe('Recursive array', () => {
     array[0] = array;
     array[1] = array;
 
-    const result = (await schema.validate(array, { allowCycles: true })).getValue();
+    const result = (await schema.validate(array, { allowCycles: true })).getValue() as any;
     expect(result).not.toBe(array);
     expect(result[0]).toBe(result);
     expect(result[1]).toBe(result);

@@ -1,12 +1,12 @@
 import { test, expect } from 'vitest'
 import { Validator, Violation, ValidationResult, ValidatorOptions } from './validators.js';
 
-export async function expectViolations(value: any, validator: Validator, ...violations: Violation[]) {
+export async function expectViolations<In>(value: In, validator: Validator<any, In>, ...violations: Violation[]) {
   const result = await validator.validate(value);
   expect(result).toEqual(new ValidationResult(violations));
 }
 
-export async function expectValid(value: any, validator: Validator, convertedValue?: any, ctx?: ValidatorOptions) {
+export async function expectValid<Out, In>(value: In, validator: Validator<Out, In>, convertedValue?: Out, ctx?: ValidatorOptions) {
   const result = await validator.validate(value, ctx);
   return verifyValid(result, value, convertedValue);
 }
@@ -17,7 +17,7 @@ export async function expectUndefined(value: any, validator: Validator, converte
   expect(result.getValue()).toBeUndefined();
 }
 
-export function verifyValid(result: ValidationResult, value: any, convertedValue?: any) {
+export function verifyValid<Out>(result: ValidationResult<Out>, value: any, convertedValue?: Out) {
   expect(result.getViolations()).toEqual([]);
   if (convertedValue !== undefined) {
     expect(result.getValue()).toEqual(convertedValue);
