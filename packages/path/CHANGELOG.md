@@ -3,6 +3,10 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [7.0.0-alpha.0](https://github.com/finnair/v-validation/compare/v6.1.0...v7.0.0-alpha.0) (2024-11-08)
+
+**Note:** Version bump only for package @finnair/path
+
 # [6.1.0](https://github.com/finnair/v-validation/compare/v6.0.2...v6.1.0) (2024-10-21)
 
 **Note:** Version bump only for package @finnair/path
