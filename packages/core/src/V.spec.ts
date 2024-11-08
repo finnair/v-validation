@@ -835,51 +835,57 @@ describe('compositionOf', () => {
 describe('enum', () => {
   enum StrEnum {
     A = 'A',
+    B = 'B',
   }
   enum IntEnum {
     A,
+    B,
   }
 
   test('null is not allowed', () => expectViolations(null, V.enum(StrEnum, 'StrEnum'), defaultViolations.notNull()));
 
   describe('String', () => {
     const validator = V.enum(StrEnum, 'StrEnum');
+    type validatorType = VType<typeof validator>;
     test('valid reference', async() => 
-      (await expectValid(StrEnum.A satisfies VType<typeof validator>, validator)) satisfies VType<typeof validator>);
+      (await expectValid(StrEnum.B satisfies validatorType, validator)) satisfies validatorType);
     test('valid strign', () => expectValid('A', validator));
-    test('invalid', () => expectViolations('B', validator, defaultViolations.enum('StrEnum', 'B')));
+    test('invalid', () => expectViolations('C', validator, defaultViolations.enum('StrEnum', 'C')));
   });
 
   describe('int', () => {
     const validator = V.enum(IntEnum, 'IntEnum');
-    test('valid reference', () => expectValid(IntEnum.A, validator));
+    type validatorType = VType<typeof validator>;
+    test('valid reference', async () => 
+      (await expectValid(IntEnum.A satisfies validatorType, validator)) satisfies validatorType);
     test('valid int', () => expectValid(0, validator));
-    test('invalid', () => expectViolations(1, validator, defaultViolations.enum('IntEnum', 1)));
+    test('invalid', () => expectViolations(2, validator, defaultViolations.enum('IntEnum', 2)));
   });
 
   test('ignoreUnknownEnumValues', () =>
-    expectValid('B', V.enum(StrEnum, 'StrEnum'), 'B' as any, {
+    expectValid('C', V.enum(StrEnum, 'StrEnum'), 'C' as any, {
       ignoreUnknownEnumValues: true,
     }));
 
   test('ignoreUnknownEnumValues with warning', async () => {
     const warnings: Violation[] = [];
-    await expectValid('B', V.enum(StrEnum, 'StrEnum'), 'B' as any, {
+    await expectValid('C', V.enum(StrEnum, 'StrEnum'), 'C' as any, {
       ignoreUnknownEnumValues: true,
       warnLogger: (violation: Violation) => warnings.push(violation),
     });
-    expect(warnings).toEqual([defaultViolations.enum('StrEnum', 'B')]);
+    expect(warnings).toEqual([defaultViolations.enum('StrEnum', 'C')]);
   });
 });
 
 describe('oneOf', () => {
   enum EnumType {
-    A = 'ABC',
+    A = 'A',
+    B = 'B',
   }
   describe('with conversion', () => {
     const validator = V.oneOf(V.hasValue('2019-01-24T09:10:00Z'), V.date(), V.enum(EnumType, 'EnumType'));
 
-    test('valid enum', () => expectValid('ABC', validator, EnumType.A));
+    test('valid enum', () => expectValid('A', validator, EnumType.A));
 
     test('valid date', () => expectValid(validDateString, validator, validDate));
 
@@ -1097,17 +1103,19 @@ describe('null or undefined', () => {
 describe('async validation', () => {
   describe('allOf', () => {
     test('results ordered by timeout', async () => {
+      const validator = V.allOf(defer(V.notEmpty(), 10), defer(V.toNumber(), 5), V.date());
       await expectViolations(
         '',
-        V.allOf(defer(V.notEmpty(), 10), defer(V.toNumber(), 5), V.date()),
+        validator,
         defaultViolations.date(''),
         defaultViolations.number(''),
         defaultViolations.notEmpty(),
       );
     });
 
-    test('allow conversion', async () => {
-      await expectValid('123', V.allOf(V.string(), V.toInteger()), 123);
+    test('results must match', async () => {
+      const validator = V.allOf(V.string(), V.toInteger());
+      await expectViolations('123', validator, new Violation(ROOT, 'ConflictingConversions', '123'));
     });
 
     test('return original', async () => {
@@ -1120,7 +1128,6 @@ describe('async validation', () => {
         fail('expected an error');
       } catch (e) {
         // as expected
-      } finally {
       }
     });
   });

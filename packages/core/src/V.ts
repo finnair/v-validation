@@ -58,6 +58,15 @@ import {
 import {ObjectModel, ObjectValidator, ObjectNormalizer } from './objectValidator.js';
 import { ObjectValidatorBuilder } from './objectValidatorBuilder.js';
 
+interface AllOfParameters {
+  <In, Out1, Out2>(v1: Validator<Out1, In>, v2: Validator<Out2, In>): Validator<Out1 & Out2, In>;
+  <In, Out1, Out2, Out3>(v1: Validator<Out1, In>, v2: Validator<Out2, In>, v3: Validator<Out3, In>): Validator<Out1 & Out2 & Out3, In>;
+  <In, Out1, Out2, Out3, Out4>(v1: Validator<Out1, In>, v2: Validator<Out2, In>, v3: Validator<Out3, In>, v4: Validator<Out4, In>): Validator<Out1 & Out2 & Out3 & Out4, In>;
+  <In, Out1, Out2, Out3, Out4, Out5>(v1: Validator<Out1, In>, v2: Validator<Out2, In>, v3: Validator<Out3, In>, v4: Validator<Out4, In>, v5: Validator<Out5, In>): Validator<Out1 & Out2 & Out3 & Out4 & Out5, In>;
+}
+
+const AllOfConstructor: AllOfParameters = (...validators: [Validator<any, any>, ...Validator<any, any>[]]) => new AllOfValidator<any, any>(validators);
+
 const ignoreValidator = new IgnoreValidator(),
   stringValidator = new StringValidator(),
   toStringValidator = new StringNormalizer(),
@@ -189,11 +198,11 @@ export const V = {
   properties: <Key extends keyof any, Value>(keys: Validator<Key>, values: Validator<Value>) => 
     new ObjectValidator<Record<Key, Value>>({ additionalProperties: { keys, values } }),
 
-  allOf: (...validators: [Validator, ...Validator[]]) => new AllOfValidator(validators),
+  allOf: AllOfConstructor,
 
-  anyOf: <A extends Validator<any>, B extends Array<Validator<any>>>(...validators: [A, ...B]) => new AnyOfValidator<VType<A> | VType<B[any]>>(validators),
+  anyOf: <V extends [Validator<any>, ...Validator<any>[]]>(...validators: V) => new AnyOfValidator<VType<V[any]>>(validators),
 
-  oneOf: <A extends Validator<any>, B extends Array<Validator<any>>>(...validators: [A, ...B]) => new OneOfValidator<VType<A> | VType<B[any]>>(validators),
+  oneOf: <V extends [Validator<any>, ...Validator<any>[]]>(...validators: V) => new OneOfValidator<VType<V[any]>>(validators),
 
   compositionOf: <Out, In, T1, T2, T3, T4, T5>(...validators: CompositionParameters<Out, In, T1, T2, T3, T4, T5>) => 
     maybeCompositionOf(...validators),

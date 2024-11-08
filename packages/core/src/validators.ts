@@ -1104,7 +1104,7 @@ export class HasValueValidator<InOut> extends Validator<InOut> {
     Object.freeze(this);
   }
   validatePath(value: unknown, path: Path, ctx: ValidationContext): PromiseLike<InOut> {
-    if (deepEqual(value, this.expectedValue)) {
+    if (deepEqual(value, this.expectedValue, { strict: true })) {
       return Promise.resolve(value as InOut);
     }
     return Promise.reject(new HasValueViolation(path, this.expectedValue, value));
@@ -1120,18 +1120,18 @@ export class AllOfValidator<Out, In> extends Validator<Out, In> {
 
   validatePath(value: In, path: Path, ctx: ValidationContext): PromiseLike<Out> {
     let violations: Violation[] = [];
+    let firstResult = true;
     let convertedValue: any;
     const promises: PromiseLike<any>[] = [];
     for (let i = 0; i < this.validators.length; i++) {
       const validator = this.validators[i];
       promises[i] = validator.validatePath(value, path, ctx).then(
         result => {
-          if (result !== value as any) {
-            if (convertedValue !== undefined && !deepEqual(result, convertedValue)) {
-              violations.push(new Violation(path, 'ConflictingConversions', value));
-            } else {
-              convertedValue = result;
-            }
+          if (firstResult) {
+            convertedValue = result;
+            firstResult = false;
+          } else if (!deepEqual(result, convertedValue, { strict: true })) {
+            violations.push(new Violation(path, 'ConflictingConversions', value));
           }
         },
         error => {
@@ -1141,7 +1141,7 @@ export class AllOfValidator<Out, In> extends Validator<Out, In> {
     }
     return Promise.allSettled(promises).then(_ => {
       if (violations.length == 0) {
-        return Promise.resolve(convertedValue !== undefined ? convertedValue : value);
+        return Promise.resolve(convertedValue);
       }
       return Promise.reject(violations);
     });
