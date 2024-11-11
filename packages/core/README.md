@@ -207,6 +207,7 @@ type UserRegistration = VType<typeof UserRegistrationValidator>;
 - Supports recursive types/validators (e.g. linked list)
 - Supports cyclic data: allow or disallow by configuration
 - TypeScript native implementation
+- Supports type inference that can be mixed with better readable custom types/interfaces
 
 ## Pure Validation?
 
@@ -239,7 +240,26 @@ V.string()
   .pattern(/.+/)
   .size(1, 10)
 ```
+## Typing in Version >= 7
 
+All built-in validators have input and output types. Typed ObjectValidators can be built with `V.objectType()`.
+Since inferred types tend to get quite long and hard to read, you can also combine them with hand-written types.
+
+### Typeguards (Work in Proggress)
+
+When using custom interfaces it's good to verify that the validator is in sync with the interface:
+```typescript
+interface MyInterface{
+  //...
+}
+const myInterfaceValidator = V.objectType()
+  .properties({
+    //...
+  })
+  .build();
+
+type MyVerifiedInterface = VerifyEqualTypes<ComparableType<VType<typeof myInterfaceValidator>>, ComparableType<MyInterface>> extends true ? MyInterface : never
+```
 
 ## Combining Validators
 
@@ -289,7 +309,7 @@ A child model may extend the validation rules of any inherited properties. In su
     sideBags: V.boolean(), // Add a property
   })
   .localProperties({
-    type: V.hasValue('Bike' as const),
+    type: V.hasValue<'Bike'>('Bike'), // Another way of enforcing literal type
   })
   .build();
   
@@ -393,8 +413,7 @@ Polymorphims requires that objects are somehow tagged with a type used to valida
 one needs a _discriminator_ property or a function to infer object's type. This type is then used to actually validate the object.
 
 Polymorphic schemas are recursive in nature: 1) a child needs to know it's parents so that it may extend them and 2) unless the type information is natively bound to
-the object being validated, the parent needs to know it's children so that it may dispatch the validation to the correct child. As (direct) cyclic references are not possible, SchemaValidator is created with a callback function that supports referencing other models within the schema by name
-even before they are defined:
+the object being validated, the parent needs to know it's children so that it may dispatch the validation to the correct child. As (direct) cyclic references are not possible, SchemaValidator is created with a callback function that supports referencing other models within the schema by name even before they are defined:
 
 1. An object may extend other models by simply referencing them by name.
 2. Object properties can refer named models via `SchemaValidator.of('ModelName')`.
@@ -461,18 +480,29 @@ const schema = V.schema((schema: SchemaValidator) => ({
 
 ## Recursive Models
 
-Recursive model has a cyclic reference to itself. While a model cannot reference itself
-before it's declared, we can wrap the call within a validator function:
+Recursive model has a cyclic reference to itself. While a model cannot reference itself before it's declared, 
+we can wrap the call within a validator function. Type inference also cannot infer type from itself so we need 
+to define the target interface separately.
 
 ```typescript
-// { head: 'first value', tail: { head: 'second value', tail: { head: 'last value' } } }
-const list = V.object({
-  properties: {
-    first: V.any(),
-    // Instead of recursive model, we have recursive call
-    next: V.optional(V.fn((value: any, path: Path, ctx: ValidationContext) => list.validatePath(value, path, ctx))),
-  },
-});
+interface RecursiveModel {
+  first: string; // removing this gives error in VerifyEqualTypes<VType<typeof validator>, RecursiveModel>
+  next?: RecursiveModel; // TODO: How to detect removing an optional property?
+  //foo: boolean; // gives error in VerifyEqualTypes<VType<typeof validator>, RecursiveModel>
+}
+// Typed placeholder for the recursive validator
+let recursive: ObjectValidator<RecursiveModel>; 
+const validator = V.objectType()
+  .properties({
+    first: V.string(), // V.number() gives error in build
+    //foo: V.boolean(), // This gives error in build
+    next: V.optionalStrict(V.fn((value: any, path: Path, ctx: ValidationContext) => recursive.validatePath(value, path, ctx))),
+  }).localProperties({
+    //foo: V.boolean(), // This gives error in build
+  })
+  .build();
+recursive = validator;
+type verifiedType = VerifyEqualTypes<VType<typeof recursive>, RecursiveModel>
 ```
 
 Another option is to use [`V.schema`](#schema).

@@ -21,11 +21,12 @@ import {
   JsonSet,
   VType,
 } from './validators.js';
-import { ObjectValidator, ObjectModel } from './objectValidator.js';
+import { ObjectValidator, ObjectModel, VInheritableType } from './objectValidator.js';
 import { V } from './V.js';
 import { Path } from '@finnair/path';
 import { expectUndefined, expectValid, expectViolations, verifyValid } from './testUtil.spec.js';
 import { fail } from 'assert';
+import { ComparableType, ComparableType, ExpandRecursively, GetVerifiedType, VerifyEqualTypes } from './objectValidatorBuilder.js';
 
 const ROOT = Path.ROOT,
   index = Path.index,
@@ -420,8 +421,16 @@ describe('objects', () => {
   describe('properties', () => {
     test('valid properties', async () => {
       const validator = V.properties(V.string(), V.string());
-      (await expectValid({ foo: 'bar' } satisfies Record<string, string>, validator)) satisfies Record<string, string>;
+      await expectValid({ foo: 'bar' }, validator);
     });
+    test('enum keys'), async () => {
+      enum Keys { A='A', B='B', C='C' };
+      type type = { [key in Keys]?: number };
+      const validator = V.properties(V.enum(Keys, 'Keys'), V.number());
+      await expectValid({ A: 5 }, validator);
+      await expectValid({ A: 1, B: 2, C: 3 }, validator);
+      await expectViolations({ D: 4 }, validator, defaultViolations.enum('Keys', 'D'))
+    }
   });
 
   describe('cross-property rules', () => {
@@ -437,10 +446,12 @@ describe('objects', () => {
         this.password2 = properties.password2;
       }
     }
-    const modelValidator = V.objectType().properties({
-        password1: V.compositionOf(V.string(), V.notEmpty<string>()),
-        password2: V.compositionOf(V.string(), V.notBlank()),
-      }).next(V.map(value => new PasswordRequest(value)))
+    const modelValidator = V.objectType()
+      .properties({
+        password1: V.string().notEmpty(),
+        password2: V.string().notBlank(),
+      })
+      .next(V.map(value => new PasswordRequest(value)))
       .build()
 
     const validator = modelValidator.next(
@@ -454,19 +465,27 @@ describe('objects', () => {
       await expectViolations({ password1: 'pwd', password2: 'pwb' }, validator, new Violation(property('password1'), 'ConfirmPassword')));
   });
 
-  describe('recursive models', () => {
+  describe('recursive models', async () => {
+
     interface RecursiveModel {
       first: string;
       next?: RecursiveModel;
+      //optional?: number, 
     }
-    const validator = V.object<RecursiveModel>({
-      properties: {
+    // Typed placeholder for the recursive validator
+    let recursion: ObjectValidator<RecursiveModel, RecursiveModel>;
+    const validator = V.objectType()
+      .properties({
         first: V.string(),
-        next: V.optionalStrict(V.fn((value: any, path: Path, ctx: ValidationContext): PromiseLike<RecursiveModel> => validator.validatePath(value, path, ctx))),
-      },
-    });
+        next: V.optionalStrict(V.fn((value: any, path: Path, ctx: ValidationContext) => recursion.validatePath(value, path, ctx))),
+        //optional: V.optionalStrict(V.string()),
+      }).localProperties({
+        //optional: V.optionalStrict(V.string()),
+      })
+      .build();
+    recursion = validator;
 
-    test('recursive type', () => expectValid({ first: 'first', next: { first: 'second', next: { first: 'third' } } }, validator));
+    test('recursive type', () => expectValid(({ first: 'first', next: { first: 'second', next: { first: 'third' } } }) satisfies VType<typeof validator>, validator));
 
     test('cyclic data', async () => {
       const first: any = { first: 'first' };
@@ -515,29 +534,61 @@ describe('objects', () => {
   });
 
   describe('localProperties', () => {
-    const parent = V.objectType().properties({
+    interface IParent {
+      type: string;
+      parentProp?: string;
+      //foo: boolean; // This makes type of parent never
+      nestedObject?: {
+        req: string;
+        foo: boolean;
+      }
+    }
+
+    interface IChild extends IParent{}
+
+    const parent = V.objectType()
+      .properties({
+        /**
+         * Type of this object.
+         */
         type: V.string(),
-      }).localProperties({
-        type: V.hasValue<'Parent'>('Parent'),
-      }).build();
+        parentProp: V.optionalStrict(V.string()),
+        //foo: V.optionalStrict(V.boolean()),
+        nestedObject: V.optionalStrict(
+          V.objectType()
+            .properties({
+              req: V.string(),
+              foo: V.boolean(),
+            })
+            .build()
+          ),
+      })
+      .localProperties({
+        type: V.hasValue('Parent' as const),
+      })
+      .build();
+
     const child = V.objectType()
       .extends(parent)
       .localProperties({
         type: V.hasValue<'Child'>('Child'),
-      }).build();
+      })
+      .build();
 
-    ({ type: 'Parent' }) satisfies VType<typeof parent>;
-    ({ type: 'Child' }) satisfies VType<typeof child>;
+    type parentType = VInheritableType<typeof parent>;
+    type childType = VInheritableType<typeof child>;
+    type VerifiedParent = VerifyEqualTypes<ComparableType<parentType>, ComparableType<IParent>> extends true ? IParent : never;
+    type VerifiedChild = VerifyEqualTypes<ComparableType<childType>, ComparableType<IChild>> extends true ? IChild : never;
 
-    test('valid parent', () => expectValid({ type: 'Parent' }, parent));
+    test('valid parent', () => expectValid({ type: 'Parent' } satisfies VerifiedParent, parent));
 
-    test('valid child', () => expectValid({ type: 'Child' }, child));
+    test('valid child', () => expectValid({ type: 'Child' } satisfies VerifiedChild, child));
 
     test('parent is not valid child', () => expectViolations({ type: 'Parent' }, child, new HasValueViolation(property('type'), 'Child', 'Parent')));
 
     test('child is not valid parent', () => expectViolations({ type: 'Child' }, parent, new HasValueViolation(property('type'), 'Parent', 'Child')));
   });
-
+  
   describe('toObject', () => {
     test('undefined', () => expectValid(undefined, V.toObject('value')));
 
@@ -549,7 +600,16 @@ describe('objects', () => {
   });
 
   describe('derived validators', () => {
-    const base = V.objectType().properties({ prop1: V.string(), prop2: V.number()}).localProperties({ local: V.boolean() }).build();
+    const base = V.objectType()
+      .properties({ 
+        prop1: V.string(), 
+        prop2: V.number(),
+      })
+      .localProperties({ 
+        local: V.boolean(), 
+      })
+      .build();
+
     test('omit', async () => {
       const omit = base.omit('prop1', 'local');
       const value = ({ prop2: 123 }) satisfies VType<typeof omit>;
@@ -603,19 +663,30 @@ describe('additionalProperties', () => {
 });
 
 describe('inheritance', () => {
-  const parentValidator = V.objectType().properties({ id: V.notNull()}).build();
+  const parentValidator = V.objectType()
+    .properties({ 
+      id: V.notNull(),
+    })
+    .build();
 
-  const childValidator = V.objectType().extends(parentValidator).properties({
+  const childValidator = V.objectType()
+    .extends(parentValidator).properties({
       id: V.string(), // Additional requirements for the id property
       name: V.string().notEmpty(),
-    }).build();
+    })
+    .build();
 
-  const addionalPropertiesAllowed = V.objectType().allowAdditionalProperties(true).build();
+  const addionalPropertiesAllowed = V.objectType()
+    .allowAdditionalProperties(true)
+    .build();
 
   const multiParentChild = V.objectType()
     .extends(childValidator)
     .extends(addionalPropertiesAllowed)
-    .properties({ anything: V.notNull() }).build();
+    .properties({ 
+      anything: V.notNull(),
+    })
+    .build();
   
   test('valid parent', () => expectValid({ id: 123 }, parentValidator));
 
@@ -785,9 +856,11 @@ describe('object localNext', () => {
 
 describe('Date', () => {
   const now = new Date();
-  const validator = V.objectType().properties({
-    date: V.date(),
-  }).build();
+  const validator = V.objectType()
+    .properties({
+      date: V.date(),
+    })
+    .build();
 
   ({ date: new Date() }) satisfies VType<typeof validator>;
 

@@ -10,7 +10,7 @@ type OptionalProperties<T> = Partial<Pick<T, KeysOfType<T, undefined>>>;
 
 type RequiredProperties<T> = Omit<T, KeysOfType<T, undefined>>;
 
-type UndefinedAsOptionalProperties<T> =  RequiredProperties<T> & OptionalProperties<T>;
+type UndefinedAsOptionalProperties<T> = RequiredProperties<T> & OptionalProperties<T>;
 
 export class ObjectValidatorBuilder<Props, Next, LocalProps, LocalNext> {
   private _extends: ObjectValidator[] = [];
@@ -45,18 +45,21 @@ export class ObjectValidatorBuilder<Props, Next, LocalProps, LocalNext> {
   }
   additionalProperties<K extends keyof any, V>(keys: Validator<K>, values: Validator<V>) {
     this._additionalProperties.push({ keys, values });
-    return this as ObjectValidatorBuilder<Props & Record<K, V>, Next, LocalProps, LocalNext>;
+    return this as ObjectValidatorBuilder<Props & { [key in K]?: V }, Next, LocalProps, LocalNext>;
   }
-  next<NextOut>(validator: Validator<NextOut, Next extends {} ? Next : Props>) {
+  next<NextOut>(validator: Validator<NextOut, Next extends object ? Next : Props>) {
     this._next?.push(validator);
     return this as unknown as ObjectValidatorBuilder<Props, NextOut, LocalProps, LocalNext>;
   }
-  localNext<NextOut>(validator: Validator<NextOut, LocalNext extends {} ? LocalNext : Next extends {} ? Next : Props & LocalProps>) {
+  localNext<NextOut>(validator: Validator<NextOut, LocalNext extends object ? LocalNext : Next extends object ? Next : Props & LocalProps>) {
     this._localNext?.push(validator);
     return this as unknown as ObjectValidatorBuilder<Props, Next, LocalProps, NextOut>;
   }
   build() {
-    return new ObjectValidator<LocalNext extends {} ? LocalNext : Next extends {} ? Next : Props & LocalProps, Next extends {} ? Next : Props>({
+    return new ObjectValidator<
+        (Next extends object ? Next : Props) & (LocalNext extends object ? LocalNext : LocalProps), 
+        (Next extends object ? Next : Props)
+      >({
       extends: this._extends,
       properties: this._properties,
       additionalProperties: this._additionalProperties,
