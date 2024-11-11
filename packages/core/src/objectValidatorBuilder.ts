@@ -10,7 +10,7 @@ type OptionalProperties<T> = Partial<Pick<T, KeysOfType<T, undefined>>>;
 
 type RequiredProperties<T> = Omit<T, KeysOfType<T, undefined>>;
 
-type UndefinedAsOptionalProperties<T> = OptionalProperties<T> & RequiredProperties<T>;
+type UndefinedAsOptionalProperties<T> =  RequiredProperties<T> & OptionalProperties<T>;
 
 export class ObjectValidatorBuilder<Props, Next, LocalProps, LocalNext> {
   private _extends: ObjectValidator[] = [];
