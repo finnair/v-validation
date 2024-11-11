@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [7.0.0-alpha.3](https://github.com/finnair/v-validation/compare/v7.0.0-alpha.2...v7.0.0-alpha.3) (2024-11-11)
+
+### Bug Fixes
+
+- objectType: infer optional properties for next and localNext ([3c41da9](https://github.com/finnair/v-validation/commit/3c41da9a3fd0f04f2de801736f2ceeaf46a0453e))
+
 # [7.0.0-alpha.2](https://github.com/finnair/v-validation/compare/v7.0.0-alpha.1...v7.0.0-alpha.2) (2024-11-08)
 
 ### Features

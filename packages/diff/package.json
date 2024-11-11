@@ -1,6 +1,6 @@
 {
   "name": "@finnair/diff",
-  "version": "7.0.0-alpha.2",
+  "version": "7.0.0-alpha.3",
   "private": false,
   "description": "Object Diff Based on Paths And Valudes of an Object",
   "main": "./dist/cjs/index.js",
@@ -41,7 +41,7 @@
     "@finnair/path-parser": ">=6"
   },
   "devDependencies": {
-    "@finnair/path": "^7.0.0-alpha.2",
-    "@finnair/path-parser": "^7.0.0-alpha.2"
+    "@finnair/path": "^7.0.0-alpha.3",
+    "@finnair/path-parser": "^7.0.0-alpha.3"
   }
 }
