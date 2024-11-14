@@ -31,6 +31,8 @@ export interface PropertyFilter {
   (key: string): boolean;
 }
 
+export type VInheritableType<V extends ObjectValidator<any, any>> = V extends ObjectValidator<any, infer Out> ? Out : unknown;
+
 export interface ObjectModel<LocalType = unknown, InheritableType = unknown> {
   /**
    * Inherit all non-local rules from parent validators. 
@@ -61,7 +63,7 @@ export interface ObjectModel<LocalType = unknown, InheritableType = unknown> {
   readonly localNext?: Validator | Validator[];
 }
 
-export class ObjectValidator<LocalType = unknown, InheritableType = unknown> extends Validator<LocalType, unknown> {
+export class ObjectValidator<LocalType = unknown, InheritableType = LocalType> extends Validator<LocalType, unknown> {
   public readonly properties: Properties;
 
   public readonly localProperties: Properties;
@@ -99,7 +101,10 @@ export class ObjectValidator<LocalType = unknown, InheritableType = unknown> ext
     this.additionalProperties = additionalProperties.concat(getMapEntryValidators(model.additionalProperties));
     this.properties = mergeProperties(getPropertyValidators(model.properties), properties);
     this.localProperties = getPropertyValidators(model.localProperties);
-    this.nextValidator = nextValidators.length > 0 ? maybeCompositionOf(...(nextValidators as CompositionParameters)) : undefined;
+    const next = nextValidators.length > 0 ? maybeCompositionOf(...(nextValidators as CompositionParameters)) : undefined;
+    if (next) {
+      this.nextValidator = next;
+    }
     if (model.localNext) {
       if (!Array.isArray(model.localNext)) {
         this.localNextValidator = model.localNext;
