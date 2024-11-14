@@ -1,16 +1,7 @@
 import { V } from "./V.js";
 import { Validator } from "./validators.js";
 import { MapEntryModel, ObjectValidator, PropertyModel, strictUnknownPropertyValidator } from "./objectValidator.js";
-
-type KeysOfType<T, SelectedType> = {
-  [key in keyof T]: SelectedType extends T[key] ? key : never;
-}[keyof T];
-
-type OptionalProperties<T> = Partial<Pick<T, KeysOfType<T, undefined>>>;
-
-type RequiredProperties<T> = Omit<T, KeysOfType<T, undefined>>;
-
-type UndefinedAsOptionalProperties<T> = RequiredProperties<T> & OptionalProperties<T>;
+import { UndefinedAsOptionalProperties } from "./typing.js";
 
 export class ObjectValidatorBuilder<Props, Next, LocalProps, LocalNext> {
   private _extends: ObjectValidator[] = [];

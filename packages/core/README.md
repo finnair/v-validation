@@ -245,7 +245,12 @@ V.string()
 All built-in validators have input and output types. Typed ObjectValidators can be built with `V.objectType()`.
 Since inferred types tend to get quite long and hard to read, you can also combine them with hand-written types.
 
-### Typeguards (Work in Proggress)
+### Validator Type
+Use `VType<typeof validator>` to get the result type of `validator`.
+
+Use `VInheritableType<typeof objectValidator> to get the inheritable type of `objectValidator: ObjectValidator<LocalType, Inheritabletype>`.
+
+### Type Guards
 
 When using custom interfaces it's good to verify that the validator is in sync with the interface. The 
 challenge is that TypeScript generic `extends` only verifies type compatibility, optional
@@ -254,11 +259,9 @@ we need to also consider optional properties and nested structure. For this ther
 types:
 
 1. `ComparableType<T>` converts all optional properties to mandatory `Optional<T>` recursively.
-2. `VerifyEqualTypes<A, B>` verifies that `A extends B` and `B extends A`.  
+2. `EqualTypes<A, B>` verifies that `A extends B` and `B extends A` and resolves to `true` if there's no error.
 
-Last hack that is needed, is ignoring unused type error about the `VerifyEqualTypes`. There's at least two
-ways for that:
-
+These can be used with `assertType` to verify type equality:
 ```typescript
 interface MyInterface{
   //...
@@ -269,16 +272,11 @@ const myInterfaceValidator = V.objectType()
   })
   .build();
 
-// 1) use VerifyEqualTypes to make "VerifiedType" and use that
-type MyVerifiedInterface = VerifyEqualTypes<ComparableType<VType<typeof myInterfaceValidator>>, ComparableType<MyInterface>> extends true ? MyInterface : never
-
-// 2) Split VerifyEqualTypes on two or more lines and ignore the unused variable error
-// @ts-ignore
-type verify = VerifyEqualTypes<
-  ComparableType<VType<typeof myInterfaceValidator>>, 
-  ComparableType<MyInterface>
->
+// Use assertType function with EqualTypes and ComparableType to verify that myInterfaceValidator type is equal to MyInterface
+assertType<EqualTypes<ComparableType<VType<typeof myInterfaceValidator>>, ComparableType<MyInterface>>>(true);
 ```
+Why `assertType`? EqualTypes can also be used directly, but it needs to be tied to something (e.g. `type verified = Equaltypes<...>`),
+but that something may then cause "is declared but never used" -error.
 
 ## Combining Validators
 
@@ -505,23 +503,22 @@ to define the target interface separately.
 
 ```typescript
 interface RecursiveModel {
-  first: string; // removing this gives error in VerifyEqualTypes<VType<typeof validator>, RecursiveModel>
-  next?: RecursiveModel; // TODO: How to detect removing an optional property?
-  //foo: boolean; // gives error in VerifyEqualTypes<VType<typeof validator>, RecursiveModel>
+  first: string;
+  next?: RecursiveModel;
 }
+
 // Typed placeholder for the recursive validator
-let recursive: ObjectValidator<RecursiveModel>; 
+let recursion: ObjectValidator<RecursiveModel, RecursiveModel>;
 const validator = V.objectType()
   .properties({
-    first: V.string(), // V.number() gives error in build
-    //foo: V.boolean(), // This gives error in build
-    next: V.optionalStrict(V.fn((value: any, path: Path, ctx: ValidationContext) => recursive.validatePath(value, path, ctx))),
-  }).localProperties({
-    //foo: V.boolean(), // This gives error in build
+    first: V.string(),
+    next: V.optionalStrict(V.fn((value: any, path: Path, ctx: ValidationContext) => recursion.validatePath(value, path, ctx))),
   })
   .build();
-recursive = validator;
-type verifiedType = VerifyEqualTypes<VType<typeof recursive>, RecursiveModel>
+recursion = validator;
+
+// Verify that validator matches RecursiveModel
+assertType<EqualTypes<ComparableType<VType<typeof validator>>, ComparableType<RecursiveModel>>>(true);
 ```
 
 Another option is to use [`V.schema`](#schema).

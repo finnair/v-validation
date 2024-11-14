@@ -26,7 +26,7 @@ import { V } from './V.js';
 import { Path } from '@finnair/path';
 import { expectUndefined, expectValid, expectViolations, verifyValid } from './testUtil.spec.js';
 import { fail } from 'assert';
-import { ComparableType, VerifyEqualTypes } from './objectValidatorBuilder.js';
+import { EqualTypes, ComparableType, assertType } from './typing.js';
 
 const ROOT = Path.ROOT,
   index = Path.index,
@@ -312,7 +312,7 @@ describe('objects', () => {
 
       test('required property missing', () => {
         // @ts-ignore
-        type v = VerifyEqualTypes<
+        type v = EqualTypes<
           ComparableType<VType<typeof validator>>,
           // @ts-expect-error
           ComparableType<{
@@ -322,7 +322,7 @@ describe('objects', () => {
       });
       test('optional property missing', () => {
         // @ts-ignore
-        type v = VerifyEqualTypes<
+        type v = EqualTypes<
           ComparableType<VType<typeof validator>>,
           // @ts-expect-error
           ComparableType<{
@@ -332,7 +332,7 @@ describe('objects', () => {
       });
       test('optional has wrong type', () => {
         // @ts-ignore
-        type v = VerifyEqualTypes<
+        type v = EqualTypes<
           // @ts-expect-error
           ComparableType<VType<typeof validator>>,
           ComparableType<{
@@ -363,7 +363,7 @@ describe('objects', () => {
 
       test('required.required property missing', () => {
         // @ts-ignore
-        type v = VerifyEqualTypes<
+        type v = EqualTypes<
           ComparableType<VType<typeof validator>>,
           // @ts-expect-error 
           ComparableType<{
@@ -380,7 +380,7 @@ describe('objects', () => {
       });
       test('optional.required property missing', () => {
         // @ts-ignore
-        type v = VerifyEqualTypes<
+        type v = EqualTypes<
           ComparableType<VType<typeof validator>>,
           // @ts-expect-error 
           ComparableType<{
@@ -397,7 +397,7 @@ describe('objects', () => {
       });
       test('required.optional property missing', () => {
         // @ts-ignore
-        type v = VerifyEqualTypes<
+        type v = EqualTypes<
           ComparableType<VType<typeof validator>>,
           // @ts-expect-error 
           ComparableType<{
@@ -414,7 +414,7 @@ describe('objects', () => {
       });
       test('required.optional has wrong type', () => {
         // @ts-ignore
-        type v = VerifyEqualTypes<
+        type v = EqualTypes<
           // @ts-expect-error 
           ComparableType<VType<typeof validator>>,
           ComparableType<{
@@ -431,7 +431,7 @@ describe('objects', () => {
       });
       test('required.optional should be required', () => {
         // @ts-ignore
-        type v = VerifyEqualTypes<
+        type v = EqualTypes<
           // @ts-expect-error 
           ComparableType<VType<typeof validator>>,
           ComparableType<{
@@ -618,7 +618,6 @@ describe('objects', () => {
     interface RecursiveModel {
       first: string;
       next?: RecursiveModel;
-      //optional?: number, 
     }
     // Typed placeholder for the recursive validator
     let recursion: ObjectValidator<RecursiveModel, RecursiveModel>;
@@ -626,12 +625,10 @@ describe('objects', () => {
       .properties({
         first: V.string(),
         next: V.optionalStrict(V.fn((value: any, path: Path, ctx: ValidationContext) => recursion.validatePath(value, path, ctx))),
-        //optional: V.optionalStrict(V.string()),
-      }).localProperties({
-        //optional: V.optionalStrict(V.string()),
       })
       .build();
     recursion = validator;
+    assertType<EqualTypes<ComparableType<VType<typeof validator>>, ComparableType<RecursiveModel>>>(true);
 
     test('recursive type', () => expectValid(({ first: 'first', next: { first: 'second', next: { first: 'third' } } }) satisfies VType<typeof validator>, validator));
 
@@ -722,21 +719,14 @@ describe('objects', () => {
         type: V.hasValue<'Child'>('Child'),
       })
       .build();
-
     type parentType = VInheritableType<typeof parent>;
     type childType = VInheritableType<typeof child>;
-    type VerifiedParent = VerifyEqualTypes<ComparableType<parentType>, ComparableType<IParent>> extends true ? IParent : never;
-    type VerifiedChild = VerifyEqualTypes<ComparableType<childType>, ComparableType<IChild>> extends true ? IChild : never;
-    // ts-ignore
-    type verify = VerifyEqualTypes<
-      ComparableType<parentType>,
-      ComparableType<IParent>
-    >
+    assertType<EqualTypes<ComparableType<parentType>, ComparableType<IParent>>>(true);
+    assertType<EqualTypes<ComparableType<childType>, ComparableType<IChild>>>(true);
 
+    test('valid parent', () => expectValid({ type: 'Parent' } satisfies parentType, parent));
 
-    test('valid parent', () => expectValid({ type: 'Parent' } satisfies VerifiedParent, parent));
-
-    test('valid child', () => expectValid({ type: 'Child' } satisfies VerifiedChild, child));
+    test('valid child', () => expectValid({ type: 'Child' } satisfies childType, child));
 
     test('parent is not valid child', () => expectViolations({ type: 'Parent' }, child, new HasValueViolation(property('type'), 'Child', 'Parent')));
 
