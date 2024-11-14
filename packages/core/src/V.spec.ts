@@ -447,6 +447,14 @@ describe('objects', () => {
         >;
       });
     });
+
+    test('next allows conversion to string', () => {
+      const validator = V.objectType()
+        .properties({ value: V.string() })
+        .next(V.map( value => JSON.stringify(value) ))
+        .build();
+      assertType<EqualTypes<VType<typeof validator>, string>>(true);
+    });
   });
 
   test('input is not modified', async () => {

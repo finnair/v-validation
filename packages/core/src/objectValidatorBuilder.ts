@@ -38,18 +38,18 @@ export class ObjectValidatorBuilder<Props, Next, LocalProps, LocalNext> {
     this._additionalProperties.push({ keys, values });
     return this as ObjectValidatorBuilder<Props & { [key in K]?: V }, Next, LocalProps, LocalNext>;
   }
-  next<NextOut>(validator: Validator<NextOut, Next extends object ? Next : Props>) {
+  next<NextOut extends {}>(validator: Validator<NextOut, Next extends {} ? Next : Props>) {
     this._next?.push(validator);
     return this as unknown as ObjectValidatorBuilder<Props, NextOut, LocalProps, LocalNext>;
   }
-  localNext<NextOut>(validator: Validator<NextOut, LocalNext extends object ? LocalNext : Next extends object ? Next : Props & LocalProps>) {
+  localNext<NextOut extends {}>(validator: Validator<NextOut, LocalNext extends {} ? LocalNext : Next extends {} ? Next : Props & LocalProps>) {
     this._localNext?.push(validator);
     return this as unknown as ObjectValidatorBuilder<Props, Next, LocalProps, NextOut>;
   }
   build() {
     return new ObjectValidator<
-        (Next extends object ? Next : Props) & (LocalNext extends object ? LocalNext : LocalProps), 
-        (Next extends object ? Next : Props)
+        (Next extends {} ? Next : Props) & (LocalNext extends {} ? LocalNext : LocalProps), 
+        (Next extends {} ? Next : Props)
       >({
       extends: this._extends,
       properties: this._properties,
