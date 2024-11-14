@@ -247,7 +247,18 @@ Since inferred types tend to get quite long and hard to read, you can also combi
 
 ### Typeguards (Work in Proggress)
 
-When using custom interfaces it's good to verify that the validator is in sync with the interface:
+When using custom interfaces it's good to verify that the validator is in sync with the interface. The 
+challenge is that TypeScript generic `extends` only verifies type compatibility, optional
+properties do not count unless they are of conflicting type. For type-validator compatibility
+we need to also consider optional properties and nested structure. For this there is two helper
+types:
+
+1. `ComparableType<T>` converts all optional properties to mandatory `Optional<T>` recursively.
+2. `VerifyEqualTypes<A, B>` verifies that `A extends B` and `B extends A`.  
+
+Last hack that is needed, is ignoring unused type error about the `VerifyEqualTypes`. There's at least two
+ways for that:
+
 ```typescript
 interface MyInterface{
   //...
@@ -258,7 +269,15 @@ const myInterfaceValidator = V.objectType()
   })
   .build();
 
+// 1) use VerifyEqualTypes to make "VerifiedType" and use that
 type MyVerifiedInterface = VerifyEqualTypes<ComparableType<VType<typeof myInterfaceValidator>>, ComparableType<MyInterface>> extends true ? MyInterface : never
+
+// 2) Split VerifyEqualTypes on two or more lines and ignore the unused variable error
+// @ts-ignore
+type verify = VerifyEqualTypes<
+  ComparableType<VType<typeof myInterfaceValidator>>, 
+  ComparableType<MyInterface>
+>
 ```
 
 ## Combining Validators

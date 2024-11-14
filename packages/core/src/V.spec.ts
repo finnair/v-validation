@@ -26,7 +26,7 @@ import { V } from './V.js';
 import { Path } from '@finnair/path';
 import { expectUndefined, expectValid, expectViolations, verifyValid } from './testUtil.spec.js';
 import { fail } from 'assert';
-import { ComparableType, ComparableType, ExpandRecursively, GetVerifiedType, VerifyEqualTypes } from './objectValidatorBuilder.js';
+import { ComparableType, VerifyEqualTypes } from './objectValidatorBuilder.js';
 
 const ROOT = Path.ROOT,
   index = Path.index,
@@ -151,7 +151,7 @@ describe('strings', () => {
 
   describe('string validator chaining', () => {
     test('notBlank > notEmpty > pattern > size', () => expectValid('A', V.string().notBlank().notEmpty().pattern(/^[A-Z]$/).size(1, 2)));
-    
+
     test('first validator failure', () => {
       expectViolations(123 as any, V.string().notBlank(), new TypeMismatch(ROOT, 'string', 123));
     })
@@ -301,6 +301,154 @@ describe('objects', () => {
     },
   });
 
+  describe('typing', () => {
+    describe('simple type', () => {
+      const validator = V.objectType()
+        .properties({
+          required: V.string(),
+          optional: V.optionalStrict(V.string()),
+        })
+        .build();
+
+      test('required property missing', () => {
+        // @ts-ignore
+        type v = VerifyEqualTypes<
+          ComparableType<VType<typeof validator>>,
+          // @ts-expect-error
+          ComparableType<{
+            optional?: string;
+          }>
+        >;
+      });
+      test('optional property missing', () => {
+        // @ts-ignore
+        type v = VerifyEqualTypes<
+          ComparableType<VType<typeof validator>>,
+          // @ts-expect-error
+          ComparableType<{
+            required: string;
+          }>
+        >;
+      });
+      test('optional has wrong type', () => {
+        // @ts-ignore
+        type v = VerifyEqualTypes<
+          // @ts-expect-error
+          ComparableType<VType<typeof validator>>,
+          ComparableType<{
+            required: string;
+            optional?: number;
+          }>
+        >;
+      });
+    });
+
+    describe('nested type', () => {
+      const validator = V.objectType()
+        .properties({
+          required: V.objectType()
+            .properties({
+              required: V.string(),
+              optional: V.optionalStrict(V.string()),
+            })
+            .build(),
+          optional: V.optionalStrict(V.objectType()
+            .properties({
+              required: V.string(),
+              optional: V.optionalStrict(V.string()),
+            })
+            .build()),
+        })
+        .build();
+
+      test('required.required property missing', () => {
+        // @ts-ignore
+        type v = VerifyEqualTypes<
+          ComparableType<VType<typeof validator>>,
+          // @ts-expect-error 
+          ComparableType<{
+            required: {
+              //required: string;
+              optional?: string;
+            }
+            optional?: {
+              required: string;
+              optional?: string;
+            }
+          }>
+        >;
+      });
+      test('optional.required property missing', () => {
+        // @ts-ignore
+        type v = VerifyEqualTypes<
+          ComparableType<VType<typeof validator>>,
+          // @ts-expect-error 
+          ComparableType<{
+            required: {
+              required: string;
+              optional?: string;
+            }
+            optional?: {
+              //required: string;
+              optional?: string;
+            }
+          }>
+        >;
+      });
+      test('required.optional property missing', () => {
+        // @ts-ignore
+        type v = VerifyEqualTypes<
+          ComparableType<VType<typeof validator>>,
+          // @ts-expect-error 
+          ComparableType<{
+            required: {
+              required: string;
+              //optional?: string;
+            }
+            optional?: {
+              required: string;
+              optional?: string;
+            }
+          }>
+        >;
+      });
+      test('required.optional has wrong type', () => {
+        // @ts-ignore
+        type v = VerifyEqualTypes<
+          // @ts-expect-error 
+          ComparableType<VType<typeof validator>>,
+          ComparableType<{
+            required: {
+              required: string;
+              optional?: number;
+            }
+            optional?: {
+              required: string;
+              optional?: string;
+            }
+          }>
+        >;
+      });
+      test('required.optional should be required', () => {
+        // @ts-ignore
+        type v = VerifyEqualTypes<
+          // @ts-expect-error 
+          ComparableType<VType<typeof validator>>,
+          ComparableType<{
+            required: {
+              required: string;
+              optional?: number;
+            }
+            optional?: {
+              required: string;
+              optional: string;
+            }
+          }>
+        >;
+      });
+    });
+  });
+
   test('input is not modified', async () => {
     const validator = V.check(
       V.object({
@@ -424,7 +572,7 @@ describe('objects', () => {
       await expectValid({ foo: 'bar' }, validator);
     });
     test('enum keys'), async () => {
-      enum Keys { A='A', B='B', C='C' };
+      enum Keys { A = 'A', B = 'B', C = 'C' };
       type type = { [key in Keys]?: number };
       const validator = V.properties(V.enum(Keys, 'Keys'), V.number());
       await expectValid({ A: 5 }, validator);
@@ -544,7 +692,7 @@ describe('objects', () => {
       }
     }
 
-    interface IChild extends IParent{}
+    interface IChild extends IParent { }
 
     const parent = V.objectType()
       .properties({
@@ -561,7 +709,7 @@ describe('objects', () => {
               foo: V.boolean(),
             })
             .build()
-          ),
+        ),
       })
       .localProperties({
         type: V.hasValue('Parent' as const),
@@ -579,6 +727,12 @@ describe('objects', () => {
     type childType = VInheritableType<typeof child>;
     type VerifiedParent = VerifyEqualTypes<ComparableType<parentType>, ComparableType<IParent>> extends true ? IParent : never;
     type VerifiedChild = VerifyEqualTypes<ComparableType<childType>, ComparableType<IChild>> extends true ? IChild : never;
+    // ts-ignore
+    type verify = VerifyEqualTypes<
+      ComparableType<parentType>,
+      ComparableType<IParent>
+    >
+
 
     test('valid parent', () => expectValid({ type: 'Parent' } satisfies VerifiedParent, parent));
 
@@ -588,7 +742,7 @@ describe('objects', () => {
 
     test('child is not valid parent', () => expectViolations({ type: 'Child' }, parent, new HasValueViolation(property('type'), 'Parent', 'Child')));
   });
-  
+
   describe('toObject', () => {
     test('undefined', () => expectValid(undefined, V.toObject('value')));
 
@@ -601,12 +755,12 @@ describe('objects', () => {
 
   describe('derived validators', () => {
     const base = V.objectType()
-      .properties({ 
-        prop1: V.string(), 
+      .properties({
+        prop1: V.string(),
         prop2: V.number(),
       })
-      .localProperties({ 
-        local: V.boolean(), 
+      .localProperties({
+        local: V.boolean(),
       })
       .build();
 
@@ -664,7 +818,7 @@ describe('additionalProperties', () => {
 
 describe('inheritance', () => {
   const parentValidator = V.objectType()
-    .properties({ 
+    .properties({
       id: V.notNull(),
     })
     .build();
@@ -683,11 +837,11 @@ describe('inheritance', () => {
   const multiParentChild = V.objectType()
     .extends(childValidator)
     .extends(addionalPropertiesAllowed)
-    .properties({ 
+    .properties({
       anything: V.notNull(),
     })
     .build();
-  
+
   test('valid parent', () => expectValid({ id: 123 }, parentValidator));
 
   test('valid child', () => expectValid({ id: '123', name: 'child' }, childValidator));
@@ -749,26 +903,26 @@ describe('inheritance', () => {
 
   describe('allOf parent next validators', async () => {
     const parent1 = V.objectType().properties({
-        pwd1: V.string(),
-        pwd2: V.string(), 
-      }).next(V.assertTrue(obj => obj.pwd1 === obj.pwd2, 'PasswordsMatch'))
+      pwd1: V.string(),
+      pwd2: V.string(),
+    }).next(V.assertTrue(obj => obj.pwd1 === obj.pwd2, 'PasswordsMatch'))
       .build();
 
     const parent2 = V.objectType().properties({
-        min: V.number(),
-        max: V.number(), 
-      }).next(V.assertTrue(obj => obj.min <= obj.max, 'MinLoeMax'))
+      min: V.number(),
+      max: V.number(),
+    }).next(V.assertTrue(obj => obj.min <= obj.max, 'MinLoeMax'))
       .build();
 
     const child = V.objectType()
       .extends(parent1)
       .extends(parent2)
       .build();
-    
-    test('valid child', () => expectValid({ pwd1: 'pwd', pwd2: 'pwd', min: 1, max: 2} satisfies VType<typeof child>, child))
 
-    test('invalid child', () => expectViolations({ pwd1: 'pwd1', pwd2: 'pwd2', min: 2, max: 1}, child, new Violation(ROOT, 'PasswordsMatch'), new Violation(ROOT, 'MinLoeMax')));
-  }); 
+    test('valid child', () => expectValid({ pwd1: 'pwd', pwd2: 'pwd', min: 1, max: 2 } satisfies VType<typeof child>, child))
+
+    test('invalid child', () => expectViolations({ pwd1: 'pwd1', pwd2: 'pwd2', min: 2, max: 1 }, child, new Violation(ROOT, 'PasswordsMatch'), new Violation(ROOT, 'MinLoeMax')));
+  });
 });
 
 describe('object next', () => {
@@ -792,7 +946,7 @@ describe('object next', () => {
 
   describe('inherited next', () => {
     interface User extends Password {
-      name: string; 
+      name: string;
     }
     const userValidator = V.object({
       extends: passwordValidator,
@@ -826,7 +980,7 @@ describe('object localNext', () => {
     .extends(parent)
     .localNext(V.map(obj => `child:${obj.name}`))
     .build();
-  
+
   test('parent', async () => {
     expect((await parent.validate({ name: 'Darth' })).getValue()).toEqual('parent:Darth');
   });
@@ -920,7 +1074,7 @@ describe('enum', () => {
   describe('String', () => {
     const validator = V.enum(StrEnum, 'StrEnum');
     type validatorType = VType<typeof validator>;
-    test('valid reference', async() => 
+    test('valid reference', async () =>
       (await expectValid(StrEnum.B satisfies validatorType, validator)) satisfies validatorType);
     test('valid strign', () => expectValid('A', validator));
     test('invalid', () => expectViolations('C', validator, defaultViolations.enum('StrEnum', 'C')));
@@ -929,7 +1083,7 @@ describe('enum', () => {
   describe('int', () => {
     const validator = V.enum(IntEnum, 'IntEnum');
     type validatorType = VType<typeof validator>;
-    test('valid reference', async () => 
+    test('valid reference', async () =>
       (await expectValid(IntEnum.A satisfies validatorType, validator)) satisfies validatorType);
     test('valid int', () => expectValid(0, validator));
     test('invalid', () => expectViolations(2, validator, defaultViolations.enum('IntEnum', 2)));
@@ -1152,7 +1306,7 @@ describe('number', () => {
       test('valid integer', () => expectValid(-123, V.toInteger(), -123));
 
       test('convert Number to number', () => expectValid(new Number(123), V.toInteger(), 123));
-  
+
       test('convert string to integer', () => expectValid('-123', V.toInteger(), -123));
     });
   });
@@ -1354,10 +1508,10 @@ describe('required', () => {
 
   test('valid string', () => expectValid('123', validator));
 
-  test('type conversion with compositionOf', () => 
+  test('type conversion with compositionOf', () =>
     expectValid(validDateString, V.required(V.hasValue(validDateString), V.date(), V.assertTrue(dateInPast)), validDate));
 
-  test('type validation with compositionOf', () => 
+  test('type validation with compositionOf', () =>
     expectValid(validDateString, V.check(V.hasValue(validDateString), V.date(), V.assertTrue(dateInPast))));
 });
 
@@ -1618,18 +1772,18 @@ describe('Set', () => {
   test('Set instance is valid', () => expectValid(new Set([1, 2]), V.setType(V.number(), false)));
 
   test('array is valid', () => expectValid([1, 2], V.setType(V.number(), false), new Set([1, 2])));
- 
+
   test('object is not valid', () => expectViolations({}, V.setType(V.number(), false), new TypeMismatch(ROOT, 'Set')));
 
   test('Set has invalid value', () => expectViolations(new Set(['foo']), V.setType(V.number()), new TypeMismatch(Path.of(0), 'number', 'foo')));
- 
+
   test('json round-trip', async () => {
     const setArray = [1, 2, 3];
     const validator = V.setType(V.number(), true);
-    
+
     const set1 = (await validator.validate(new Set(setArray))).getValue();
     expect(set1).toBeInstanceOf(JsonSet);
-    
+
     const parsedArray = JSON.parse(JSON.stringify(set1));
     expect(parsedArray).toEqual(setArray);
   })
