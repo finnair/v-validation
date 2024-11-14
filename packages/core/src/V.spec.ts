@@ -577,16 +577,21 @@ describe('objects', () => {
   describe('properties', () => {
     test('valid properties', async () => {
       const validator = V.properties(V.string(), V.string());
+      
+      assertType<EqualTypes<ComparableType<VType<typeof validator>>, ComparableType<{ [ key: string ]: string}>>>(true)
       await expectValid({ foo: 'bar' }, validator);
     });
-    test('enum keys'), async () => {
+    
+    test('enum keys', async () => {
       enum Keys { A = 'A', B = 'B', C = 'C' };
       type type = { [key in Keys]?: number };
-      const validator = V.properties(V.enum(Keys, 'Keys'), V.number());
+      const validator = V.optionalProperties(V.enum(Keys, 'Keys'), V.number());
+      
+      assertType<EqualTypes<ComparableType<VType<typeof validator>>, ComparableType<type>>>(true)
       await expectValid({ A: 5 }, validator);
       await expectValid({ A: 1, B: 2, C: 3 }, validator);
-      await expectViolations({ D: 4 }, validator, defaultViolations.enum('Keys', 'D'))
-    }
+      await expectViolations({ D: 4 }, validator, defaultViolations.enum('Keys', 'D', Path.of('D')));
+    });
   });
 
   describe('cross-property rules', () => {
