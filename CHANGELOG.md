@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [7.0.0-alpha.4](https://github.com/finnair/v-validation/compare/v7.0.0-alpha.3...v7.0.0-alpha.4) (2024-11-14)
+
+### Features
+
+- type guards to verify validator and existing type equality ([#119](https://github.com/finnair/v-validation/issues/119)) ([92699e7](https://github.com/finnair/v-validation/commit/92699e7c87e89246f92b24627278dfc57b9a128d))
+
 # [7.0.0-alpha.3](https://github.com/finnair/v-validation/compare/v7.0.0-alpha.2...v7.0.0-alpha.3) (2024-11-11)
 
 ### Bug Fixes
