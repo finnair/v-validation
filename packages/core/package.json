@@ -1,6 +1,6 @@
 {
   "name": "@finnair/v-validation",
-  "version": "7.0.0-alpha.4",
+  "version": "7.0.0-alpha.5",
   "private": false,
   "description": "V-validation core package",
   "main": "./dist/cjs/index.js",
@@ -48,6 +48,6 @@
     "@finnair/path": ">=6"
   },
   "devDependencies": {
-    "@finnair/path": "^7.0.0-alpha.4"
+    "@finnair/path": "^7.0.0-alpha.5"
   }
 }
