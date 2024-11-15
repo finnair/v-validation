@@ -34,10 +34,12 @@ npm install @finnair/v-validation
 * Use `Validator#validateValue` to get valid a valid value or an exception directly
 
 ### Breaking changes: 
-* V.string() and some other validators do not support String object as input any more.
-* V.number() does not support Number object as input any more.
-* V.allOf() requires that all results match
+* `V.string()` and some other validators do not support String object as input any more.
+* `V.number()` does not support Number object as input any more.
+* `V.allOf()` requires that all results match
 * Validators that accept multiple subvalidators (`V.optional`, `V.required`, `V.check`, `V.if`, `V.whenGroup`, `V.json` and `ObjectModel#next`) are combined using `V.compositionOf` instead of `V.allOf` as composition makes more sense in general. However, if there are multiple parents with next validators, those are still combined with `V.allOf` as they are not aware of each other.
+* `V.if` does not support "fall through" any more but rejects with NoMatchingCondition if no condition matches. Use `.else(V.any())` if "fall through" is desirable.
+* `V.whenGroup` does not support "fall through" any more but rejects with NoMatchingGroup if no condition matches. Use `.otherwise(V.any())` if "fall through" is desirable.
 * More straightforward internal architecture:
   * Internal Validator#validatePath returns now a Promise of valid value or reject of Violation(s) directly instead of ValidationResult
   * Custom SyncPromise is removed in favor of Promise.resolve and reject.
