@@ -781,12 +781,11 @@ describe('objects', () => {
 });
 
 describe('additionalProperties', () => {
-  const allowXString = V.object({
-    additionalProperties: {
-      keys: V.pattern(/^x-.+/),
-      values: V.string(),
-    },
-  });
+  const allowXString = V.objectType()
+    .additionalProperties(V.pattern(/^x-.+/), V.string(), true)
+    .build();
+  assertType<EqualTypes<ComparableType<VType<typeof allowXString>>, ComparableType<Partial<Record<string, string>>>>>(true);
+
   const allowYStringRestrictX = V.object({
     extends: allowXString,
     additionalProperties: [
@@ -1627,7 +1626,12 @@ describe('normalizers', () => {
   });
 
   describe('emptyTo', () => {
-    test('undefined', () => expectValid(undefined, V.emptyTo('default'), 'default'));
+    test('undefined input', () => expectValid(undefined, V.emptyTo('default'), 'default'));
+
+    test('undefined as default', async () => {
+      const result = await V.emptyTo(undefined).getValid('');
+      expect(result).toBeUndefined();
+    });
 
     test('empty string', () => expectValid('', V.emptyTo('default'), 'default'));
 

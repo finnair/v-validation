@@ -139,8 +139,8 @@ export const V = {
 
   undefinedToNull: () => undefinedToNullValidator,
 
-  emptyTo: <InOut extends { length: number }>(defaultValue: InOut) => 
-    new ValueMapper<InOut, InOut>((value: InOut) => (isNullOrUndefined(value) || value.length === 0 ? defaultValue : value)),
+  emptyTo: <In extends { length: number }, Default = In>(defaultValue: Default) => 
+    new ValueMapper<In | Default, In | null | undefined>((value: In | null | undefined) => (isNullOrUndefined(value) || value.length === 0 ? defaultValue : value)),
 
   uuid: (version?: number) => new UuidValidator(version),
 
