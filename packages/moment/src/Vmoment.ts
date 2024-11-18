@@ -9,7 +9,7 @@ export class MomentValidator extends Validator<Moment, string | Moment> {
   }
   async validatePath(value: string | Moment, path: Path, ctx: ValidationContext): Promise<Moment> {
     if (isNullOrUndefined(value)) {
-      return ctx.failure(defaultViolations.notNull(path), value);
+      return Promise.reject(defaultViolations.notNull(path));
     }
     if (isString(value) || moment.isMoment(value)) {
       const convertedValue = this.parse(value);
@@ -17,7 +17,7 @@ export class MomentValidator extends Validator<Moment, string | Moment> {
         return Promise.resolve(convertedValue);
       }
     }
-    throw defaultViolations.date(value, path, this.type);
+    return Promise.reject(defaultViolations.date(value, path, this.type));
   }
 }
 
@@ -26,7 +26,7 @@ const durationPattern =
 export class DurationValidator extends Validator<moment.Duration> {
   async validatePath(value: any, path: Path, ctx: ValidationContext): Promise<moment.Duration> {
     if (isNullOrUndefined(value)) {
-      return ctx.failure(defaultViolations.notNull(path), value);
+      return Promise.reject(defaultViolations.notNull(path));
     }
     if ((isString(value) && durationPattern.test(value)) || moment.isDuration(value)) {
       const convertedValue = moment.duration(value);
@@ -34,7 +34,7 @@ export class DurationValidator extends Validator<moment.Duration> {
         return Promise.resolve(convertedValue);
       }
     }
-    return ctx.failure(new TypeMismatch(path, 'Duration', value), value);
+    return Promise.reject(new TypeMismatch(path, 'Duration', value));
   }
 }
 

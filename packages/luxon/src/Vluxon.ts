@@ -33,7 +33,7 @@ export class DateTimeValidator extends Validator<DateTime> {
   validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<DateTime> {
     const params = this.params;
     if (isNullOrUndefined(value)) {
-      throw defaultViolations.notNull(path);
+      return Promise.reject(defaultViolations.notNull(path));
     }
     if (DateTime.isDateTime(value)) {
       if (value.isValid) {
@@ -48,7 +48,7 @@ export class DateTimeValidator extends Validator<DateTime> {
         }
       }
     }
-    throw defaultViolations.date(value, path, params.type);
+    return Promise.reject(defaultViolations.date(value, path, params.type));
   }
 }
 
@@ -187,7 +187,7 @@ export interface ValidateLuxonNumberParams {
 
 export async function validateLuxonNumber({ value, path, ctx, type, parser }: ValidateLuxonNumberParams): Promise<DateTime> {
   if (isNullOrUndefined(value)) {
-    throw defaultViolations.notNull(path);
+    return Promise.reject(defaultViolations.notNull(path));
   } else if (DateTime.isDateTime(value)) {
     if (value.isValid) {
       return Promise.resolve(value);
@@ -198,7 +198,7 @@ export async function validateLuxonNumber({ value, path, ctx, type, parser }: Va
       return Promise.resolve(dateTime);
     }
   }
-  throw defaultViolations.date(value, path, type);
+  return Promise.reject(defaultViolations.date(value, path, type));
 }
 
 function dateTimeFromMillis(options: DateTimeJSOptions = { zone: FixedOffsetZone.utcInstance }) {
@@ -231,7 +231,7 @@ const durationPattern =
 export class DurationValidator extends Validator<Duration> {
   async validatePath(value: any, path: Path, ctx: ValidationContext): Promise<Duration> {
     if (isNullOrUndefined(value)) {
-      throw defaultViolations.notNull(path);
+      return Promise.reject(defaultViolations.notNull(path));
     } else if (Duration.isDuration(value)) {
       return Promise.resolve(value);
     } else if (isString(value) && durationPattern.test(value)) {
@@ -240,14 +240,14 @@ export class DurationValidator extends Validator<Duration> {
         return Promise.resolve(duration);
       }
     }
-    throw new TypeMismatch(path, 'Duration', value);
+    return Promise.reject(new TypeMismatch(path, 'Duration', value));
   }
 }
 
 export class TimeDurationValidator extends Validator<Duration> {
   async validatePath(value: any, path: Path, ctx: ValidationContext): Promise<Duration> {
     if (isNullOrUndefined(value)) {
-      return ctx.failure(defaultViolations.notNull(path), value);
+      return Promise.reject(defaultViolations.notNull(path));
     } else if (Duration.isDuration(value)) {
       return Promise.resolve(value);
     } else if (isString(value)) {
@@ -256,7 +256,7 @@ export class TimeDurationValidator extends Validator<Duration> {
         return Promise.resolve(duration);
       }
     }
-    return ctx.failure(new TypeMismatch(path, 'TimeDuration', value), value);
+    return Promise.reject(new TypeMismatch(path, 'TimeDuration', value));
   }
 }
 

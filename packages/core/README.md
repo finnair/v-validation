@@ -35,6 +35,7 @@ npm install @finnair/v-validation
 
 ### Breaking changes: 
 * `V.string()` and some other validators do not support String object as input any more.
+* `isString()` function doesn't support String object any more
 * `V.number()` does not support Number object as input any more.
 * `V.allOf()` requires that all results match
 * Validators that accept multiple subvalidators (`V.optional`, `V.required`, `V.check`, `V.if`, `V.whenGroup`, `V.json` and `ObjectModel#next`) are combined using `V.compositionOf` instead of `V.allOf` as composition makes more sense in general. However, if there are multiple parents with next validators, those are still combined with `V.allOf` as they are not aware of each other.
