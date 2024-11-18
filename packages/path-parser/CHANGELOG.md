@@ -3,6 +3,10 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [7.0.0-alpha.6](https://github.com/finnair/v-validation/compare/v7.0.0-alpha.5...v7.0.0-alpha.6) (2024-11-18)
+
+**Note:** Version bump only for package @finnair/path-parser
+
 # [7.0.0-alpha.5](https://github.com/finnair/v-validation/compare/v7.0.0-alpha.4...v7.0.0-alpha.5) (2024-11-14)
 
 **Note:** Version bump only for package @finnair/path-parser

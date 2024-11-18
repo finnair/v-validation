@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [7.0.0-alpha.6](https://github.com/finnair/v-validation/compare/v7.0.0-alpha.5...v7.0.0-alpha.6) (2024-11-18)
+
+### Bug Fixes
+
+- some validators throwing instead of returning Promise.reject ([c00876d](https://github.com/finnair/v-validation/commit/c00876ddb77d8deefcf38c8e9a05749b8c7f1cff))
+
 # [7.0.0-alpha.5](https://github.com/finnair/v-validation/compare/v7.0.0-alpha.4...v7.0.0-alpha.5) (2024-11-14)
 
 **Note:** Version bump only for package @finnair/v-validation-moment
