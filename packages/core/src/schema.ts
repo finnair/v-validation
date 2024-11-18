@@ -82,7 +82,7 @@ export class SchemaValidator extends Validator {
 
   validateClass(value: any, path: Path, ctx: ValidationContext, expectedType?: string): PromiseLike<any> {
     if (isNullOrUndefined(value)) {
-      throw defaultViolations.notNull(path)
+      return Promise.reject(defaultViolations.notNull(path));
     }
     // 1) Validate discriminator
     let type: string;
@@ -95,14 +95,14 @@ export class SchemaValidator extends Validator {
     }
     const validator = this.validators[type];
     if (!validator) {
-      throw new DiscriminatorViolation(typePath, type, Object.keys(this.validators))
+      return Promise.reject(new DiscriminatorViolation(typePath, type, Object.keys(this.validators)));
     }
 
     // 2) Validate that the type is assignable to the expected type (polymorphism)
     if (expectedType) {
       const expectedParent = this.validators[expectedType];
       if (!this.isSubtypeOf(validator, expectedParent)) {
-        throw new TypeMismatch(path, expectedType, type)
+        return Promise.reject(new TypeMismatch(path, expectedType, type));
       }
     }
 

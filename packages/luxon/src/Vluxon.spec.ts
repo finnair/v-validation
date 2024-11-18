@@ -1,5 +1,5 @@
 import { describe, beforeAll, afterAll, test, expect } from 'vitest'
-import { Validator, ValidatorOptions, ValidationResult, V, Violation, defaultViolations, TypeMismatch } from '@finnair/v-validation';
+import { Validator, ValidatorOptions, ValidationResult, V, Violation, defaultViolations, TypeMismatch, ValidationContext, violationsOf } from '@finnair/v-validation';
 import { LuxonValidator, Vluxon } from './Vluxon.js';
 import {
   LocalDateLuxon,
@@ -13,10 +13,17 @@ import {
 } from './luxon.js';
 import { DateTime, Duration, FixedOffsetZone, IANAZone, Settings } from 'luxon';
 import { Path } from '@finnair/path';
+import { fail } from 'assert';
 
 async function expectViolations<In>(value: In, validator: Validator<any, In>, ...violations: Violation[]) {
-  const result = await validator.validate(value);
-  expect(result).toEqual(new ValidationResult(violations));
+  await validator.validatePath(value, Path.ROOT, new ValidationContext({})).then(
+    success => {
+      fail(`expected violations, got ${success}`)
+    },
+    fail => {
+      expect(violationsOf(fail)).toEqual(violations);
+    }
+  )
 }
 
 async function expectValid<Out, In>(value: In, validator: Validator<Out, In>, convertedValue?: Out, ctx?: ValidatorOptions) {
