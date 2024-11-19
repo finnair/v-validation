@@ -256,9 +256,9 @@ Use `VInheritableType<typeof objectValidator> to get the inheritable type of `ob
 ### Type Guards
 
 When using custom interfaces it's good to verify that the validator is in sync with the interface. The 
-challenge is that TypeScript generic `extends` only verifies type compatibility, optional
-properties do not count unless they are of conflicting type. For type-validator compatibility
-we need to also consider optional properties and nested structure. For this there is two helper
+challenge is that TypeScript's generic `extends` only verifies type-compatibility and optional
+properties do not count unless they are of conflicting type. For type/validator compatibility
+we need to also consider optional properties and nested structure. For this there are a couple of helper
 types:
 
 1. `ComparableType<T>` converts all optional properties to mandatory `Optional<T>` recursively.

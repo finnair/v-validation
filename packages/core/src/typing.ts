@@ -9,7 +9,7 @@ type RequiredProperties<T> = Omit<T, KeysOfType<T, undefined>>;
 
 export type UndefinedAsOptionalProperties<T> = RequiredProperties<T> & OptionalProperties<T>;
 
-type Optional<T> = { type: Exclude<T, undefined> };
+type Optional<T> = { 'Optional<T>': Exclude<T, undefined> };
 
 type ComparableOptional<T> = T extends object
   ? { [K in keyof T]-?:  Optional<ComparableType<T[K]>> }
