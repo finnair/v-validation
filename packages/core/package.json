@@ -39,9 +39,8 @@
     "build:esm": "tsc -b . && cp ../../package.esm.json dist/esm/package.json"
   },
   "dependencies": {
-    "@types/deep-equal": "1.0.1",
     "@types/uuid": "10.0.0",
-    "deep-equal": "2.0.5",
+    "fast-deep-equal": "3.1.3",
     "uuid": "10.0.0"
   },
   "peerDependencies": {

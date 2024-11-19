@@ -1,4 +1,4 @@
-import deepEqual from 'deep-equal';
+import {default as deepEqual } from 'fast-deep-equal';
 import { Path } from '@finnair/path';
 import { validate as uuidValidate, version as uuidVersion } from 'uuid';
 
@@ -1122,7 +1122,7 @@ export class HasValueValidator<InOut> extends Validator<InOut> {
     Object.freeze(this);
   }
   validatePath(value: unknown, path: Path, ctx: ValidationContext): PromiseLike<InOut> {
-    if (deepEqual(value, this.expectedValue, { strict: true })) {
+    if (deepEqual(value, this.expectedValue)) {
       return Promise.resolve(value as InOut);
     }
     return Promise.reject(new HasValueViolation(path, this.expectedValue, value));
@@ -1148,7 +1148,7 @@ export class AllOfValidator<Out, In> extends Validator<Out, In> {
           if (firstResult) {
             convertedValue = result;
             firstResult = false;
-          } else if (!deepEqual(result, convertedValue, { strict: true })) {
+          } else if (!deepEqual(result, convertedValue)) {
             violations.push(new Violation(path, 'ConflictingConversions', value));
           }
         },
