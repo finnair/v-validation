@@ -4,7 +4,7 @@
   "private": false,
   "description": "Luxon validators",
   "main": "./dist/cjs/index.js",
-  "module": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
   "types": "./dist/cjs/index.d.ts",
   "exports": {
     ".": {
@@ -16,7 +16,8 @@
         "types": "./dist/esm/index.d.ts",
         "default": "./dist/esm/index.js"
       }
-    }
+    },
+    "./package.json": "./package.json"
   },
   "license": "MIT",
   "homepage": "https://github.com/finnair/v-validation/tree/master/packages/luxon#readme",
