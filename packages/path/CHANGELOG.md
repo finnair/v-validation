@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [6.2.0](https://github.com/finnair/v-validation/compare/v6.1.0...v6.2.0) (2024-11-21)
+
+### Bug Fixes
+
+- exports ([188dd9a](https://github.com/finnair/v-validation/commit/188dd9a1a79b3cc968d9750699472c8091a191e5))
+
 # [6.1.0](https://github.com/finnair/v-validation/compare/v6.0.2...v6.1.0) (2024-10-21)
 
 **Note:** Version bump only for package @finnair/path
