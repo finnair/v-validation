@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [7.0.0-alpha.8](https://github.com/finnair/v-validation/compare/v7.0.0-alpha.7...v7.0.0-alpha.8) (2024-11-21)
+
+### Bug Fixes
+
+- SchemaValidator export ([987f88c](https://github.com/finnair/v-validation/commit/987f88ccb7a5f0bc90c54d0a83b2fba901375d5f))
+
 # [7.0.0-alpha.7](https://github.com/finnair/v-validation/compare/v7.0.0-alpha.6...v7.0.0-alpha.7) (2024-11-21)
 
 ### Bug Fixes

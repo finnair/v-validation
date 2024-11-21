@@ -3,6 +3,10 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [7.0.0-alpha.8](https://github.com/finnair/v-validation/compare/v7.0.0-alpha.7...v7.0.0-alpha.8) (2024-11-21)
+
+**Note:** Version bump only for package @finnair/diff
+
 # [7.0.0-alpha.7](https://github.com/finnair/v-validation/compare/v7.0.0-alpha.6...v7.0.0-alpha.7) (2024-11-21)
 
 ### Bug Fixes
