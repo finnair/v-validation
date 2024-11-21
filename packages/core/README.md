@@ -31,7 +31,11 @@ npm install @finnair/v-validation
 * Direct, chainable support for most used "next" validation rules, e.g. `V.number().min(1).max(2)`: 
   * `V.string()` supports `notEmpty`, `notBlank`, `pattern` and `size`.
   * `V.number()` supports `min`, `max` and `between`.
-* Use `Validator#validateValue` to get valid a valid value or an exception directly
+* Use `Validator#getValid(input)` to get valid a valid value or an exception directly
+* New strictly typed "optional" validators: 
+  * `V.optionalStrict<T>(validator: Validator<T>)`: `undefined | T` - `V.optional` allows also null
+  * `V.nullable<T>(validator: Validator<T>)`: `null | T`
+  * `V.optionalProperties<K, V>(keys: Validator<K>, values: Validator<V>)`: `Partial<Record<Key, Value>>`
 
 ### Breaking changes: 
 * `V.string()` and some other validators do not support String object as input any more.
@@ -82,13 +86,22 @@ const percentageValidator = V.integer().min(0).max(100));
 // ]
 ```
 
-Optional `Vmoment` (`@finnair/v-validation-moment`) extension uses custom Moment extensions to support full JSON roundtrip with strict validation.
+Optional `Vmoment` (`@finnair/v-validation-moment`) extension uses custom Moment extensions to support full JSON roundtrip with strict validation. *NOTE: As Moment is now a legacy project, we recommend using Luxon with `@finnair/v-validation-luxon` instead.*
 
 ```typescript
 const dateMoment = (await Vmoment.date().validate('2020-03-05')).getValue();
 // moment('2020-03-05', 'YYYY-MM-DD', true)
 
 JSON.stringify(dateMoment);
+// "2020-03-05"
+```
+
+Optional `Vluxon` (`@finnair/v-validation-luxon`) extension uses custom DateTime wrapper to support full JSON roundtrip with strict validation:
+
+```typescript
+const luxonDate: LocalDateLuxon = await Vluxon.localDate().getValid('2020-03-05');
+
+JSON.stringify(luxonDate);
 // "2020-03-05"
 ```
 
@@ -245,13 +258,17 @@ V.string()
 ```
 ## Typing in Version >= 7
 
-All built-in validators have input and output types. Typed ObjectValidators can be built with `V.objectType()`.
+All built-in validators (except `V.shema`) have input and output types. Typed ObjectValidators can be built with `V.objectType()`.
 Since inferred types tend to get quite long and hard to read, you can also combine them with hand-written types.
 
 ### Validator Type
 Use `VType<typeof validator>` to get the result type of `validator`.
 
 Use `VInheritableType<typeof objectValidator> to get the inheritable type of `objectValidator: ObjectValidator<LocalType, Inheritabletype>`.
+
+LocalType and Inheritabletype will only differ when `localProperties` or `localNext` are used. The most obvious use case for this is a class hierarcy with discriminator property to denote a specific type.
+
+*NOTE: `V.schema` doesn't yet support typing.*
 
 ### Type Guards
 
