@@ -1,6 +1,6 @@
 {
   "name": "@finnair/path-parser",
-  "version": "7.0.0-alpha.6",
+  "version": "7.0.0-alpha.7",
   "private": false,
   "description": "Simple object path as array of strings and numbers",
   "main": "./dist/cjs/index.js",
@@ -47,6 +47,6 @@
     "@finnair/path": ">=6"
   },
   "devDependencies": {
-    "@finnair/path": "^7.0.0-alpha.6"
+    "@finnair/path": "^7.0.0-alpha.7"
   }
 }
