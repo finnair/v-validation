@@ -173,12 +173,12 @@ export const V = {
   schema: (fn: (schema: SchemaValidator) => SchemaModel) => new SchemaValidator(fn),
 
   /** WARN: Objects as Map keys use identity hash/equals, i.e. === */
-  mapType: (keys: Validator, values: Validator, jsonSafeMap: boolean = true) => new MapValidator(keys, values, jsonSafeMap),
+  mapType: <K, V, E extends boolean>(keys: Validator<K>, values: Validator<V>, jsonSafeMap: E) => new MapValidator<K, V, E>(keys, values, jsonSafeMap),
 
   /** WARN: Objects as Map keys use identity hash/equals, i.e. === */
-  toMapType: (keys: Validator, values: Validator) => new MapNormalizer(keys, values),
+  toMapType: <K, V, E extends boolean>(keys: Validator<K>, values: Validator<V>, jsonSafeMap: E) => new MapNormalizer<K, V, E>(keys, values, jsonSafeMap),
 
-  setType: (values: Validator, jsonSafeSet: boolean = true) => new SetValidator(values, jsonSafeSet),
+  setType: <T, E extends boolean>(values: Validator<T>, jsonSafeSet: E) => new SetValidator<T, E>(values, jsonSafeSet),
 
   nullTo: <Out extends string | number | bigint | boolean | symbol, In = unknown>(defaultValue: Out) => 
     new ValueMapper<Out | In, In>((value: In) => (isNullOrUndefined(value) ? defaultValue : value)),

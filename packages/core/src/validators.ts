@@ -583,12 +583,12 @@ export class WhenGroup<T> {
   }
 }
 
-export class MapValidator<K extends unknown, V extends unknown> extends Validator<Map<K, V>> {
-  constructor(public readonly keys: Validator<K>, public readonly values: Validator<V>, public readonly jsonSafeMap: boolean) {
+export class MapValidator<K = unknown, V = unknown, E extends boolean = true> extends Validator<E extends true ? JsonMap<K, V> : Map<K, V>> {
+  constructor(public readonly keys: Validator<K>, public readonly values: Validator<V>, public readonly jsonSafeMap: E) {
     super();
     Object.freeze(this);
   }
-  validatePath(value: unknown, path: Path, ctx: ValidationContext): PromiseLike<Map<K, V>>{
+  validatePath(value: unknown, path: Path, ctx: ValidationContext): PromiseLike<E extends true ? JsonMap<K, V> : Map<K, V>>{
     if (isNullOrUndefined(value)) {
       return Promise.reject(defaultViolations.notNull(path));
     }
@@ -596,7 +596,7 @@ export class MapValidator<K extends unknown, V extends unknown> extends Validato
       return Promise.reject(new TypeMismatch(path, 'Map'));
     }
     const map: Map<any, any> = value as Map<any, any>;
-    const convertedMap: Map<K, V> = this.jsonSafeMap ? new JsonMap<K, V>() : new Map<K, V>();
+    const convertedMap = this.jsonSafeMap ? new JsonMap<K, V>() : new Map<K, V>();
     const promises: Promise<void>[] = [];
     let violations: Violation[] = [];
     let i = 0;
@@ -625,16 +625,16 @@ export class MapValidator<K extends unknown, V extends unknown> extends Validato
       if (violations.length > 0) {
         return Promise.reject(violations);
       }
-      return Promise.resolve(convertedMap);
+      return Promise.resolve(convertedMap as any);
     });
   }
 }
 
-export class MapNormalizer<K = unknown, V = unknown> extends MapValidator<K, V> {
-  constructor(keys: Validator<K>, values: Validator<V>, jsonSafeMap: boolean = true) {
+export class MapNormalizer<K = unknown, V = unknown, E extends boolean = true> extends MapValidator<K, V, E> {
+  constructor(keys: Validator<K>, values: Validator<V>, jsonSafeMap: E) {
     super(keys, values, jsonSafeMap);
   }
-  validatePath(value: unknown, path: Path, ctx: ValidationContext): PromiseLike<Map<K, V>> {
+  validatePath(value: unknown, path: Path, ctx: ValidationContext): PromiseLike<E extends true ? JsonMap<K, V> : Map<K, V>> {
     if (value instanceof Map) {
       return super.validatePath(value, path, ctx);
     }
@@ -663,27 +663,27 @@ export class MapNormalizer<K = unknown, V = unknown> extends MapValidator<K, V> 
 }
 
 export class JsonMap<K, V> extends Map<K, V> {
-  constructor(params?: any) {
-    super(params);
+  constructor(entries?: readonly (readonly [K, V])[] | null) {
+    super(entries);
   }
   toJSON() {
     return [...this.entries()];
   }
 }
 
-export class SetValidator<T = unknown> extends Validator<Set<T>> {
-  constructor(public readonly values: Validator<T>, public readonly jsonSafeSet: boolean) {
+export class SetValidator<T = unknown, E extends boolean = true> extends Validator<E extends true ? JsonSet<T> : Set<T>> {
+  constructor(public readonly values: Validator<T>, public readonly jsonSafeSet: E) {
     super();
     Object.freeze(this);
   }
-  validatePath(value: unknown, path: Path, ctx: ValidationContext): PromiseLike<Set<T>> {
+  validatePath(value: unknown, path: Path, ctx: ValidationContext): PromiseLike<E extends true ? JsonSet<T> : Set<T>> {
     if (isNullOrUndefined(value)) {
       return Promise.reject(defaultViolations.notNull(path));
     }
     if (!(value instanceof Set || Array.isArray(value))) {
       return Promise.reject(new TypeMismatch(path, 'Set'));
     }
-    const convertedSet: Set<any> = this.jsonSafeSet ? new JsonSet() : new Set<any>();
+    const convertedSet = this.jsonSafeSet ? new JsonSet<T>() : new Set<T>();
     const promises: PromiseLike<void>[] = [];
     let violations: Violation[] = [];
     let i = 0;
@@ -704,14 +704,14 @@ export class SetValidator<T = unknown> extends Validator<Set<T>> {
       if (violations.length > 0) {
         return Promise.reject(violations);
       }
-      return Promise.resolve(convertedSet);
+      return Promise.resolve(convertedSet as any);
     });
   }
 }
 
 export class JsonSet<K> extends Set<K> {
-  constructor(params?: any) {
-    super(params);
+  constructor(values?: readonly K[] | null) {
+    super(values);
   }
   toJSON() {
     return [...this.values()];
