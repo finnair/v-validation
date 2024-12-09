@@ -31,7 +31,11 @@ npm install @finnair/v-validation
 * Direct, chainable support for most used "next" validation rules, e.g. `V.number().min(1).max(2)`: 
   * `V.string()` supports `notEmpty`, `notBlank`, `pattern` and `size`.
   * `V.number()` supports `min`, `max` and `between`.
-* Use `Validator#validateValue` to get valid a valid value or an exception directly
+* Use `Validator#getValid(input)` to get valid a valid value or an exception directly
+* New strictly typed "optional" validators: 
+  * `V.optionalStrict<T>(validator: Validator<T>)`: `undefined | T` - `V.optional` allows also null
+  * `V.nullable<T>(validator: Validator<T>)`: `null | T`
+  * `V.optionalProperties<K, V>(keys: Validator<K>, values: Validator<V>)`: `Partial<Record<Key, Value>>`
 
 ### Breaking changes: 
 * `V.string()` and some other validators do not support String object as input any more.
@@ -45,6 +49,7 @@ npm install @finnair/v-validation
   * Internal Validator#validatePath returns now a Promise of valid value or reject of Violation(s) directly instead of ValidationResult
   * Custom SyncPromise is removed in favor of Promise.resolve and reject.
   * ValidatorContext no longer has `success`, `successPromise`, `failurePromise` and `promise` functions - use `Promise.resolve(value)` or `Promise.reject(new Violation(...))` with single violation or an array of violations. 
+* `V.mapType`, `V.toMapType` and `V.setType` now require `jsonSafe` boolean parameter for typing: JsonMap/JsonSet (true) or plain Map/Set (false).
 
 ## Show Me the Code!
 
@@ -82,13 +87,22 @@ const percentageValidator = V.integer().min(0).max(100));
 // ]
 ```
 
-Optional `Vmoment` (`@finnair/v-validation-moment`) extension uses custom Moment extensions to support full JSON roundtrip with strict validation.
+Optional `Vmoment` (`@finnair/v-validation-moment`) extension uses custom Moment extensions to support full JSON roundtrip with strict validation. *NOTE: As Moment is now a legacy project, we recommend using Luxon with `@finnair/v-validation-luxon` instead.*
 
 ```typescript
 const dateMoment = (await Vmoment.date().validate('2020-03-05')).getValue();
 // moment('2020-03-05', 'YYYY-MM-DD', true)
 
 JSON.stringify(dateMoment);
+// "2020-03-05"
+```
+
+Optional `Vluxon` (`@finnair/v-validation-luxon`) extension uses custom DateTime wrapper to support full JSON roundtrip with strict validation:
+
+```typescript
+const luxonDate: LocalDateLuxon = await Vluxon.localDate().getValid('2020-03-05');
+
+JSON.stringify(luxonDate);
 // "2020-03-05"
 ```
 
@@ -245,13 +259,17 @@ V.string()
 ```
 ## Typing in Version >= 7
 
-All built-in validators have input and output types. Typed ObjectValidators can be built with `V.objectType()`.
+All built-in validators (except `V.shema`) have input and output types. Typed ObjectValidators can be built with `V.objectType()`.
 Since inferred types tend to get quite long and hard to read, you can also combine them with hand-written types.
 
 ### Validator Type
 Use `VType<typeof validator>` to get the result type of `validator`.
 
 Use `VInheritableType<typeof objectValidator> to get the inheritable type of `objectValidator: ObjectValidator<LocalType, Inheritabletype>`.
+
+LocalType and Inheritabletype will only differ when `localProperties` or `localNext` are used. The most obvious use case for this is a class hierarcy with discriminator property to denote a specific type.
+
+*NOTE: `V.schema` doesn't yet support typing.*
 
 ### Type Guards
 
@@ -539,20 +557,31 @@ successful validation retains identical reference structure compared to the orig
 
 ```typescript
 const keys = V.string();
-const values = V.any();
-const myMap = V.toMapType(keys, values); // keyValidator, valueValidator, jsonSafeMap?
-const map = (
-  await myMap.validate([
-    ['key1', 'value1'],
-    ['key2', 'value2'],
-  ])
-).getValue() as Map;
+const values = V.string();
+const myMap = V.toMapType(keys, values, true); // keyValidator, valueValidator, jsonSafeMap
+const map = await myMap.getValid([['key1', 'value1'], ['key2', 'value2']]) satisfies JsonMap<string, string>;
 
 JSON.stringify(map);
 // [["key1", "value1"], ["key2", "value2"]]
 
-// Or without array conversion and JSON support:
+// Or plain Map without JSON serialization support:
 V.mapType(keys, values, false);
+```
+
+## Set
+
+`V` supports JavaScript Sets with a custom extension for JSON serialization.
+
+```typescript
+const values = V.string();
+const setValidator = V.setType(values, true); // valueValidator, jsonSafeSet
+const set = await setValidator.getValid(['value1', 'value2']) satisfies JsonSet<string>;
+
+JSON.stringify(set);
+// ["value1", "value2"]
+
+// Or plain Set without JSON serialization support:
+V.setType(values, false); // Validator<Set<string>>
 ```
 
 ## Validator Options
@@ -663,8 +692,9 @@ Unless otherwise stated, all validators require non-null and non-undefined value
 | schema                  | callback: (schema: SchemaValidator) => SchemaModel               | Defines a [SchemaValidator](#schema) for a discriminator and models.                                                                      |
 | properties              | keys: Validator<Keys>, values: Validator<Values>                 | A shortcut for object with `additionalProperties`. Type: Record<Keys, Values>                                                             |
 | optionalProperties      | keys: Validator<Keys>, values: Validator<Values>                 | A shortcut for object with `additionalProperties`. Type: Partial<Record<Keys, Values>>                                                    |
-| mapType                 | keys: Validator, values: Validator, jsonSafeMap: boolean = true  | [Map validator](#map)                                                                                                                     |
-| toMapType(keys, values) | keys: Validator, values: Validator                               | Converts an array-of-arrays representation of a Map into a JsonSafeMap instance.                                                          |
+| mapType                 | keys: Validator, values: Validator, jsonSafeMap: boolean         | [Map validator](#map). JSON safe map (JsonMap) serializes into an array of [key, value]-arrays.                                           |
+| toMapType(keys, values) | keys: Validator, values: Validator                               | Converts an array-of-arrays representation of a Map into a JsonMap instance.                                                              |
+| setType                 | values: Validator, jsonSafeMap: boolean                          | [Set validator](#set). JSON safe set (JsonSet) serializes into an array of values.                                                        |
 | array                   | ...items: Validator[]                                            | [Array validator](#array)                                                                                                                 |
 | toArray                 | items: Validator                                                 | Converts undefined to an empty array and non-arrays to single-valued arrays.                                                              |
 | size                    | min: number, max: number                                         | Asserts that input's numeric `length` property is between min and max (both inclusive).                                                   |

@@ -20,6 +20,7 @@ import {
   EnumMismatch,
   JsonSet,
   VType,
+  JsonMap,
 } from './validators.js';
 import { ObjectValidator, ObjectModel, VInheritableType } from './objectValidator.js';
 import { V } from './V.js';
@@ -1716,14 +1717,17 @@ describe('Map', () => {
     key2: string;
   }
 
-  test('undefined not allowed', () => expectViolations(undefined, V.mapType(V.any(), V.any()), defaultViolations.notNull()));
+  test('undefined not allowed', () => expectViolations(undefined, V.mapType(V.any(), V.any(), false), defaultViolations.notNull()));
 
   describe('toMapType', () => {
     const validator = V.toMapType(
-      V.object({
-        properties: { key1: V.required(V.string()), key2: V.required(V.string()) },
-      }),
+      V.objectType()
+      .properties({ 
+        key1: V.required(V.string()), 
+        key2: V.required(V.string()),
+      }).build(),
       V.string(),
+      true,
     );
     test('JSON roundtrip', async () => {
       const key = { key1: 'key1', key2: 'key2' };
@@ -1732,8 +1736,9 @@ describe('Map', () => {
       // Real map is valid
       const map = new Map<MapKeyType, String>(mapArray);
       expect(map.get(key)).toEqual('value');
-      let result = await validator.validate(map);
+      let result = (await validator.validate(map));
       expect(result.isFailure()).toBe(false);
+      result.getValue() satisfies JsonMap<{key1: string, key2: string}, string>
 
       // Serializes to JSON as array
       const jsonString = JSON.stringify(result.getValue());
@@ -1758,6 +1763,17 @@ describe('Map', () => {
     test('empty array component is not allowed', () => expectViolations([[]], validator, new SizeViolation(Path.of(0), 1, 2)));
 
     test('object is not allowed', () => expectViolations({}, validator, new TypeMismatch(Path.ROOT, 'Map OR array of [key, value] arrays')));
+    
+    describe('typing', () => {
+      test('JsonMap', () => {
+        const validator = V.toMapType(V.string(), V.number(), true);
+        assertType<EqualTypes<VType<typeof validator>, JsonMap<string, number>>>(true);
+      });
+      test('Map', () => {
+        const validator = V.toMapType(V.string(), V.number(), false);
+        assertType<EqualTypes<VType<typeof validator>, Map<string, number>>>(true);
+      });
+    });
   });
 
   describe('mapType', () => {
@@ -1770,11 +1786,22 @@ describe('Map', () => {
     test('Map has invalid value', () => expectViolations(new Map([['foo', 0]]), validator, new TypeMismatch(Path.of(0, 1), 'string', 0)));
 
     test('Map has invalid key', () => expectViolations(new Map([[0, 'foo']]), validator, new TypeMismatch(Path.of(0, 0), 'string', 0)));
+    
+    describe('typing', () => {
+      test('JsonMap', () => {
+        const validator = V.mapType(V.string(), V.number(), true);
+        assertType<EqualTypes<VType<typeof validator>, JsonMap<string, number>>>(true);
+      });
+      test('Map', () => {
+        const validator = V.mapType(V.string(), V.number(), false);
+        assertType<EqualTypes<VType<typeof validator>, Map<string, number>>>(true);
+      });
+    });
   });
 });
 
 describe('Set', () => {
-  test('undefined not allowed', () => expectViolations(undefined, V.setType(V.any()), defaultViolations.notNull()));
+  test('undefined not allowed', () => expectViolations(undefined, V.setType(V.any(), false), defaultViolations.notNull()));
 
   test('Set instance is valid', () => expectValid(new Set([1, 2]), V.setType(V.number(), false)));
 
@@ -1782,7 +1809,7 @@ describe('Set', () => {
 
   test('object is not valid', () => expectViolations({}, V.setType(V.number(), false), new TypeMismatch(ROOT, 'Set')));
 
-  test('Set has invalid value', () => expectViolations(new Set(['foo']), V.setType(V.number()), new TypeMismatch(Path.of(0), 'number', 'foo')));
+  test('Set has invalid value', () => expectViolations(new Set(['foo']), V.setType(V.number(), false), new TypeMismatch(Path.of(0), 'number', 'foo')));
 
   test('json round-trip', async () => {
     const setArray = [1, 2, 3];
@@ -1793,7 +1820,18 @@ describe('Set', () => {
 
     const parsedArray = JSON.parse(JSON.stringify(set1));
     expect(parsedArray).toEqual(setArray);
-  })
+  });
+
+  describe('typing', () => {
+    test('JsonSet', async () => {
+      const validator = V.setType(V.string(), true);
+      assertType<EqualTypes<VType<typeof validator>, JsonSet<string>>>(true);
+    });
+    test('Set', async () => {
+      const validator = V.setType(V.string(), false);
+      assertType<EqualTypes<VType<typeof validator>, Set<string>>>(true);
+    });
+  });
 })
 
 describe('json', () => {
