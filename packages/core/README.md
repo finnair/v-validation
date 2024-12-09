@@ -570,7 +570,7 @@ V.mapType(keys, values, false);
 
 ## Set
 
-`V` supports JavaScript Maps with a custom extension for JSON serialization.
+`V` supports JavaScript Sets with a custom extension for JSON serialization.
 
 ```typescript
 const values = V.string();
@@ -692,7 +692,7 @@ Unless otherwise stated, all validators require non-null and non-undefined value
 | schema                  | callback: (schema: SchemaValidator) => SchemaModel               | Defines a [SchemaValidator](#schema) for a discriminator and models.                                                                      |
 | properties              | keys: Validator<Keys>, values: Validator<Values>                 | A shortcut for object with `additionalProperties`. Type: Record<Keys, Values>                                                             |
 | optionalProperties      | keys: Validator<Keys>, values: Validator<Values>                 | A shortcut for object with `additionalProperties`. Type: Partial<Record<Keys, Values>>                                                    |
-| mapType                 | keys: Validator, values: Validator, jsonSafeMap: boolean       | [Map validator](#map). JSON safe map (JsonMap) serializes into an array of [key, value]-arrays.                                             |
+| mapType                 | keys: Validator, values: Validator, jsonSafeMap: boolean         | [Map validator](#map). JSON safe map (JsonMap) serializes into an array of [key, value]-arrays.                                           |
 | toMapType(keys, values) | keys: Validator, values: Validator                               | Converts an array-of-arrays representation of a Map into a JsonMap instance.                                                              |
 | setType                 | values: Validator, jsonSafeMap: boolean                          | [Set validator](#set). JSON safe set (JsonSet) serializes into an array of values.                                                        |
 | array                   | ...items: Validator[]                                            | [Array validator](#array)                                                                                                                 |
