@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [7.0.0-alpha.9](https://github.com/finnair/v-validation/compare/v7.0.0-alpha.8...v7.0.0-alpha.9) (2024-12-11)
+
+### Features
+
+- V.mapType, V.toMapType and V.setType typing ([#123](https://github.com/finnair/v-validation/issues/123)) ([ed7780c](https://github.com/finnair/v-validation/commit/ed7780c284fb8d41157cf33fa54f6984275c6283))
+
 # [7.0.0-alpha.8](https://github.com/finnair/v-validation/compare/v7.0.0-alpha.7...v7.0.0-alpha.8) (2024-11-21)
 
 ### Bug Fixes
