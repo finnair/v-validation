@@ -21,6 +21,7 @@ import {
   JsonSet,
   VType,
   JsonMap,
+  JsonBigInt,
 } from './validators.js';
 import { ObjectValidator, ObjectModel, VInheritableType } from './objectValidator.js';
 import { V } from './V.js';
@@ -1833,6 +1834,36 @@ describe('Set', () => {
     });
   });
 })
+
+describe('JsonBigInt', () => {
+  const largeBigInt = 9007199254740993n;
+  
+  test('JsonBigInt', async () => expectValid(new JsonBigInt(largeBigInt), V.jsonBigInt()));
+  test('bigint', async () => expectValid(largeBigInt, V.jsonBigInt(), new JsonBigInt(largeBigInt)));
+  test('string', async () => expectValid(largeBigInt.toString(), V.jsonBigInt(), new JsonBigInt(largeBigInt)));
+  test('negative string', async () => expectValid(`-${largeBigInt}`, V.jsonBigInt(), new JsonBigInt(-largeBigInt)));
+  test('number', async () => expectValid(12345, V.jsonBigInt(), new JsonBigInt(12345n)));
+
+  test('illegal number', async () => expectViolations(12.34, V.jsonBigInt(), new TypeMismatch(ROOT, 'integer', 12.34)));
+  test('illegal string', async () => expectViolations("12.34", V.jsonBigInt(), new TypeMismatch(ROOT, '/^-?[0-9]+$/', "12.34")));
+  test('BigInt object is not supported', async () => expectViolations(new Object(1234n), V.jsonBigInt(), new TypeMismatch(ROOT, 'JsonBigInt, bigint or integer as number or string', new Object(1234n))));
+
+  test('toJSON', () => {
+    expect(JSON.stringify({ bigint: new JsonBigInt(largeBigInt) })).toEqual('{"bigint":"9007199254740993"}');
+  });
+  test('valueOf', () => {
+    expect(new JsonBigInt(largeBigInt).valueOf()).toEqual(largeBigInt);
+  });
+  test('illegal value', () => {
+    try {
+      const input: any = "1234";
+      new JsonBigInt(input);
+      fail('Expected an error')
+    } catch (e: any) {
+      expect(e.message).toEqual('Expected bigint, got string');
+    }
+  });
+});
 
 describe('json', () => {
   const validator = V.json(V.array(V.string()));

@@ -54,6 +54,7 @@ import {
   CompositionParameters,
   OptionalUndefinedValidator,
   NullableValidator,
+  JsonBigIntValidator,
 } from './validators.js';
 import {ObjectModel, ObjectValidator, ObjectNormalizer } from './objectValidator.js';
 import { ObjectValidatorBuilder } from './objectValidatorBuilder.js';
@@ -79,6 +80,7 @@ const ignoreValidator = new IgnoreValidator(),
   numberValidator = new NumberValidator(NumberFormat.number),
   toNumberValidator = new NumberNormalizer(NumberFormat.number),
   integerValidator = new NumberValidator(NumberFormat.integer),
+  jsonBigIntValidator = new JsonBigIntValidator(),
   toIntegerValidator = new NumberNormalizer(NumberFormat.integer),
   dateValidator = new DateValidator(ValidatorType.Date);
 
@@ -163,6 +165,8 @@ export const V = {
   min: (min: number, inclusive = true) => new MinValidator(min, inclusive),
 
   max: (max: number, inclusive = true) => new MaxValidator(max, inclusive),
+
+  jsonBigInt: () => jsonBigIntValidator,
 
   object: <T, I = T>(model: ObjectModel<T, I>) => new ObjectValidator<T, I>(model),
 

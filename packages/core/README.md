@@ -23,7 +23,7 @@ Or [`npm`](https://www.npmjs.com/):
 npm install @finnair/v-validation
 ```
 
-## Major Changes Comming in Version 7
+## Major Changes in Version 7
 ### New Features
 * **Typing**: Validators may have a specific input and especially output type.
 * `V.objectType()` builder can be used to build an ObjectValidator with inferred type.
@@ -36,6 +36,7 @@ npm install @finnair/v-validation
   * `V.optionalStrict<T>(validator: Validator<T>)`: `undefined | T` - `V.optional` allows also null
   * `V.nullable<T>(validator: Validator<T>)`: `null | T`
   * `V.optionalProperties<K, V>(keys: Validator<K>, values: Validator<V>)`: `Partial<Record<Key, Value>>`
+* JsonBigInt: BigInt wrapper with toJSON() serialization as string
 
 ### Breaking changes: 
 * `V.string()` and some other validators do not support String object as input any more.
@@ -683,6 +684,7 @@ Unless otherwise stated, all validators require non-null and non-undefined value
 | toInteger               |                                                                  | Converts numeric strings to integers.                                                                                                     |
 | min                     | min: number, inclusive = true                                    | Asserts that numeric input is greater than or equal (if inclusive = true) than `min`.                                                     |
 | max                     | max: number, inclusive = true                                    | Asserts that numeric input is less than or equal (if inclusive = true) than `max`.                                                        |
+| jsonBigInt              |                                                                  | Converts bigints, integer numbers and strings to `JsonBigInt` wrapper for `BigInt` with `toJSON()` serialization as string.               |
 | date                    |                                                                  | Reqruires a valid date. Converts string to Date.                                                                                          |
 | enum                    | enumType: object, name: string                                   | Requires that the input is one of given enumType. Name of the enum provided for error message.                                            |
 | assertTrue              | fn: AssertTrue, type: string = 'AssertTrue', path?: Path         | Requires that the input passes `fn`. Type can be provided for error messages and path to target a sub property                            |
