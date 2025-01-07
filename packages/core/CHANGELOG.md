@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [7.0.0](https://github.com/finnair/v-validation/compare/v7.0.0-alpha.9...v7.0.0) (2025-01-07)
+
+### Features
+
+- V.jsonBigInt() validator for JSON-safe JsonBigInt wrapper for BigInt ([#125](https://github.com/finnair/v-validation/issues/125)) ([b6ae653](https://github.com/finnair/v-validation/commit/b6ae65374d41436577d4e4b6c5ee148f8ad8635c))
+
 # [7.0.0-alpha.9](https://github.com/finnair/v-validation/compare/v7.0.0-alpha.8...v7.0.0-alpha.9) (2024-12-11)
 
 ### Features
