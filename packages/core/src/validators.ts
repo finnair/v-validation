@@ -1,10 +1,10 @@
-import {default as deepEqual } from 'fast-deep-equal';
+import { default as deepEqual } from 'fast-deep-equal';
 import { Path } from '@finnair/path';
 import { validate as uuidValidate, version as uuidVersion } from 'uuid';
 
 const ROOT = Path.ROOT;
 
-export interface ValidatorFn<Out = unknown, In = unknown>{
+export interface ValidatorFn<Out = unknown, In = unknown> {
   (value: In, path: Path, ctx: ValidationContext): PromiseLike<Out>;
 }
 
@@ -21,7 +21,7 @@ export interface ValidatorOptions {
 }
 
 export class ValidationContext {
-  constructor(public readonly options: ValidatorOptions) {}
+  constructor(public readonly options: ValidatorOptions) { }
 
   private readonly objects = new Map<any, any>();
 
@@ -156,7 +156,7 @@ export class ValidationError extends Error {
 }
 
 export class Violation {
-  constructor(public readonly path: Path, public readonly type: string, public readonly invalidValue?: any) {}
+  constructor(public readonly path: Path, public readonly type: string, public readonly invalidValue?: any) { }
 }
 
 export class TypeMismatch extends Violation {
@@ -353,7 +353,7 @@ export class ArrayValidator<Out = unknown> extends Validator<Out[]> {
     for (let i = 0; i < value.length; i++) {
       const item = value[i];
       promises[i] = this.itemsValidator.validatePath(item, path.index(i), ctx).then(
-        result => convertedArray[i] = result, 
+        result => convertedArray[i] = result,
         reject => violations = violations.concat(violationsOf(reject))
       );
     }
@@ -430,7 +430,7 @@ export class OneOfValidator<Out = unknown> extends Validator<Out> {
           matches++;
           newValue = result;
         },
-        error => {}
+        error => { }
       );
     }
     await Promise.allSettled(promises);
@@ -454,7 +454,7 @@ export class AnyOfValidator<Out = unknown, In = unknown> extends Validator<Out, 
     for (const validator of this.validators) {
       promises.push(
         validator.validatePath(value, path, ctx).then(
-          result => { 
+          result => {
             passes.push(result);
           },
           (error) => {
@@ -500,7 +500,7 @@ export class IfValidator<If = unknown, In = unknown, Else = unknown> extends Val
       throw new Error('Else is already defined. Define elseIfs first.');
     }
     return new IfValidator<If | ElIf, In | ElIn, Else>(
-      [...this.conditionals, new Conditional(fn, validator)] as Conditional<If | ElIf, In | ElIn>[], 
+      [...this.conditionals, new Conditional(fn, validator)] as Conditional<If | ElIf, In | ElIn>[],
       this.elseValidator
     );
   }
@@ -527,7 +527,7 @@ export class WhenGroupValidator<When = unknown, Otherwise = unknown> extends Val
     Object.freeze(this);
   }
 
-  validatePath(value: unknown, path: Path, ctx: ValidationContext): PromiseLike<When | Otherwise>{
+  validatePath(value: unknown, path: Path, ctx: ValidationContext): PromiseLike<When | Otherwise> {
     if (ctx.options.group) {
       let passes: When[] = [];
       let violations: Violation[] = [];
@@ -588,7 +588,7 @@ export class MapValidator<K = unknown, V = unknown, E extends boolean = true> ex
     super();
     Object.freeze(this);
   }
-  validatePath(value: unknown, path: Path, ctx: ValidationContext): PromiseLike<E extends true ? JsonMap<K, V> : Map<K, V>>{
+  validatePath(value: unknown, path: Path, ctx: ValidationContext): PromiseLike<E extends true ? JsonMap<K, V> : Map<K, V>> {
     if (isNullOrUndefined(value)) {
       return Promise.reject(defaultViolations.notNull(path));
     }
@@ -718,6 +718,19 @@ export class JsonSet<K> extends Set<K> {
   }
 }
 
+export class JsonBigInt {
+  constructor(public readonly value: bigint) {
+    if (typeof value !== 'bigint') {
+      throw new Error('Expected bigint, got ' + typeof value);
+    }
+  }
+  valueOf() {
+    return this.value;
+  }
+  toJSON() {
+    return this.value.toString(10);
+  }
+}
 
 export class AnyValidator<InOut = any> extends Validator<InOut> {
   validatePath(value: InOut, path: Path, ctx: ValidationContext): PromiseLike<InOut> {
@@ -735,19 +748,19 @@ export function isSimplePrimitive(value: any) {
 }
 
 export abstract class StringValidatorBase<In> extends Validator<string, In> {
-  
+
   notEmpty() {
     return new NextStringValidator(this, new NotEmptyValidator<string>());
   }
-  
+
   notBlank() {
     return new NextStringValidator(this, new NotBlankValidator());
   }
-  
+
   pattern(pattern: string | RegExp, flags?: string) {
     return new NextStringValidator(this, new PatternValidator(pattern, flags));
   }
-  
+
   size(min: number, max: number) {
     return new NextStringValidator(this, new SizeValidator<string>(min, max));
   }
@@ -795,11 +808,11 @@ export class StringNormalizer extends StringValidatorBase<unknown> {
 }
 
 export class NotNullOrUndefinedValidator<InOut> extends Validator<
-    InOut extends null ? never : InOut extends undefined ? never : InOut, 
-    InOut extends null ? never : InOut extends undefined ? never : InOut
-  > {
-  validatePath(value: InOut extends null ? never : InOut extends undefined ? never : InOut, path: Path, ctx: ValidationContext): 
-      PromiseLike<InOut extends null ? never : InOut extends undefined ? never : InOut> {
+  InOut extends null ? never : InOut extends undefined ? never : InOut,
+  InOut extends null ? never : InOut extends undefined ? never : InOut
+> {
+  validatePath(value: InOut extends null ? never : InOut extends undefined ? never : InOut, path: Path, ctx: ValidationContext):
+    PromiseLike<InOut extends null ? never : InOut extends undefined ? never : InOut> {
     if (isNullOrUndefined(value)) {
       return Promise.reject(defaultViolations.notNull(path));
     }
@@ -816,7 +829,7 @@ export class IsNullOrUndefinedValidator extends Validator<null | undefined> {
   }
 }
 
-export class NotEmptyValidator<InOut extends { length: number}> extends Validator<InOut, InOut> {
+export class NotEmptyValidator<InOut extends { length: number }> extends Validator<InOut, InOut> {
   validatePath(value: InOut, path: Path, ctx: ValidationContext): PromiseLike<InOut> {
     if (!isNullOrUndefined(value) && isNumber((value as any).length) && (value as any).length > 0) {
       return Promise.resolve(value);
@@ -930,7 +943,7 @@ export abstract class NumberValidatorBase<In> extends Validator<number, In> {
   max(max: number, inclusive = true) {
     return new NextNumberValidator<In>(this, new MaxValidator(max, inclusive));
   }
-  
+
   between(min: number, max: number, minInclusive = true, maxInclusive = true) {
     if (minInclusive && maxInclusive) {
       if (!(min <= max)) {
@@ -951,6 +964,40 @@ export abstract class NumberValidatorBase<In> extends Validator<number, In> {
         break;
     }
     return Promise.resolve(value);
+  }
+}
+
+const bigIntFormat = /^-?[0-9]+$/;
+
+export class JsonBigIntValidator extends Validator<JsonBigInt, any> {
+  constructor() {
+    super();
+    Object.freeze(this);
+  }
+  validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<JsonBigInt> {
+    const valueType = typeof value;
+    switch (valueType) {
+      case 'bigint':
+        return Promise.resolve(new JsonBigInt(value));
+      case 'number':
+        try {
+          return Promise.resolve(new JsonBigInt(BigInt(value)));
+        } catch (e) {
+          return Promise.reject(new TypeMismatch(path, 'integer', value));
+        }
+      case 'string':
+        if (value.match(bigIntFormat)) {
+          return Promise.resolve(new JsonBigInt(BigInt(value)));
+        } else {
+          return Promise.reject(new TypeMismatch(path, bigIntFormat.toString(), value));
+        }
+      case 'object':
+        if (value instanceof JsonBigInt) {
+          return Promise.resolve(value);
+        }
+        break;
+    }
+    return Promise.reject(new TypeMismatch(path, 'JsonBigInt, bigint or integer as number or string', value));
   }
 }
 
@@ -1361,14 +1408,14 @@ export class JsonValidator<Out> extends Validator<Out, string> {
   }
 }
 
-export type NextCompositionParameters<Out = unknown, In = unknown, T1 = unknown, T2 = unknown, T3 = unknown, T4 = unknown> = 
-[Validator<Out, In>] | 
-[Validator<T1, In>, Validator<Out, T1>] |
-[Validator<T1, In>, Validator<T2, T1>, Validator<Out, T2>] |
-[Validator<T1, In>, Validator<T2, T1>, Validator<T3, T2>, Validator<Out, T3>] |
-[Validator<T1, In>, Validator<T2, T1>, Validator<T3, T2>, Validator<T4, T3>, Validator<Out, T4>];
+export type NextCompositionParameters<Out = unknown, In = unknown, T1 = unknown, T2 = unknown, T3 = unknown, T4 = unknown> =
+  [Validator<Out, In>] |
+  [Validator<T1, In>, Validator<Out, T1>] |
+  [Validator<T1, In>, Validator<T2, T1>, Validator<Out, T2>] |
+  [Validator<T1, In>, Validator<T2, T1>, Validator<T3, T2>, Validator<Out, T3>] |
+  [Validator<T1, In>, Validator<T2, T1>, Validator<T3, T2>, Validator<T4, T3>, Validator<Out, T4>];
 
-export type CompositionParameters<Out = unknown, In = unknown, T1 = unknown, T2 = unknown, T3 = unknown, T4 = unknown, T5 = unknown> = 
+export type CompositionParameters<Out = unknown, In = unknown, T1 = unknown, T2 = unknown, T3 = unknown, T4 = unknown, T5 = unknown> =
   NextCompositionParameters<Out, In, T1, T2, T3, T4> |
   [Validator<T1, In>, Validator<T2, T1>, Validator<T3, T2>, Validator<T4, T3>, Validator<T5, T4>, Validator<Out, T5>];
 
@@ -1389,7 +1436,7 @@ export function maybeAllOfValidator<Out, In>(validators: [Validator<Out, In>, ..
 
 export function violationsOf<Out>(error: any): Violation[] {
   if (error instanceof Violation) {
-    return [ error ];
+    return [error];
   }
   if (error instanceof ValidationError) {
     return error.violations;
@@ -1397,5 +1444,5 @@ export function violationsOf<Out>(error: any): Violation[] {
   if (Array.isArray(error) && error[0] instanceof Violation) {
     return error as Violation[];
   }
-  return [ new ErrorViolation(ROOT, error) ];
+  return [new ErrorViolation(ROOT, error)];
 }
