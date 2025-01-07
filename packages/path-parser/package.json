@@ -44,9 +44,9 @@
     "nearley": "2.20.1"
   },
   "peerDependencies": {
-    "@finnair/path": ">=6"
+    "@finnair/path": ">=7"
   },
   "devDependencies": {
-    "@finnair/path": "^7.0.0-alpha.9"
+    "@finnair/path": "^7.0.0"
   }
 }
