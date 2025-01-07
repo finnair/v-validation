@@ -29,27 +29,27 @@ npm install @finnair/v-validation
 * `V.objectType()` builder can be used to build an ObjectValidator with inferred type.
 * Validator (output/result) type can be acquired with `VType<typeof validator>`. 
 * Direct, chainable support for most used "next" validation rules, e.g. `V.number().min(1).max(2)`: 
-  * `V.string()` supports `notEmpty`, `notBlank`, `pattern` and `size`.
+  * `V.string()` supports `notEmpty`, `notBlank`, `pattern` and `size`,
   * `V.number()` supports `min`, `max` and `between`.
-* Use `Validator#getValid(input)` to get valid a valid value or an exception directly
+* Use `Validator#getValid(input)` to get valid a valid value or an exception directly.
 * New strictly typed "optional" validators: 
-  * `V.optionalStrict<T>(validator: Validator<T>)`: `undefined | T` - `V.optional` allows also null
-  * `V.nullable<T>(validator: Validator<T>)`: `null | T`
-  * `V.optionalProperties<K, V>(keys: Validator<K>, values: Validator<V>)`: `Partial<Record<Key, Value>>`
-* JsonBigInt: BigInt wrapper with toJSON() serialization as string
+  * `V.optionalStrict<T>(validator: Validator<T>)`: `undefined | T` - `V.optional` allows also null,
+  * `V.nullable<T>(validator: Validator<T>)`: `null | T`,
+  * `V.optionalProperties<K, V>(keys: Validator<K>, values: Validator<V>)`: `Partial<Record<Key, Value>>`.
+* `JsonBigInt`: `BigInt` wrapper with `toJSON()` serialization as `string`.
 
 ### Breaking changes: 
 * `V.string()` and some other validators do not support String object as input any more.
-* `isString()` function doesn't support String object any more
+* `isString()` function doesn't support String object any more.
 * `V.number()` does not support Number object as input any more.
-* `V.allOf()` requires that all results match
+* `V.allOf()` requires that all results match.
 * Validators that accept multiple subvalidators (`V.optional`, `V.required`, `V.check`, `V.if`, `V.whenGroup`, `V.json` and `ObjectModel#next`) are combined using `V.compositionOf` instead of `V.allOf` as composition makes more sense in general. However, if there are multiple parents with next validators, those are still combined with `V.allOf` as they are not aware of each other.
 * `V.if` does not support "fall through" any more but rejects with NoMatchingCondition if no condition matches. Use `.else(V.any())` if "fall through" is desirable.
 * `V.whenGroup` does not support "fall through" any more but rejects with NoMatchingGroup if no condition matches. Use `.otherwise(V.any())` if "fall through" is desirable.
 * More straightforward internal architecture:
-  * Internal Validator#validatePath returns now a Promise of valid value or reject of Violation(s) directly instead of ValidationResult
-  * Custom SyncPromise is removed in favor of Promise.resolve and reject.
-  * ValidatorContext no longer has `success`, `successPromise`, `failurePromise` and `promise` functions - use `Promise.resolve(value)` or `Promise.reject(new Violation(...))` with single violation or an array of violations. 
+  * internal Validator#validatePath returns now a Promise of valid value or reject of Violation(s) directly instead of ValidationResult,
+  * custom SyncPromise is removed in favor of Promise.resolve and reject,
+  * `ValidatorContext` no longer has `success`, `successPromise`, `failurePromise` and `promise` functions - use `Promise.resolve(value)` or `Promise.reject(new Violation(...))` with single violation or an array of violations. 
 * `V.mapType`, `V.toMapType` and `V.setType` now require `jsonSafe` boolean parameter for typing: JsonMap/JsonSet (true) or plain Map/Set (false).
 
 ## Show Me the Code!
@@ -260,15 +260,15 @@ V.string()
 ```
 ## Typing in Version >= 7
 
-All built-in validators (except `V.shema`) have input and output types. Typed ObjectValidators can be built with `V.objectType()`.
+All built-in validators (except `V.schema`) have input and output types. Typed ObjectValidators can be built with `V.objectType()`.
 Since inferred types tend to get quite long and hard to read, you can also combine them with hand-written types.
 
 ### Validator Type
 Use `VType<typeof validator>` to get the result type of `validator`.
 
-Use `VInheritableType<typeof objectValidator> to get the inheritable type of `objectValidator: ObjectValidator<LocalType, Inheritabletype>`.
+Use `VInheritableType<typeof objectValidator> to get the inheritable type of `objectValidator: ObjectValidator<LocalType, InheritableType>`.
 
-LocalType and Inheritabletype will only differ when `localProperties` or `localNext` are used. The most obvious use case for this is a class hierarcy with discriminator property to denote a specific type.
+LocalType and InheritableType will only differ when `localProperties` or `localNext` are used. The most obvious use case for this is a class hierarcy with discriminator property to denote a specific type.
 
 *NOTE: `V.schema` doesn't yet support typing.*
 
@@ -285,7 +285,7 @@ types:
 
 These can be used with `assertType` to verify type equality:
 ```typescript
-interface MyInterface{
+interface MyInterface {
   //...
 }
 const myInterfaceValidator = V.objectType()
@@ -304,13 +304,11 @@ but that something may then cause "is declared but never used" -error.
 
 `V` supports
 
-- All validators have [`Validator.next`](#next) function to chain validator rules,. 
-- `compositionOf` - validators are run one after another against the (current) converted value (a shortcut for [`Validator.next`](#next))
-- `allOf` - value must satisfy all the validators
-  - validators are run in parallel and the results are combined
-  - all the validators must return the same value (deepEquals)
-- `anyOf` - at least one of the validators must match
-- `oneOf` - exactly one validator must match while others should return false
+- All validators have [`Validator.next`](#next) function to chain validator rules. 
+- `compositionOf` - validators are run one after another against the (current) converted value (a shortcut for [`Validator.next`](#next)).
+- `allOf` - the input value must satisfy all the validators. Validators are run in parallel and must return the same value (deepEquals).
+- `anyOf` - at least one of the validators must match.
+- `oneOf` - exactly one validator must match while others should return false.
 
 ## <a name="object">V.object</a>
 
@@ -319,9 +317,11 @@ but that something may then cause "is declared but never used" -error.
 1. named properties as references to other validators,
 2. rules defining what, if any, additional (unnamed) properties are allowed,
 3. references to parent model(s),
-4. local (non-inheritable) properties and
-5. next validator for cross-property rules
-6. local next for non-inheritable mapping
+4. local (non-inheritable) properties,
+5. next validator for cross-property rules and
+6. local next for non-inheritable mapping.
+
+Note that `V.object` is essentially deprecated. Please use `V.objectType` to create properly typed object validators. 
 
 ### Named Properties
 
@@ -592,7 +592,7 @@ Options are passed to to `validate` function as optional second argument.
 
 | Option                            | Description                                |
 | --------------------------------- | ------------------------------------------ |
-| ignoreUnknownProperties?: boolean | Unknown properties allowed by default.\*   |
+| ignoreUnknownProperties?: boolean | Unknown properties allowed by default\*    |
 | ignoreUnknownEnumValues?: boolean | Unknown enum values allowed by default     |
 | warnLogger?: WarnLogger           | A reporter function for ignored Violations |
 | group?: Group                     | A group used to activate validation rules  |
