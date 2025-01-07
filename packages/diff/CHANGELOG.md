@@ -7,6 +7,10 @@ See [Conventional Commits](https://conventionalcommits.org) for commit guideline
 
 **Note:** Version bump only for package @finnair/diff
 
+# [7.0.0](https://github.com/finnair/v-validation/compare/v7.0.0-alpha.9...v7.0.0) (2025-01-07)
+
+**Note:** Version bump only for package @finnair/diff
+
 # [7.0.0-alpha.9](https://github.com/finnair/v-validation/compare/v7.0.0-alpha.8...v7.0.0-alpha.9) (2024-12-11)
 
 **Note:** Version bump only for package @finnair/diff

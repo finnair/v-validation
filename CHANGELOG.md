@@ -5,6 +5,16 @@ See [Conventional Commits](https://conventionalcommits.org) for commit guideline
 
 # [7.0.0](https://github.com/finnair/v-validation/compare/v7.0.0-alpha.9...v7.0.0) (2025-01-07)
 
+### Bug Fixes
+
+- path -peer dependency ([17c0725](https://github.com/finnair/v-validation/commit/17c072593d52d4db08e98e1a56934d96fe1783a3))
+
+### Features
+
+- V.jsonBigInt() validator for JSON-safe JsonBigInt wrapper for BigInt ([#125](https://github.com/finnair/v-validation/issues/125)) ([b6ae653](https://github.com/finnair/v-validation/commit/b6ae65374d41436577d4e4b6c5ee148f8ad8635c))
+
+# [7.0.0](https://github.com/finnair/v-validation/compare/v7.0.0-alpha.9...v7.0.0) (2025-01-07)
+
 ### Features
 
 - V.jsonBigInt() validator for JSON-safe JsonBigInt wrapper for BigInt ([#125](https://github.com/finnair/v-validation/issues/125)) ([b6ae653](https://github.com/finnair/v-validation/commit/b6ae65374d41436577d4e4b6c5ee148f8ad8635c))

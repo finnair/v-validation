@@ -5,6 +5,12 @@ See [Conventional Commits](https://conventionalcommits.org) for commit guideline
 
 # [7.0.0](https://github.com/finnair/v-validation/compare/v7.0.0-alpha.9...v7.0.0) (2025-01-07)
 
+### Bug Fixes
+
+- path -peer dependency ([17c0725](https://github.com/finnair/v-validation/commit/17c072593d52d4db08e98e1a56934d96fe1783a3))
+
+# [7.0.0](https://github.com/finnair/v-validation/compare/v7.0.0-alpha.9...v7.0.0) (2025-01-07)
+
 **Note:** Version bump only for package @finnair/v-validation-moment
 
 # [7.0.0-alpha.9](https://github.com/finnair/v-validation/compare/v7.0.0-alpha.8...v7.0.0-alpha.9) (2024-12-11)
