@@ -4,8 +4,8 @@ export const defaultDiffFilter = (_path: Path, value: any) => value !== undefine
 
 export interface DiffConfig {
   readonly filter?: DiffFilter;
-  readonly isPrimitive?: (value: any) => boolean; 
-  readonly isEqual?: (a: any, b: any) => boolean;
+  readonly isPrimitive?: (value: any, path: Path) => boolean; 
+  readonly isEqual?: (a: any, b: any, path: Path) => boolean;
   readonly includeObjects?: boolean;
 }
 
@@ -65,7 +65,7 @@ export class Diff {
           const aNode = aMap.get(pathStr);
           const aValue = aNode?.value;
           aMap.delete(pathStr);
-          if (!this.isEqual(aValue, bValue)) {
+          if (!this.isEqual(aValue, bValue, path)) {
             changeset.set(pathStr, { path, oldValue: aValue, newValue: this.getNewValue(bValue) });
           }
         } else {
@@ -86,7 +86,7 @@ export class Diff {
 
   private collectPathsAndValues(value: any, collector: (node: Node) => void, path: Path = Path.ROOT) {
     if ((this.config?.filter ?? defaultDiffFilter)(path, value)) {
-      if (isPrimitive(value) || this.config?.isPrimitive?.(value)) {
+      if (isPrimitive(value) || this.config?.isPrimitive?.(value, path)) {
         collector({ path, value });
       } else if (typeof value === 'object') {
         if (Array.isArray(value)) {
@@ -108,11 +108,11 @@ export class Diff {
     }
   }
 
-  private isEqual(a: any, b: any): boolean {
+  private isEqual(a: any, b: any, path: Path): boolean {
     if (a === b) {
       return true;
     }
-    return !!this.config?.isEqual?.(a, b)
+    return !!this.config?.isEqual?.(a, b, path);
   }
   
   private getNewValue(value: any) {

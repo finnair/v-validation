@@ -66,7 +66,7 @@ describe('Diff', () => {
     });
   });
 
-  describe('custom primitive', () => {
+  describe('CustomPrimitive', () => {
     const diff = new Diff({ isPrimitive: (value: any) => value instanceof CustomPrimitive, isEqual: (a: any, b: any) => {
       if (a instanceof CustomPrimitive && b instanceof CustomPrimitive) {
         return a.value === b.value;
@@ -79,6 +79,23 @@ describe('Diff', () => {
     test('change', () => {
       expect(diff.changeset({ custom: new CustomPrimitive(1) }, { custom: new CustomPrimitive(2) })).toEqual(new Map([
         ['$.custom', <Change>{ path: Path.of('custom'), oldValue: new CustomPrimitive(1), newValue: new CustomPrimitive(2)}]
+      ]));
+    });
+  });
+
+  describe('path/id based primitive', () => {
+    const diff = new Diff({ isPrimitive: (_: any, path: Path) => path.componentAt(0) === 'nested', isEqual: (a: any, b: any, path: Path) => {
+      if (path.componentAt(0) === 'nested') {
+        return a.id === b.id;
+      }
+      return false;
+    }})
+    test('objects with same id are equal', () => {
+      expect(diff.changeset({ nested: { id: 1, value: 'foo' } }, { nested: { id: 1, value: 'bar' } })).toEqual(new Map([]));
+    });
+    test('objects with different id are not equal', () => {
+      expect(diff.changeset({ nested: { id: 1, value: 'foo' } }, { nested: { id: 2, value: 'foo' } })).toEqual(new Map([
+        ['$.nested', <Change>{ path: Path.of('nested'), oldValue: { id: 1, value: 'foo' }, newValue: { id: 2, value: 'foo' } }]
       ]));
     });
   });
