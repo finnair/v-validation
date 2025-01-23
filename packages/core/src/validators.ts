@@ -26,8 +26,8 @@ export class ValidationContext {
   private readonly objects = new Map<any, any>();
 
   /**
-   * Optionally ignore an error for backwards compatible changes (enum values, new properties).
-   */
+  * Optionally ignore an error for backwards compatible changes (enum values, new properties).
+  */
   failure<Out = unknown, In = unknown>(violation: Violation | Violation[], value: In) {
     const violations: Violation[] = ([] as Violation[]).concat(violation);
     if (violations.length === 1 && this.ignoreViolation(violations[0])) {
@@ -62,12 +62,12 @@ export abstract class Validator<Out = unknown, In = unknown> {
   }
 
   /**
-   * Returns a valid value directly or throws a ValidationError with Violations.
-   * 
-   * @param value value to be validated
-   * @param options validation options
-   * @returns a valid, possibly converted value
-   */
+  * Returns a valid value directly or throws a ValidationError with Violations.
+  * 
+  * @param value value to be validated
+  * @param options validation options
+  * @returns a valid, possibly converted value
+  */
   async getValid(value: In, options?: ValidatorOptions): Promise<Out> {
     try {
       return await this.validatePath(value, ROOT, new ValidationContext(options || {}));
@@ -77,12 +77,12 @@ export abstract class Validator<Out = unknown, In = unknown> {
   }
 
   /**
-   * Returns a ValidationResult of value. 
-   * 
-   * @param value value to be validated
-   * @param options validation options
-   * @returns ValidationResult of either valid, possibly converted value or Violations
-   */
+  * Returns a ValidationResult of value. 
+  * 
+  * @param value value to be validated
+  * @param options validation options
+  * @returns ValidationResult of either valid, possibly converted value or Violations
+  */
   async validate(value: In, options?: ValidatorOptions): Promise<ValidationResult<Out>> {
     try {
       const result = await this.validatePath(value, ROOT, new ValidationContext(options || {}));
@@ -93,11 +93,11 @@ export abstract class Validator<Out = unknown, In = unknown> {
   }
 
   /**
-   * Validate `value` and return either resolved of valid/converted value or rejected of Violation or Violation[] Promise.
-   * @param value 
-   * @param path 
-   * @param ctx 
-   */
+  * Validate `value` and return either resolved of valid/converted value or rejected of Violation or Violation[] Promise.
+  * @param value 
+  * @param path 
+  * @param ctx 
+  */
   abstract validatePath(value: In, path: Path, ctx: ValidationContext): PromiseLike<Out>;
 
   next<NextOut = unknown, T1 = unknown, T2 = unknown, T3 = unknown, T4 = unknown>(...validators: NextCompositionParameters<NextOut, Out, T1, T2, T3, T4>) {
@@ -132,9 +132,9 @@ export class ValidationResult<T = unknown> {
   }
 
   /**
-   * Either returns a valid, possibly converted value or throws a ValidationError with Violations.
-   * @returns 
-   */
+  * Either returns a valid, possibly converted value or throws a ValidationError with Violations.
+  * @returns 
+  */
   getValue(): T {
     if (!this.isSuccess()) {
       throw new ValidationError(this.getViolations());
@@ -719,9 +719,18 @@ export class JsonSet<K> extends Set<K> {
 }
 
 export class JsonBigInt {
-  constructor(public readonly value: bigint) {
-    if (typeof value !== 'bigint') {
-      throw new Error('Expected bigint, got ' + typeof value);
+  public readonly value: bigint;
+  constructor(value: bigint | string | number) {
+    switch (typeof value) {
+      case 'bigint':
+        this.value = value as bigint;
+        break;
+      case 'string':
+      case 'number':
+        this.value = BigInt(value);
+        break;
+      default:
+        throw new Error('Expected bigint, got ' + typeof value);
     }
   }
   valueOf() {

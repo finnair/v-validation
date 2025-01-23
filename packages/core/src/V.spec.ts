@@ -1854,14 +1854,23 @@ describe('JsonBigInt', () => {
   test('valueOf', () => {
     expect(new JsonBigInt(largeBigInt).valueOf()).toEqual(largeBigInt);
   });
-  test('illegal value', () => {
-    try {
-      const input: any = "1234";
-      new JsonBigInt(input);
-      fail('Expected an error')
-    } catch (e: any) {
-      expect(e.message).toEqual('Expected bigint, got string');
-    }
+  describe('constructor', () => {
+    test('string', () => {
+      expect(new JsonBigInt("5")).toEqual(new JsonBigInt(5n));
+    });
+    test('number', () => {
+      expect(new JsonBigInt(5)).toEqual(new JsonBigInt(5n));
+    });
+    test('illegal value', () => {
+      try {
+        const input: any = true;
+        new JsonBigInt(input);
+        fail('Expected an error')
+      } catch (e: any) {
+        expect(e.message).toEqual('Expected bigint, got boolean');
+      }
+    });
+
   });
 });
 
