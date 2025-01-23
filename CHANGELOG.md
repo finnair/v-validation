@@ -3,6 +3,13 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [7.1.0](https://github.com/finnair/v-validation/compare/v7.0.0...v7.1.0) (2025-01-23)
+
+### Features
+
+- JsonBigInt constructor supports string and number inputs ([#127](https://github.com/finnair/v-validation/issues/127)) ([0b67fb1](https://github.com/finnair/v-validation/commit/0b67fb18c2189d2520ac34abb7107663f51f18ad))
+- path-based Diff configuration to allow any value to be handled as "primitive" ([#128](https://github.com/finnair/v-validation/issues/128)) ([4222b6d](https://github.com/finnair/v-validation/commit/4222b6d58610323219af8ebf1bc5832dc06f008b))
+
 # [7.0.0](https://github.com/finnair/v-validation/compare/v7.0.0-alpha.9...v7.0.0) (2025-01-07)
 
 ### Bug Fixes

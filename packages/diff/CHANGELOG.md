@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [7.1.0](https://github.com/finnair/v-validation/compare/v7.0.0...v7.1.0) (2025-01-23)
+
+### Features
+
+- path-based Diff configuration to allow any value to be handled as "primitive" ([#128](https://github.com/finnair/v-validation/issues/128)) ([4222b6d](https://github.com/finnair/v-validation/commit/4222b6d58610323219af8ebf1bc5832dc06f008b))
+
 # [7.0.0](https://github.com/finnair/v-validation/compare/v7.0.0-alpha.9...v7.0.0) (2025-01-07)
 
 **Note:** Version bump only for package @finnair/diff
