@@ -104,6 +104,18 @@ describe('path', () => {
     expect(Array.from(parent.concat(child))).toEqual(['parent', 'child']);
   });
 
+  test('parent', () => {
+    const path = Path.of('parent', 'nested', 0);
+    let parent: undefined | Path = path.parent()!;
+    expect(parent).toEqual(Path.of('parent', 'nested'));
+    parent = parent.parent()!;
+    expect(parent).toEqual(Path.of('parent'));
+    parent = parent.parent()!;
+    expect(parent).toBe(Path.ROOT);
+    parent = parent.parent();
+    expect(parent).toBeUndefined();
+  });
+
   describe('validate components', () => {
     test('string is not valid index', () => {
       const component: any = 'foo';

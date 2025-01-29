@@ -31,6 +31,14 @@ export class Path {
     return new Path(this.path.concat(childPath.path));
   }
 
+  parent(): undefined | Path {
+    switch (this.path.length) {
+      case 0: return undefined;
+      case 1: return Path.ROOT;
+      default: return new Path(this.path.slice(0, this.path.length - 1));
+    }
+  }
+
   toJSON(): string {
     return this.path.reduce((pathString: string, component: PathComponent) => pathString + Path.componentToString(component), '$');
   }
