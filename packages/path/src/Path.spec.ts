@@ -114,6 +114,8 @@ describe('path', () => {
     expect(parent).toBe(Path.ROOT);
     parent = parent.parent();
     expect(parent).toBeUndefined();
+    // original is not modified
+    expect(path).toEqual(Path.of('parent', 'nested', 0));
   });
 
   describe('validate components', () => {
