@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [7.2.0](https://github.com/finnair/v-validation/compare/v7.1.0...v7.2.0) (2025-01-29)
+
+### Features
+
+- Path.parent() method to get parent path ([#129](https://github.com/finnair/v-validation/issues/129)) ([629ca95](https://github.com/finnair/v-validation/commit/629ca95266a8ae0a25e5cd689f750583aeb15efc))
+
 # [7.1.0](https://github.com/finnair/v-validation/compare/v7.0.0...v7.1.0) (2025-01-23)
 
 **Note:** Version bump only for package @finnair/path
