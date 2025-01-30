@@ -43,6 +43,21 @@ export class Path {
     return this.path.reduce((pathString: string, component: PathComponent) => pathString + Path.componentToString(component), '$');
   }
 
+  equals(other: any) {
+    if (other instanceof Path) {
+      const otherLength = other.length;
+      if (otherLength === this.length) {
+        for (let i = 0; i < otherLength; i++) {
+          if (other.componentAt(i) != this.componentAt(i)) {
+            return false;
+          }
+        }
+        return true;
+      }
+    }
+    return false;
+  }
+
   get length(): number {
     return this.path.length;
   }
