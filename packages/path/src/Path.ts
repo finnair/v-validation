@@ -23,6 +23,13 @@ export class Path {
     return new Path(this.path.concat(property));
   }
 
+  child(key: number | string): Path {
+    if (typeof key === 'number') {
+      return this.index(key);
+    }
+    return this.property(key);
+  }
+
   connectTo(newRootPath: Path) {
     return new Path(newRootPath.path.concat(this.path));
   }

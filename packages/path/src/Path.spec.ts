@@ -119,6 +119,10 @@ describe('path', () => {
     expect(path).toEqual(Path.of('parent', 'nested', 0));
   });
 
+  test('child', () => {
+    expect(Path.of('foo').child(1).child('bar')).toEqual(Path.of('foo', 1, 'bar'));
+  });
+
   describe('equals', () => {
     test('equal path', () => {
       expect(Path.of('foo', 0).equals(Path.of('foo', 0))).toBe(true);
