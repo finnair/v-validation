@@ -139,7 +139,7 @@ export class ObjectValidator<LocalType = unknown, InheritableType = LocalType> e
       convertedObject: {} as LocalType,
       violations: [],
     };
-    const cycleResult = ctx.registerObject<LocalType>(value, path, context.convertedObject);
+    const cycleResult = ctx.registerObject<LocalType>(value, path, this, context.convertedObject);
     if (cycleResult) {
       return cycleResult;
     }

@@ -653,6 +653,29 @@ describe('objects', () => {
       first.next = second;
       return expectValid(first, validator, first, { allowCycles: true });
     });
+
+    test('broken cycle', async () => {
+      interface CycleModel {
+        cycle?: CycleModel; 
+      }
+      let cycleValidator: ObjectValidator<CycleModel, CycleModel>;
+      const validator = V.objectType()
+        .properties({
+          // Another validator will result in another converted object
+          cycle: V.objectType()
+            .properties({
+              cycle: V.fn((value: any, path: Path, ctx: ValidationContext) => cycleValidator.validatePath(value, path, ctx))
+            }).build(),
+        })
+        .build();
+      cycleValidator = validator;
+      const cycle: CycleModel = {};
+      cycle.cycle = cycle;
+
+      const result = await cycleValidator.getValid(cycle, { allowCycles: true });
+      expect(result.cycle).not.toBe(result);
+      expect(result.cycle!.cycle).toBe(result);
+    });
   });
 
   describe('custom property filtering ObjectValidator extension', () => {
@@ -1114,16 +1137,62 @@ describe('oneOf', () => {
     B = 'B',
   }
   describe('with conversion', () => {
-    const validator = V.oneOf(V.hasValue('2019-01-24T09:10:00Z'), V.date(), V.enum(EnumType, 'EnumType'));
+    const dateValue = '2019-01-24T09:10:00Z';
+    const validator = V.oneOf(V.hasValue(dateValue), V.date(), V.enum(EnumType, 'EnumType'));
 
     test('valid enum', () => expectValid('A', validator, EnumType.A));
 
     test('valid date', () => expectValid(validDateString, validator, validDate));
 
-    test('invalid value matching two', () => expectViolations('2019-01-24T09:10:00Z', validator, defaultViolations.oneOf(2)));
+    test('invalid value matching two', () => expectViolations(dateValue, validator, 
+      defaultViolations.oneOf(2, [
+        new ValidationResult([], dateValue), 
+        new ValidationResult([], new Date(dateValue)), 
+        new ValidationResult([defaultViolations.enum('EnumType', dateValue, ROOT)]),
+      ])));
 
-    test('no matches', () => expectViolations('ABD', validator, defaultViolations.oneOf(0)));
+    test('no matches', () => expectViolations('ABD', validator, 
+      defaultViolations.oneOf(0, [
+        new ValidationResult([new HasValueViolation(ROOT, dateValue, 'ABD')]), 
+        new ValidationResult([defaultViolations.date('ABD', ROOT)]), 
+        new ValidationResult([defaultViolations.enum('EnumType', 'ABD', ROOT)]),
+      ])));
   });
+
+  test('test validation oneOf functionality validator order effect', async () => {
+    const data = {
+      item: [
+        {
+          key1: "string",
+          key2: 3
+        }
+      ]
+    };
+    const objectValidatorA = V.objectType().properties({
+      key1: V.string(),
+      key2: V.number()
+    }).build();
+    const objectValidatorB = V.objectType().properties({
+      key1: V.number(),
+      key2: V.string()
+    }).build();
+
+    const validator1 = V.objectType().properties({
+      item: V.array(
+        V.oneOf(objectValidatorA, objectValidatorB)
+      )
+    }).build();
+    const validationResult1 = await validator1.validate(data);
+    expect(validationResult1.isSuccess()).toBe(true);
+
+    const validator2 = V.objectType().properties({
+      item: V.array(
+        V.oneOf(objectValidatorB, objectValidatorA)
+      )
+    }).build();
+    const validationResult2 = await validator2.validate(data);
+    expect(validationResult2.isSuccess()).toBe(true);
+  })
 });
 
 describe('anyOf', () => {
@@ -1381,7 +1450,11 @@ describe('async validation', () => {
     });
 
     test('invalid', async () => {
-      await expectViolations(true, V.oneOf(defer(V.number()), defer(V.string())), defaultViolations.oneOf(0));
+      await expectViolations(true, V.oneOf(defer(V.number()), defer(V.string())), 
+      defaultViolations.oneOf(0, [
+        new ValidationResult([new TypeMismatch(ROOT, 'number', true)]),
+        new ValidationResult([new TypeMismatch(ROOT, 'string', true)]),
+      ]));
     });
   });
 

@@ -227,7 +227,7 @@ type UserRegistration = VType<typeof UserRegistrationValidator>;
 - TypeScript native implementation
 - Supports type inference that can be mixed with better readable custom types/interfaces
 
-## Pure Validation?
+## <a name="pure-validation">Pure Validation</a>
 
 As a matter of principle, `V` doesn't modify the value being validated. All conversions and normalizations return a new object or array. For pure validation,
 
@@ -549,8 +549,11 @@ Another option is to use [`V.schema`](#schema).
 
 By default `V` returns an error if same object is referenced multiple times in the input data structure.
 While plain data cannot contain duplicates, as they require references, `V` allows these and even
-cyclic data by setting `ValidatorOptions.allowCycles = true`. The converted object returned by
-successful validation retains identical reference structure compared to the original.
+cyclic data by setting `ValidatorOptions.allowCycles = true`. The converted object returned by successful 
+validation retains identical reference structure compared to the original. _Note, however, that cycles 
+can only be connected in the converted result if the same validation rule is used on both ends._ 
+If different ObjectValidator rule is used, then the separate branches will result in a different copy of
+the converted object. In such case, it's better to use [Pure validation](#pure-validation).
 
 ## Map
 

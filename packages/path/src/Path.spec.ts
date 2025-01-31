@@ -2,6 +2,7 @@ import { describe, test, expect } from 'vitest'
 import { Path, PathComponent } from './Path.js';
 import { PathMatcher } from './PathMatcher.js';
 import { AnyProperty, AnyIndex } from './matchers.js';
+import path from 'path';
 
 describe('path', () => {
   test('toJSON', () => expect(Path.property('s p a c e s').index(5).property('regular').toJSON()).toEqual('$["s p a c e s"][5].regular'));
@@ -116,6 +117,28 @@ describe('path', () => {
     expect(parent).toBeUndefined();
     // original is not modified
     expect(path).toEqual(Path.of('parent', 'nested', 0));
+  });
+
+  test('child', () => {
+    expect(Path.of('foo').child(1).child('bar')).toEqual(Path.of('foo', 1, 'bar'));
+  });
+
+  describe('equals', () => {
+    test('equal path', () => {
+      expect(Path.of('foo', 0).equals(Path.of('foo', 0))).toBe(true);
+    });
+    test('non equal path', () => {
+      expect(Path.of('foo', 0).equals(Path.of('foo', 1))).toBe(false);
+    });
+    test('string and number indexes are equal', () => {
+      expect(Path.of('foo', 0).equals(Path.of('foo', "0"))).toBe(true);
+    });
+    test('shorter path', () => {
+      expect(Path.of('foo', 'bar').equals(Path.of('foo'))).toBe(false);
+    })
+    test('longer path', () => {
+      expect(Path.of('foo').equals(Path.of('foo', 'bar'))).toBe(false);
+    })
   });
 
   describe('validate components', () => {
