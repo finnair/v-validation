@@ -647,34 +647,15 @@ describe('objects', () => {
 
     test('recursive type', () => expectValid(({ first: 'first', next: { first: 'second', next: { first: 'third' } } }) satisfies VType<typeof validator>, validator));
 
-    test('cyclic data', async () => {
+    test('cyclic data is invalid ', async () => {
       const first: any = { first: 'first' };
       const second: any = { first: 'second', next: first };
       first.next = second;
-      return expectValid(first, validator, first, { allowCycles: true });
-    });
-
-    test('broken cycle', async () => {
-      interface CycleModel {
-        cycle?: CycleModel; 
-      }
-      let cycleValidator: ObjectValidator<CycleModel, CycleModel>;
-      const validator = V.objectType()
-        .properties({
-          // Another validator will result in another converted object
-          cycle: V.objectType()
-            .properties({
-              cycle: V.fn((value: any, path: Path, ctx: ValidationContext) => cycleValidator.validatePath(value, path, ctx))
-            }).build(),
-        })
-        .build();
-      cycleValidator = validator;
-      const cycle: CycleModel = {};
-      cycle.cycle = cycle;
-
-      const result = await cycleValidator.getValid(cycle, { allowCycles: true });
-      expect(result.cycle).not.toBe(result);
-      expect(result.cycle!.cycle).toBe(result);
+      const result = await validator.validate(first);
+      expect(result.isSuccess()).toBe(false);
+      const violation = result.getViolations()[0];
+      expect(violation).toBeInstanceOf(ErrorViolation);
+      expect((violation as ErrorViolation).error.message).toEqual('Maximum call stack size exceeded');
     });
   });
 
@@ -807,7 +788,7 @@ describe('objects', () => {
 
 describe('additionalProperties', () => {
   const allowXString = V.objectType()
-    .additionalProperties(V.pattern(/^x-.+/), V.string(), true)
+    .additionalProperties(V.pattern(/^x-.+/), V.string())
     .build();
   assertType<EqualTypes<ComparableType<VType<typeof allowXString>>, ComparableType<Partial<Record<string, string>>>>>(true);
 
@@ -1146,16 +1127,16 @@ describe('oneOf', () => {
 
     test('invalid value matching two', () => expectViolations(dateValue, validator, 
       defaultViolations.oneOf(2, [
-        new ValidationResult([], dateValue), 
-        new ValidationResult([], new Date(dateValue)), 
-        new ValidationResult([defaultViolations.enum('EnumType', dateValue, ROOT)]),
+        { success: true }, 
+        { success: true }, 
+        { violations: [defaultViolations.enum('EnumType', dateValue, ROOT)] },
       ])));
 
     test('no matches', () => expectViolations('ABD', validator, 
       defaultViolations.oneOf(0, [
-        new ValidationResult([new HasValueViolation(ROOT, dateValue, 'ABD')]), 
-        new ValidationResult([defaultViolations.date('ABD', ROOT)]), 
-        new ValidationResult([defaultViolations.enum('EnumType', 'ABD', ROOT)]),
+        { violations: [new HasValueViolation(ROOT, dateValue, 'ABD')] }, 
+        { violations: [defaultViolations.date('ABD', ROOT)] }, 
+        { violations: [defaultViolations.enum('EnumType', 'ABD', ROOT)] },
       ])));
   });
 
@@ -1452,8 +1433,8 @@ describe('async validation', () => {
     test('invalid', async () => {
       await expectViolations(true, V.oneOf(defer(V.number()), defer(V.string())), 
       defaultViolations.oneOf(0, [
-        new ValidationResult([new TypeMismatch(ROOT, 'number', true)]),
-        new ValidationResult([new TypeMismatch(ROOT, 'string', true)]),
+        { violations: [new TypeMismatch(ROOT, 'number', true)] },
+        { violations: [new TypeMismatch(ROOT, 'string', true)] },
       ]));
     });
   });

@@ -17,13 +17,10 @@ export interface ValidatorOptions {
   readonly ignoreUnknownProperties?: boolean;
   readonly ignoreUnknownEnumValues?: boolean;
   readonly warnLogger?: WarnLogger;
-  readonly allowCycles?: boolean;
 }
 
 export class ValidationContext {
   constructor(public readonly options: ValidatorOptions) { }
-
-  private readonly objects = new Map<any, Map<Validator, any>>();
 
   /**
   * Optionally ignore an error for backwards compatible changes (enum values, new properties).
@@ -37,22 +34,6 @@ export class ValidationContext {
       return Promise.resolve(value as unknown as Out);
     }
     return Promise.reject(violations);
-  }
-  registerObject<T = unknown>(value: any, path: Path, validator: Validator, convertedValue: T): undefined | PromiseLike<T> {
-    if (this.objects.has(value)) {
-      const validatorValue = this.objects.get(value)!;
-      if (validatorValue.has(validator)) {
-        if (this.options.allowCycles) {
-          return Promise.resolve(validatorValue.get(validator));
-        }
-        return Promise.reject(defaultViolations.cycle(path));
-      } else {
-        validatorValue.set(validator, convertedValue);
-      }
-    } else {
-      this.objects.set(value, new Map([[validator, convertedValue]]));
-    }
-    return undefined;
   }
   private ignoreViolation(violation: Violation) {
     return (
@@ -195,8 +176,10 @@ export class PatternViolation extends Violation {
   }
 }
 
+export type OneOfResult = { success: true } | { violations: Violation[] };
+
 export class OneOfMismatch extends Violation {
-  constructor(path: Path, public readonly matches: number, public readonly results: ValidationResult[]) {
+  constructor(path: Path, public readonly matches: number, public readonly results: OneOfResult[]) {
     super(path, ValidatorType.OneOf);
   }
 }
@@ -312,12 +295,11 @@ export const defaultViolations = {
   notUndefined: (path: Path = ROOT) => new Violation(path, ValidatorType.NotUndefined),
   notEmpty: (path: Path = ROOT) => new Violation(path, ValidatorType.NotEmpty),
   notBlank: (path: Path = ROOT) => new Violation(path, ValidatorType.NotBlank),
-  oneOf: (matches: number, results: ValidationResult[], path: Path = ROOT) => new OneOfMismatch(path, matches, results),
+  oneOf: (matches: number, results: OneOfResult[], path: Path = ROOT) => new OneOfMismatch(path, matches, results),
   pattern: (pattern: RegExp, invalidValue: any, path: Path = ROOT) => new PatternViolation(path, '' + pattern, invalidValue),
   enum: (name: string, invalidValue: any, path: Path = ROOT) => new EnumMismatch(path, name, invalidValue),
   unknownProperty: (path: Path) => new Violation(path, ValidatorType.UnknownProperty),
   unknownPropertyDenied: (path: Path) => new Violation(path, ValidatorType.UnknownPropertyDenied),
-  cycle: (path: Path) => new Violation(path, 'Cycle'),
 };
 
 export interface AssertTrue<In = unknown> {
@@ -349,10 +331,6 @@ export class ArrayValidator<Out = unknown> extends Validator<Out[]> {
       return Promise.reject(new TypeMismatch(path, 'array', value));
     }
     const convertedArray: Array<any> = [];
-    const cycleResult = ctx.registerObject(value, path, this, convertedArray);
-    if (cycleResult) {
-      return cycleResult;
-    }
 
     const promises: PromiseLike<any>[] = [];
     let violations: Violation[] = [];
@@ -429,27 +407,25 @@ export class OneOfValidator<Out = unknown> extends Validator<Out> {
   async validatePath(value: unknown, path: Path, ctx: ValidationContext): Promise<Out> {
     let matches = 0;
     let newValue: any = null;
-    const promises: PromiseLike<ValidationResult>[] = [];
+    const promises: PromiseLike<OneOfResult>[] = [];
     for (let i = 0; i < this.validators.length; i++) {
       promises[i] = this.validators[i].validatePath(value, path, ctx).then(
         result => {
           matches++;
           newValue = result;
-          return new ValidationResult([], result);
+          return { success: true };
         },
         error => {
-          return new ValidationResult(violationsOf(error));
+          return { violations: violationsOf(error) };
         }
       );
     }
-    const results = await Promise.allSettled(promises);
+    // Promise handler takes care of error handling, so Promise.all is safe
+    const results = await Promise.all(promises);
     if (matches === 1) {
       return Promise.resolve(newValue);
     }
-    return Promise.reject(defaultViolations.oneOf(matches, results.map(result => {
-      // Promise handler takes care of errors so this should never reject
-      return (result as PromiseFulfilledResult<any>).value;
-    }), path));
+    return Promise.reject(defaultViolations.oneOf(matches, results, path));
   }
 }
 

@@ -23,6 +23,12 @@ Or [`npm`](https://www.npmjs.com/):
 npm install @finnair/v-validation
 ```
 
+## Major Change in Version 8
+
+Drop (partial) support for cyclic data: There are cases where validation result (i.e. converted object) simply cannot retain cycles, e.g. the same object being validated with `V.oneOf` in different branches of the validator tree and resulting in different versions of the object. The rare use-cases for cyclic data simply do not justify the added complexity. 
+
+There is no special cycle detection, but if cyclic data is validated, the result will be an ErrorViolation due to "Maximum call stack size exceeded".
+
 ## Major Changes in Version 7
 ### New Features
 * **Typing**: Validators may have a specific input and especially output type.
@@ -223,7 +229,6 @@ type UserRegistration = VType<typeof UserRegistrationValidator>;
   - No need to register custom validators
 - All the validators are effectively immutable
 - Supports recursive types/validators (e.g. linked list)
-- Supports cyclic data: allow or disallow by configuration
 - TypeScript native implementation
 - Supports type inference that can be mixed with better readable custom types/interfaces
 
@@ -452,7 +457,7 @@ Polymorphims requires that objects are somehow tagged with a type used to valida
 one needs a _discriminator_ property or a function to infer object's type. This type is then used to actually validate the object.
 
 Polymorphic schemas are recursive in nature: 1) a child needs to know it's parents so that it may extend them and 2) unless the type information is natively bound to
-the object being validated, the parent needs to know it's children so that it may dispatch the validation to the correct child. As (direct) cyclic references are not possible, SchemaValidator is created with a callback function that supports referencing other models within the schema by name even before they are defined:
+the object being validated, the parent needs to know it's children so that it may dispatch the validation to the correct child validator. As (direct) cyclic references are not possible, SchemaValidator is created with a callback function that supports referencing other models within the schema by name even before they are defined:
 
 1. An object may extend other models by simply referencing them by name.
 2. Object properties can refer named models via `SchemaValidator.of('ModelName')`.
@@ -519,7 +524,7 @@ const schema = V.schema((schema: SchemaValidator) => ({
 
 ## Recursive Models
 
-Recursive model has a cyclic reference to itself. While a model cannot reference itself before it's declared, 
+Recursive model/type has a cyclic reference to itself. While a model cannot reference itself before it's declared, 
 we can wrap the call within a validator function. Type inference also cannot infer type from itself so we need 
 to define the target interface separately.
 
@@ -545,15 +550,7 @@ assertType<EqualTypes<ComparableType<VType<typeof validator>>, ComparableType<Re
 
 Another option is to use [`V.schema`](#schema).
 
-### Cyclic Data
-
-By default `V` returns an error if same object is referenced multiple times in the input data structure.
-While plain data cannot contain duplicates, as they require references, `V` allows these and even
-cyclic data by setting `ValidatorOptions.allowCycles = true`. The converted object returned by successful 
-validation retains identical reference structure compared to the original. _Note, however, that cycles 
-can only be connected in the converted result if the same validation rule is used on both ends._ 
-If different ObjectValidator rule is used, then the separate branches will result in a different copy of
-the converted object. In such case, it's better to use [Pure validation](#pure-validation).
+_NOTE, however that actually cyclic data is not supported._
 
 ## Map
 
@@ -599,7 +596,6 @@ Options are passed to to `validate` function as optional second argument.
 | ignoreUnknownEnumValues?: boolean | Unknown enum values allowed by default     |
 | warnLogger?: WarnLogger           | A reporter function for ignored Violations |
 | group?: Group                     | A group used to activate validation rules  |
-| allowCycles?: boolean             | Multiple references to same object allowed |
 
 \*) Note that this option has no effect in cases where additional properties are explicitly denied.
 
@@ -746,17 +742,3 @@ All `Violations` have following propertie in common:
 | Violation              | UnknownProperty       |                                 | Additional property that is denied by default (see ignoreUnknownProperties).        |
 | Violation              | UnknownPropertyDenied |                                 | Explicitly denied additional property.                                              |
 | DiscriminatorViolation | Discriminator         | expectedOneOf: string[]         | Invalid discriminator value: `expectedOneOf` is a list of known types.              |
-
-## Roadmap
-
-### Before 1.0 Release
-
-- <s>Remove jsonpath dependency as it doesn't work with webpack</s>
-- <s>Detect cyclic input</s>
-- <s>Use in real-life project. While `V` was originally built as a part of a critical large-scale real-life project, this library isn't an exact copy of that...</s>
-- Add JSDoc
-
-### Later
-
-- TypeScript type inference from V rules?
-- OpenAPI documentation generation from V rules?

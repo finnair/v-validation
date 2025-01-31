@@ -139,10 +139,6 @@ export class ObjectValidator<LocalType = unknown, InheritableType = LocalType> e
       convertedObject: {} as LocalType,
       violations: [],
     };
-    const cycleResult = ctx.registerObject<LocalType>(value, path, this, context.convertedObject);
-    if (cycleResult) {
-      return cycleResult;
-    }
     const propertyResults: PromiseLike<any>[] = [];
 
     for (const key in this.properties) {
