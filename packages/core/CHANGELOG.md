@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [7.3.0](https://github.com/finnair/v-validation/compare/v7.2.0...v7.3.0) (2025-01-31)
+
+### Features
+
+- `V.oneOf`reports all results in case of error + fixed cycle detection ([#130](https://github.com/finnair/v-validation/issues/130)) ([c1a2148](https://github.com/finnair/v-validation/commit/c1a214885a9ea0b438b19df7994bf59174b246a0))
+
 # [7.2.0](https://github.com/finnair/v-validation/compare/v7.1.0...v7.2.0) (2025-01-29)
 
 **Note:** Version bump only for package @finnair/v-validation

@@ -1,6 +1,6 @@
 {
   "name": "@finnair/v-validation-moment",
-  "version": "7.2.0",
+  "version": "7.3.0",
   "private": false,
   "description": "Moment validators",
   "main": "./dist/cjs/index.js",
@@ -46,7 +46,7 @@
     "moment": "^2.30.0"
   },
   "devDependencies": {
-    "@finnair/path": "^7.2.0",
-    "@finnair/v-validation": "^7.2.0"
+    "@finnair/path": "^7.3.0",
+    "@finnair/v-validation": "^7.3.0"
   }
 }
