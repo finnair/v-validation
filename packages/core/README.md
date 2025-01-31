@@ -551,9 +551,9 @@ By default `V` returns an error if same object is referenced multiple times in t
 While plain data cannot contain duplicates, as they require references, `V` allows these and even
 cyclic data by setting `ValidatorOptions.allowCycles = true`. The converted object returned by successful 
 validation retains identical reference structure compared to the original. _Note, however, that cycles 
-can only be connected in the converted result if the same validation rule is used on both ends._ If different
-ObjectValidator rule is used, then the separate branches will result in a different copy of the
-converted object. In such case, it's better to use [Pure validation](#pure-validation).
+can only be connected in the converted result if the same validation rule is used on both ends._ 
+If different ObjectValidator rule is used, then the separate branches will result in a different copy of
+the converted object. In such case, it's better to use [Pure validation](#pure-validation).
 
 ## Map
 
