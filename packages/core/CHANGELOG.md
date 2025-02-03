@@ -5,7 +5,9 @@ See [Conventional Commits](https://conventionalcommits.org) for commit guideline
 
 # [8.0.0](https://github.com/finnair/v-validation/compare/v7.3.0...v8.0.0) (2025-02-03)
 
-**Note:** Version bump only for package @finnair/v-validation
+### BREAKING CHANGES
+
+- drop (partial) support for cyclic data validation ([#131](https://github.com/finnair/v-validation/pull/131)) ([553d0de](https://github.com/finnair/v-validation/commit/553d0de557e9301823a2d687fef4b7f356da21bd))
 
 # [7.3.0](https://github.com/finnair/v-validation/compare/v7.2.0...v7.3.0) (2025-01-31)
 
@@ -27,13 +29,33 @@ See [Conventional Commits](https://conventionalcommits.org) for commit guideline
 
 ### Features
 
+- **Typing**: Validators may have a specific input and especially output type.
+- `V.objectType()` builder can be used to build an ObjectValidator with inferred type.
+- Validator (output/result) type can be acquired with `VType<typeof validator>`. 
+- Direct, chainable support for most used "next" validation rules, e.g. `V.number().min(1).max(2)`: 
+  - `V.string()` supports `notEmpty`, `notBlank`, `pattern` and `size`,
+  - `V.number()` supports `min`, `max` and `between`.
+- Use `Validator#getValid(input)` to get valid a valid value or an exception directly.
+- New strictly typed "optional" validators: 
+  - `V.optionalStrict<T>(validator: Validator<T>)`: `undefined | T` - `V.optional` allows also null,
+  - `V.nullable<T>(validator: Validator<T>)`: `null | T`,
+  - `V.optionalProperties<K, V>(keys: Validator<K>, values: Validator<V>)`: `Partial<Record<Key, Value>>`.
 - V.jsonBigInt() validator for JSON-safe JsonBigInt wrapper for BigInt ([#125](https://github.com/finnair/v-validation/issues/125)) ([b6ae653](https://github.com/finnair/v-validation/commit/b6ae65374d41436577d4e4b6c5ee148f8ad8635c))
 
-# [7.0.0](https://github.com/finnair/v-validation/compare/v7.0.0-alpha.9...v7.0.0) (2025-01-07)
+### BREAKING CHANGES
 
-### Features
-
-- V.jsonBigInt() validator for JSON-safe JsonBigInt wrapper for BigInt ([#125](https://github.com/finnair/v-validation/issues/125)) ([b6ae653](https://github.com/finnair/v-validation/commit/b6ae65374d41436577d4e4b6c5ee148f8ad8635c))
+- `V.string()` and some other validators do not support String object as input any more.
+ `isString()` function doesn't support String object any more.
+- `V.number()` does not support Number object as input any more.
+- `V.allOf()` requires that all results match.
+- Validators that accept multiple subvalidators (`V.optional`, `V.required`, `V.check`, `V.if`, `V.whenGroup`, `V.json` and `ObjectModel#next`) are combined using `V.compositionOf` instead of `V.allOf` as composition makes more sense in general. However, if there are multiple parents with next validators, those are still combined with `V.allOf` as they are not aware of each other.
+- `V.if` does not support "fall through" any more but rejects with NoMatchingCondition if no condition matches. Use `.else(V.any())` if "fall through" is desirable.
+- `V.whenGroup` does not support "fall through" any more but rejects with NoMatchingGroup if no condition matches. Use `.otherwise(V.any())` if "fall through" is desirable.
+- More straightforward internal architecture:
+  - internal Validator#validatePath returns now a Promise of valid value or reject of Violation(s) directly instead of ValidationResult,
+  - custom SyncPromise is removed in favor of Promise.resolve and reject,
+  - `ValidatorContext` no longer has `success`, `successPromise`, `failurePromise` and `promise` functions - use `Promise.resolve(value)` or `Promise.reject(new Violation(...))` with single violation or an array of violations. 
+- `V.mapType`, `V.toMapType` and `V.setType` now require `jsonSafe` boolean parameter for typing: JsonMap/JsonSet (true) or plain Map/Set (false).
 
 # [7.0.0-alpha.9](https://github.com/finnair/v-validation/compare/v7.0.0-alpha.8...v7.0.0-alpha.9) (2024-12-11)
 

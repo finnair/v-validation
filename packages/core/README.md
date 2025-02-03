@@ -23,11 +23,13 @@ Or [`npm`](https://www.npmjs.com/):
 npm install @finnair/v-validation
 ```
 
-## Major Change in Version 8
+## Major Changes in Version 8
 
 Drop (partial) support for cyclic data: There are cases where validation result (i.e. converted object) simply cannot retain cycles, e.g. the same object being validated with `V.oneOf` in different branches of the validator tree and resulting in different versions of the object. The rare use-cases for cyclic data simply do not justify the added complexity. 
 
 There is no special cycle detection, but if cyclic data is validated, the result will be an ErrorViolation due to "Maximum call stack size exceeded".
+
+The newly improved `V.oneOf` violations are further improved. Instead of `ValidationResult[]` the result is simplified to `OneOfResult[]` of either successes of error violations: `{ success: true } | { violations: Violation[] }`.
 
 ## Major Changes in Version 7
 ### New Features
