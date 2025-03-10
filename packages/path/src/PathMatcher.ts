@@ -11,9 +11,7 @@ export interface ResultCollector {
 export class PathMatcher {
   readonly allowGaps: boolean;
   private constructor(private readonly expressions: PathExpression[]) {
-    let allowGaps = false;
-    expressions.forEach(expression => (allowGaps = allowGaps || expression.allowGaps));
-    this.allowGaps = allowGaps;
+    this.allowGaps = expressions.some((expression) => expression.allowGaps);
     Object.freeze(this.expressions);
     Object.freeze(this);
   }

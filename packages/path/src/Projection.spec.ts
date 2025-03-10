@@ -56,6 +56,12 @@ describe('project', () => {
       expect(projection([PathMatcher.of('array')], [PathMatcher.of('array', 1), PathMatcher.of('array', AnyIndex, 'name')])(obj)).toEqual({
         array: [{ value: 123 }, { value: 789 }],
       }));
+    
+    test("always index does't leave gaps", () =>
+      expect(projection([], [PathMatcher.of(AnyProperty)], [PathMatcher.of('array', 1, 'name')])(obj)).toEqual({
+        array: [{ name: 'b' }],
+      })
+    );
 
     test('include only array', () => {
       expect(projection([PathMatcher.of('array')])(obj)).toEqual({
@@ -104,6 +110,11 @@ describe('project', () => {
     test('projection of PathMatcher instance', () => expect(projection([PathMatcher.of('foo')])).toBeDefined());
 
     test('object is not valid PathMatcher', () => expect(() => projection([{} as any])).toThrow());
+
+    test('always included property', () => 
+      expect(projection([PathMatcher.of('non-existing-property')], [PathMatcher.of(AnyProperty)], [PathMatcher.of('id')])(obj))
+        .toEqual({ id: 'id' })
+    );
   });
 
   describe('match', () => {
@@ -151,6 +162,12 @@ describe('project', () => {
       expect(projection.match(Path.of(1))).toBe(true);
       expect(projection.match(Path.of(1, 0))).toBe(false);
       expect(projection.match(Path.of(1, 1))).toBe(true);
+    });
+
+    test('always included property', () => {
+      const projection = Projection.of([PathMatcher.of('non-existing-property')], [PathMatcher.of(AnyProperty)], [PathMatcher.of('id')]);
+      expect(projection.match(Path.of('id'))).toBe(true);
+      expect(projection.match(Path.of('name'))).toBe(false);
     });
   });
 });
