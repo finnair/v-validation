@@ -15,20 +15,28 @@ export class Projection {
   }
 
   map<T>(input: T): Partial<T> {
+    // Clone input for safety: nothing invisible to JSON should be accessible!
+    let safeInput: any;
     let output: any;
     if (this.includes.length) {
-      input = jsonClone(input);
-      output = {};
-      this.includes.forEach(expression => include(input, expression, output));
+      safeInput = jsonClone(input);
+      output = Array.isArray(safeInput) ? [] : {};
+      this.includes.forEach(expression => include(safeInput, expression, output));
+    } else if (this.excludes.length) {
+      safeInput = jsonClone(input);
+      output = safeInput;
     } else {
-      output = this.excludes.length ? jsonClone(input) : input;
+      // TODO: This should always return a "json safe" projection of the input, but that is, 
+      // while small, still a backwards incompatible change...
+      return input; 
     }
-    if (this.excludes.length) {
-      this.excludes.forEach(expression => exclude(output, expression));
-    }
-    if (this.always.length) {
+
+    this.excludes.forEach(expression => exclude(output, expression));
+    
+    if (this.includes.length || this.excludes.length) {
       this.always.forEach(expression => include(input, expression, output));
     }
+
     if (this.allowGaps) {
       return removeGaps(output);
     }
@@ -36,20 +44,14 @@ export class Projection {
   }
 
   match(path: Path) {
-    if (this.always.length) {
-      if (this.always.some(expression => expression.prefixMatch(path))) {
-        return true;
-      }
+    if (this.always.some(expression => expression.prefixMatch(path))) {
+      return true;
     }
-    if (this.includes.length) {
-      if (!this.includes.some(expression => expression.partialMatch(path))) {
-        return false;
-      }
+    if (this.includes.length && !this.includes.some(expression => expression.partialMatch(path))) {
+      return false;
     }
-    if (this.excludes.length) {
-      if (this.excludes.some(expression => expression.prefixMatch(path))) {
-        return false;
-      }
+    if (this.excludes.some(expression => expression.prefixMatch(path))) {
+      return false;
     }
     return true;
   }
@@ -91,8 +93,9 @@ function jsonClone(value: any) {
 function removeGaps(value: any) {
   if (typeof value === 'object') {
     if (Array.isArray(value)) {
-      value = value.filter(item => item !== undefined);
-      value.forEach(removeGaps);
+      value = value
+        .filter(item => item !== undefined)
+        .map(removeGaps);
     } else {
       for (const key in value) {
         value[key] = removeGaps(value[key]);

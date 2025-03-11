@@ -28,8 +28,14 @@ describe('project', () => {
         },
       ],
     };
+    Object.freeze(obj);
+    Object.freeze(obj.object);
+    Object.freeze(obj.array);
+    Object.freeze(obj.array[0]);
+    Object.freeze(obj.array[1]);
+    Object.freeze(obj.array[2]);
 
-    test('Returns original object without includes or excludes', () => expect(projection(undefined, [])(obj)).toBe(obj));
+    test('Returns the original object without includes and excludes', () => expect(projection(undefined, [])(obj)).toBe(obj));
 
     test('Returns a clone with include', () => expect(projection([PathMatcher.of(AnyProperty)], undefined)(obj)).not.toBe(obj));
 
@@ -62,6 +68,10 @@ describe('project', () => {
         array: [{ name: 'b' }],
       })
     );
+
+    test("removing gaps retains nulls", () => {
+      expect(projection([PathMatcher.of(UnionMatcher.of(1, 2))])([null, null, null, null])).toEqual([null, null]);
+    })
 
     test('include only array', () => {
       expect(projection([PathMatcher.of('array')])(obj)).toEqual({
