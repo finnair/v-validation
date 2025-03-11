@@ -2,24 +2,41 @@ import { PathMatcher } from './PathMatcher.js';
 import { Path } from './Path.js';
 
 export class Projection {
-  private constructor(private readonly includes: PathMatcher[], private readonly excludes: PathMatcher[], private readonly allowGaps: boolean) {
+  private constructor(
+    private readonly includes: PathMatcher[], 
+    private readonly excludes: PathMatcher[], 
+    private readonly always: PathMatcher[],
+    private readonly allowGaps: boolean
+  ) {
     Object.freeze(this.includes);
     Object.freeze(this.excludes);
+    Object.freeze(this.always);
     Object.freeze(this);
   }
 
   map<T>(input: T): Partial<T> {
+    // Clone input for safety: nothing invisible to JSON should be accessible!
+    let safeInput: any;
     let output: any;
     if (this.includes.length) {
-      input = jsonClone(input);
-      output = {};
-      this.includes.forEach(expression => include(input, expression, output));
+      safeInput = jsonClone(input);
+      output = Array.isArray(safeInput) ? [] : {};
+      this.includes.forEach(expression => include(safeInput, expression, output));
+    } else if (this.excludes.length) {
+      safeInput = jsonClone(input);
+      output = safeInput;
     } else {
-      output = this.excludes.length ? jsonClone(input) : input;
+      // TODO: This should always return a "json safe" projection of the input, but that is, 
+      // while small, still a backwards incompatible change...
+      return input; 
     }
-    if (this.excludes.length) {
-      this.excludes.forEach(expression => exclude(output, expression));
+
+    this.excludes.forEach(expression => exclude(output, expression));
+    
+    if (this.includes.length || this.excludes.length) {
+      this.always.forEach(expression => include(input, expression, output));
     }
+
     if (this.allowGaps) {
       return removeGaps(output);
     }
@@ -27,29 +44,29 @@ export class Projection {
   }
 
   match(path: Path) {
-    if (this.includes.length) {
-      if (!this.includes.some(expression => expression.partialMatch(path))) {
-        return false;
-      }
+    if (this.always.some(expression => expression.prefixMatch(path))) {
+      return true;
     }
-    if (this.excludes.length) {
-      if (this.excludes.some(expression => expression.prefixMatch(path))) {
-        return false;
-      }
+    if (this.includes.length && !this.includes.some(expression => expression.partialMatch(path))) {
+      return false;
+    }
+    if (this.excludes.some(expression => expression.prefixMatch(path))) {
+      return false;
     }
     return true;
   }
 
-  static of(includes?: PathMatcher[], excludes?: PathMatcher[]) {
+  static of(includes?: PathMatcher[], excludes?: PathMatcher[], always?: PathMatcher[]) {
     includes = includes ? includes.map(validatePathMatcher) : [];
     excludes = excludes ? excludes.map(validatePathMatcher) : [];
-    const allowGaps = includes.some(expression => expression.allowGaps) || excludes.some(expression => expression.allowGaps);
-    return new Projection(includes, excludes, allowGaps);
+    always = always ? always.map(validatePathMatcher) : [];
+    const allowGaps = includes.some(expression => expression.allowGaps) || excludes.some(expression => expression.allowGaps) || always.some(expression => expression.allowGaps);
+    return new Projection(includes, excludes, always, allowGaps);
   }
 }
 
-export function projection<T>(includes?: PathMatcher[], excludes?: PathMatcher[]) {
-  const projection = Projection.of(includes, excludes);
+export function projection<T>(includes?: PathMatcher[], excludes?: PathMatcher[], always?: PathMatcher[]) {
+  const projection = Projection.of(includes, excludes, always);
   return (input: T): Partial<T> => projection.map(input);
 }
 
@@ -74,12 +91,15 @@ function jsonClone(value: any) {
 }
 
 function removeGaps(value: any) {
-  if (typeof value == 'object') {
+  if (typeof value === 'object') {
     if (Array.isArray(value)) {
-      value = value.filter(item => item !== undefined);
-    }
-    for (const key in value) {
-      value[key] = removeGaps(value[key]);
+      value = value
+        .filter(item => item !== undefined)
+        .map(removeGaps);
+    } else {
+      for (const key in value) {
+        value[key] = removeGaps(value[key]);
+      }
     }
   }
   return value;
