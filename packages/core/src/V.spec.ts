@@ -25,7 +25,7 @@ import {
 } from './validators.js';
 import { ObjectValidator, ObjectModel, VInheritableType } from './objectValidator.js';
 import { V } from './V.js';
-import { Path } from '@finnair/path';
+import { jsonClone, Path } from '@finnair/path';
 import { expectUndefined, expectValid, expectViolations, verifyValid } from './testUtil.spec.js';
 import { fail } from 'assert';
 import { EqualTypes, ComparableType, assertType } from './typing.js';
@@ -189,7 +189,7 @@ describe('strings', () => {
     test('convert to string', () => expectValid(123, V.toString().next(V.pattern('^[0-9]+$')), '123'));
 
     test('violation toJSON', () => {
-      expect(JSON.parse(JSON.stringify(defaultViolations.pattern(/[A-Z]+/i, '123')))).toEqual({
+      expect(jsonClone(defaultViolations.pattern(/[A-Z]+/i, '123'))).toEqual({
         path: '$',
         pattern: '/[A-Z]+/i',
         type: 'Pattern',
@@ -1873,7 +1873,7 @@ describe('Set', () => {
     const set1 = (await validator.validate(new Set(setArray))).getValue();
     expect(set1).toBeInstanceOf(JsonSet);
 
-    const parsedArray = JSON.parse(JSON.stringify(set1));
+    const parsedArray = jsonClone(set1);
     expect(parsedArray).toEqual(setArray);
   });
 

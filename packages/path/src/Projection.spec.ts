@@ -35,7 +35,11 @@ describe('project', () => {
     Object.freeze(obj.array[1]);
     Object.freeze(obj.array[2]);
 
-    test('Returns the original object without includes and excludes', () => expect(projection(undefined, [])(obj)).toBe(obj));
+    test('Returns the a new object without includes and excludes', () => {
+      const result = projection(undefined, [])(obj);
+      expect(result).not.toBe(obj);
+      expect(result).toEqual(obj);
+    });
 
     test('Returns a clone with include', () => expect(projection([PathMatcher.of(AnyProperty)], undefined)(obj)).not.toBe(obj));
 
