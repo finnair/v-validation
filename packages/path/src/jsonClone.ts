@@ -4,7 +4,7 @@ export function jsonClone(input: any, replacer?: JsonReplacer) {
   return _jsonClone('', { '': input }, replacer);
 }
 
-function _jsonClone(key: string, holder: any, replacer?: JsonReplacer) {
+function _replaceValue(key: string, holder: any, replacer?: JsonReplacer) {
   let value = holder[key];
   if (typeof value?.toJSON === 'function') {
     value = value.toJSON(key);
@@ -12,6 +12,11 @@ function _jsonClone(key: string, holder: any, replacer?: JsonReplacer) {
   if (typeof replacer === 'function') {
     value = replacer.call(holder, key, value);
   }
+  return value;
+}
+
+function _jsonClone(key: string, holder: any, replacer?: JsonReplacer) {
+  const value = _replaceValue(key, holder, replacer);
   if (value && typeof value === 'object') {
     let clone: any;
     if (Array.isArray(value)) {
