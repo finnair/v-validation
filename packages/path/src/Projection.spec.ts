@@ -129,6 +129,16 @@ describe('project', () => {
       expect(projection([PathMatcher.of('non-existing-property')], [PathMatcher.of(AnyProperty)], [PathMatcher.of('id')])(obj))
         .toEqual({ id: 'id' })
     );
+
+    describe('projection map input should be non-null object', () => {
+      test('toJSON => null', () => {
+        expect(() => projection()({ toJSON() { return null; } })).toThrow();
+      });
+  
+      test('replacer => string', () => {
+        expect(() => projection(undefined, undefined, undefined, () => 'string')({})).toThrow();
+      });
+    });
   });
 
   describe('match', () => {

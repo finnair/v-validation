@@ -109,4 +109,28 @@ describe('jsonClone', () => {
   test('bigint throws an exception', () => {
     expect(() => jsonClone(1n)).toThrow("BigInt value can't be serialized in JSON");
   });
+
+  test('jsonClone of undefined is undefined', () => {
+    expect(jsonClone(undefined)).toBeUndefined();
+  });
+
+  test('jsonClone of null is null', () => {
+    expect(jsonClone(null)).toBe(null);
+  });
+
+  test('jsonClone of function is undefined', () => {
+    expect(jsonClone(JSON.stringify)).toBeUndefined();
+  });
+
+  test('jsonClone of symbol is undefined', () => {
+    expect(jsonClone(ignoredSymbol)).toBeUndefined();
+  });
+
+  test('jsonClone of number is number', () => {
+    expect(jsonClone(123)).toBe(123);
+  });
+
+  test('jsonClone of boolean is boolean', () => {
+    expect(jsonClone(true)).toBe(true);
+  });
 });
