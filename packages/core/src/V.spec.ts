@@ -1017,7 +1017,6 @@ describe('object localNext', () => {
 });
 
 describe('Date', () => {
-  const now = new Date();
   const validator = V.objectType()
     .properties({
       date: V.date(),
@@ -1030,7 +1029,7 @@ describe('Date', () => {
 
   test('convert string to Date', () => expectValid(validDateString, V.date(), validDate));
 
-  test('Date instance is valid', () => expectValid(now, V.date()));
+  test('Date instance is valid', () => expectValid(new Date(), V.date()));
 
   test('boolean is invalid', () => expectViolations(true, V.date(), defaultViolations.date(true)));
 

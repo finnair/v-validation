@@ -6,7 +6,7 @@ import { VersionInfo, VersionInfoConfig } from './VersionInfo.js';
 describe('VersionInfo', () => {
   const a: any = Object.freeze({
     id: 1234,
-    _timestamp: new Date(2024, 8, 10),
+    _timestamp: new Date(Date.UTC(2024, 8, 10)),
     name: Object.freeze({
       first: 'first',
     }),
@@ -17,7 +17,7 @@ describe('VersionInfo', () => {
   const b: any = Object.freeze({
     id: 12345,
     // _timestamp change is ignored
-    _timestamp: new Date(2024, 8, 12),
+    _timestamp: new Date(Date.UTC(2024, 8, 12)),
     name: Object.freeze({
       first: 'second',
       last: 'last',
@@ -110,7 +110,7 @@ describe('VersionInfo', () => {
   });
 
   test('no changes', () => {
-    const c = {...b, _timestamp: new Date(2024, 8, 13) };
+    const c = {...b, _timestamp: new Date(Date.UTC(2024, 8, 13)) };
 
     const version = new VersionInfo(c, b, config);
 
