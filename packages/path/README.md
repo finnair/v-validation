@@ -22,6 +22,13 @@ Or [`npm`](https://www.npmjs.com/):
 npm install @finnair/path
 ```
 
+## New in Version 9
+
+* BREAKING CHANGE: Projection will always return JSON-compliant clone of the input, not the input itself even if there are no include/exclude/always
+* Projection supports also "always" paths to specify which paths should be always included regardless of includes and excludes
+* Projection supports a replacer function as specified by `JSON.stringify`
+* New `jsonClone` method to create a JSON compliant clone of the input 
+
 ## Use Case Examples
 
 ### Validation 
@@ -34,19 +41,32 @@ Analyze changes and trigger logic based on what has changed (see [`diff`](../dif
 
 ### Include/Exclude Projection
 
-While GraphQL is all about projections, something similar can also be implemented in a REST API with include/exclude parameters. `Projection` and `parsePathMatcher` function provides means to process results safely based on such a user input. This is, of course, very simplified projection compared to what GraphQL has to offer, but it's also... well, simpler.
+While GraphQL is all about projections, something similar can also be implemented in a REST API with include, exclude and always parameters. `Projection` and `parsePathMatcher` function provides means to process results safely based on such a user input. This is, of course, very simplified projection compared to what GraphQL has to offer, but it's also... well, simpler.
 
 Projection can also be used to optimize fetching expensive relations as it also supports matching Paths and not just mapping actual values:
 
 ```typescript
 const resource = fetchResult(request);
-const projection = Projection.of(parseIncludes(request), parseExcludes(request));
+const projection = Projection.of(
+  parseIncludes(request), 
+  parseExcludes(request), 
+  [PathMatcher.of('id')], // id is always included
+  replacer // optional JSON.stringify replacer function
+);
 const result = {
   ...resource,
-  veryExpensiveRelation: projection.match(Path.of('veryExpensiveRelation')) ? fetchVeryExpensiveRelation(resource) : undefined,
+  veryExpensiveRelation: projection.match(Path.of('veryExpensiveRelation')) 
+    ? fetchVeryExpensiveRelation(resource) 
+    : undefined,
 };
 return projection.map(result);
 ```
+
+NOTE: Projection cannot be used to access anything that is not visible to JSON. Input is always converted to JSON compliant model before any processing. 
+
+### JSON Clone
+
+As safe include/exclude requires JSON conversion, this library also contains a handy `jsonClone` method that can be used to e.g. normalize input. 
 
 ## Using Path
 
