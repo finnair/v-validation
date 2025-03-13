@@ -27,7 +27,7 @@ npm install @finnair/path
 * BREAKING CHANGE: Projection will always return JSON-compliant clone of the input, not the input itself even if there are no include/exclude/always
 * Projection supports also "always" paths to specify which paths should be always included regardless of includes and excludes
 * Projection supports a replacer function as specified by `JSON.stringify`
-* New `jsonClone` method to create a JSON compliant clone of the input 
+* New `jsonClone` method to create a JSON compliant clone of the input
 
 ## Use Case Examples
 
@@ -66,7 +66,7 @@ NOTE: Projection cannot be used to access anything that is not visible to JSON. 
 
 ### JSON Clone
 
-As safe include/exclude requires JSON conversion, this library also contains a handy `jsonClone` method that can be used to e.g. normalize input. 
+As safe include/exclude requires JSON conversion, this library also contains a handy `jsonClone` method that can be used to e.g. normalize input. This method results in same as `JSON.parse(JSON.stringify(input))` but without actual serialization and parsing involved. It respects `toJSON` methods and supports `replacer` function.
 
 ## Using Path
 

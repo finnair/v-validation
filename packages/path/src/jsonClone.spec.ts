@@ -6,7 +6,7 @@ class MyClass {
   toJSON() {
     return {
       visibleValue: this.visibleValue,
-      date: new Date(2026, 3, 12, 1, 2, 3, 4),
+      date: new Date(Date.UTC(2026, 3, 12, 1, 2, 3, 4)),
       bigint: 123n,
     };
   }
@@ -21,7 +21,7 @@ describe('jsonClone', () => {
     ignoredSymbol,
     true,
     JSON.stringify,
-    new Date(2027, 4, 12, 1, 2, 3, 4)
+    new Date(Date.UTC(2027, 4, 12, 1, 2, 3, 4))
   ];
   (<any>funkyArray).ignoredProperty = 'ignoredProperty';
 
