@@ -35,7 +35,11 @@ describe('project', () => {
     Object.freeze(obj.array[1]);
     Object.freeze(obj.array[2]);
 
-    test('Returns the original object without includes and excludes', () => expect(projection(undefined, [])(obj)).toBe(obj));
+    test('Returns the a new object without includes and excludes', () => {
+      const result = projection(undefined, [])(obj);
+      expect(result).not.toBe(obj);
+      expect(result).toEqual(obj);
+    });
 
     test('Returns a clone with include', () => expect(projection([PathMatcher.of(AnyProperty)], undefined)(obj)).not.toBe(obj));
 
@@ -125,6 +129,16 @@ describe('project', () => {
       expect(projection([PathMatcher.of('non-existing-property')], [PathMatcher.of(AnyProperty)], [PathMatcher.of('id')])(obj))
         .toEqual({ id: 'id' })
     );
+
+    describe('projection map input should be non-null object', () => {
+      test('toJSON => null', () => {
+        expect(() => projection()({ toJSON() { return null; } })).toThrow();
+      });
+  
+      test('replacer => string', () => {
+        expect(() => projection(undefined, undefined, undefined, () => 'string')({})).toThrow();
+      });
+    });
   });
 
   describe('match', () => {

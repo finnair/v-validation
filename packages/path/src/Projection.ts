@@ -1,34 +1,39 @@
 import { PathMatcher } from './PathMatcher.js';
 import { Path } from './Path.js';
+import { JsonReplacer, JsonValue, jsonClone } from './jsonClone.js';
 
 export class Projection {
+  private readonly allowGaps: boolean;
   private constructor(
     private readonly includes: PathMatcher[], 
     private readonly excludes: PathMatcher[], 
     private readonly always: PathMatcher[],
-    private readonly allowGaps: boolean
+    private readonly replacer?: JsonReplacer
   ) {
+    this.allowGaps = this.includes.some(expression => expression.allowGaps) 
+    || this.excludes.some(expression => expression.allowGaps) 
+    || this.always.some(expression => expression.allowGaps);
+    
     Object.freeze(this.includes);
     Object.freeze(this.excludes);
     Object.freeze(this.always);
     Object.freeze(this);
   }
 
-  map<T>(input: T): Partial<T> {
+  map<T extends object>(input: T): JsonValue {
     // Clone input for safety: nothing invisible to JSON should be accessible!
-    let safeInput: any;
-    let output: any;
+    let safeInput = jsonClone(input, this.replacer);
+    if (typeof safeInput !== 'object' || safeInput === null) {
+      throw new Error(`Expected JSON of the input to be non-null object, got ${safeInput}`);
+    }
+    let output: JsonValue;
     if (this.includes.length) {
-      safeInput = jsonClone(input);
       output = Array.isArray(safeInput) ? [] : {};
       this.includes.forEach(expression => include(safeInput, expression, output));
     } else if (this.excludes.length) {
-      safeInput = jsonClone(input);
       output = safeInput;
     } else {
-      // TODO: This should always return a "json safe" projection of the input, but that is, 
-      // while small, still a backwards incompatible change...
-      return input; 
+      return safeInput; 
     }
 
     this.excludes.forEach(expression => exclude(output, expression));
@@ -56,18 +61,18 @@ export class Projection {
     return true;
   }
 
-  static of(includes?: PathMatcher[], excludes?: PathMatcher[], always?: PathMatcher[]) {
+  static of(includes?: PathMatcher[], excludes?: PathMatcher[], always?: PathMatcher[], replacer?: JsonReplacer) {
     includes = includes ? includes.map(validatePathMatcher) : [];
     excludes = excludes ? excludes.map(validatePathMatcher) : [];
     always = always ? always.map(validatePathMatcher) : [];
-    const allowGaps = includes.some(expression => expression.allowGaps) || excludes.some(expression => expression.allowGaps) || always.some(expression => expression.allowGaps);
-    return new Projection(includes, excludes, always, allowGaps);
+    
+    return new Projection(includes, excludes, always, replacer);
   }
 }
 
-export function projection<T>(includes?: PathMatcher[], excludes?: PathMatcher[], always?: PathMatcher[]) {
-  const projection = Projection.of(includes, excludes, always);
-  return (input: T): Partial<T> => projection.map(input);
+export function projection(includes?: PathMatcher[], excludes?: PathMatcher[], always?: PathMatcher[], replacer?: JsonReplacer) {
+  const projection = Projection.of(includes, excludes, always, replacer);
+  return <T extends object>(input: T): JsonValue => projection.map(input);
 }
 
 function validatePathMatcher(value: PathMatcher): PathMatcher {
@@ -84,10 +89,6 @@ function include(input: any, matcher: PathMatcher, output: any) {
 
 function exclude(output: any, matcher: PathMatcher) {
   matcher.find(output, (path: Path) => path.unset(output));
-}
-
-function jsonClone(value: any) {
-  return JSON.parse(JSON.stringify(value));
 }
 
 function removeGaps(value: any) {
