@@ -13,6 +13,10 @@ See [Conventional Commits](https://conventionalcommits.org) for commit guideline
 
 - always included properties for Projection ([#132](https://github.com/finnair/v-validation/issues/132)) ([db473ac](https://github.com/finnair/v-validation/commit/db473ac983b416165a9f67b8282c0df10400fa4f))
 
+### BREAKING CHANGES
+
+- optimized projection and jsonClone function #133 ([#133](https://github.com/finnair/v-validation/pull/133)) ([44614f7](https://github.com/finnair/v-validation/commit/44614f7f2538c4ff96f776b7681d910db16b96d8))
+
 # [8.0.0](https://github.com/finnair/v-validation/compare/v7.3.0...v8.0.0) (2025-02-03)
 
 **Note:** Version bump only for package @finnair/path
