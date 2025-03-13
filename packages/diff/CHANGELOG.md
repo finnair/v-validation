@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [9.0.0](https://github.com/finnair/v-validation/compare/v8.0.0...v9.0.0) (2025-03-13)
+
+### Bug Fixes
+
+- date instantiation in tests ([#134](https://github.com/finnair/v-validation/issues/134)) ([276954a](https://github.com/finnair/v-validation/commit/276954a4d4a0b397364109b4411fdd7e3c13a133))
+
 # [8.0.0](https://github.com/finnair/v-validation/compare/v7.3.0...v8.0.0) (2025-02-03)
 
 **Note:** Version bump only for package @finnair/diff

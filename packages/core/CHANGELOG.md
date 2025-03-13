@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [9.0.0](https://github.com/finnair/v-validation/compare/v8.0.0...v9.0.0) (2025-03-13)
+
+### Bug Fixes
+
+- date instantiation in tests ([#134](https://github.com/finnair/v-validation/issues/134)) ([276954a](https://github.com/finnair/v-validation/commit/276954a4d4a0b397364109b4411fdd7e3c13a133))
+
 # [8.0.0](https://github.com/finnair/v-validation/compare/v7.3.0...v8.0.0) (2025-02-03)
 
 ### BREAKING CHANGES
@@ -31,12 +37,12 @@ See [Conventional Commits](https://conventionalcommits.org) for commit guideline
 
 - **Typing**: Validators may have a specific input and especially output type.
 - `V.objectType()` builder can be used to build an ObjectValidator with inferred type.
-- Validator (output/result) type can be acquired with `VType<typeof validator>`. 
-- Direct, chainable support for most used "next" validation rules, e.g. `V.number().min(1).max(2)`: 
+- Validator (output/result) type can be acquired with `VType<typeof validator>`.
+- Direct, chainable support for most used "next" validation rules, e.g. `V.number().min(1).max(2)`:
   - `V.string()` supports `notEmpty`, `notBlank`, `pattern` and `size`,
   - `V.number()` supports `min`, `max` and `between`.
 - Use `Validator#getValid(input)` to get valid a valid value or an exception directly.
-- New strictly typed "optional" validators: 
+- New strictly typed "optional" validators:
   - `V.optionalStrict<T>(validator: Validator<T>)`: `undefined | T` - `V.optional` allows also null,
   - `V.nullable<T>(validator: Validator<T>)`: `null | T`,
   - `V.optionalProperties<K, V>(keys: Validator<K>, values: Validator<V>)`: `Partial<Record<Key, Value>>`.
@@ -45,7 +51,7 @@ See [Conventional Commits](https://conventionalcommits.org) for commit guideline
 ### BREAKING CHANGES
 
 - `V.string()` and some other validators do not support String object as input any more.
- `isString()` function doesn't support String object any more.
+  `isString()` function doesn't support String object any more.
 - `V.number()` does not support Number object as input any more.
 - `V.allOf()` requires that all results match.
 - Validators that accept multiple subvalidators (`V.optional`, `V.required`, `V.check`, `V.if`, `V.whenGroup`, `V.json` and `ObjectModel#next`) are combined using `V.compositionOf` instead of `V.allOf` as composition makes more sense in general. However, if there are multiple parents with next validators, those are still combined with `V.allOf` as they are not aware of each other.
@@ -54,7 +60,7 @@ See [Conventional Commits](https://conventionalcommits.org) for commit guideline
 - More straightforward internal architecture:
   - internal Validator#validatePath returns now a Promise of valid value or reject of Violation(s) directly instead of ValidationResult,
   - custom SyncPromise is removed in favor of Promise.resolve and reject,
-  - `ValidatorContext` no longer has `success`, `successPromise`, `failurePromise` and `promise` functions - use `Promise.resolve(value)` or `Promise.reject(new Violation(...))` with single violation or an array of violations. 
+  - `ValidatorContext` no longer has `success`, `successPromise`, `failurePromise` and `promise` functions - use `Promise.resolve(value)` or `Promise.reject(new Violation(...))` with single violation or an array of violations.
 - `V.mapType`, `V.toMapType` and `V.setType` now require `jsonSafe` boolean parameter for typing: JsonMap/JsonSet (true) or plain Map/Set (false).
 
 # [7.0.0-alpha.9](https://github.com/finnair/v-validation/compare/v7.0.0-alpha.8...v7.0.0-alpha.9) (2024-12-11)
