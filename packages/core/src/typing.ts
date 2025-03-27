@@ -1,9 +1,9 @@
 
 type KeysOfType<T, SelectedType> = {
-  [key in keyof T]: SelectedType extends T[key] ? key : never;
+  [key in keyof T]: T[key] extends SelectedType ? key : never;
 }[keyof T];
 
-type OptionalProperties<T> = Partial<Pick<T, KeysOfType<T, undefined>>>;
+type OptionalProperties<T> = Pick<T, KeysOfType<T, undefined>>;
 
 type RequiredProperties<T> = Omit<T, KeysOfType<T, undefined>>;
 
