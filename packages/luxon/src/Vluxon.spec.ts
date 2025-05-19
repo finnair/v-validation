@@ -207,6 +207,11 @@ describe('Vluxon', () => {
       expectValid(now, Vluxon.localDate(), new LocalDateLuxon(now));
     });
 
+    test('instances are accepted across context boundaries', () => {
+      const now = DateTime.now();
+      expectValid({ dateTime: now}, Vluxon.localDate(), new LocalDateLuxon(now));
+    });
+
     test('wrap', () => {
       const luxon = new LocalDateLuxon(DateTime.utc(2022, 1, 15, 1, 2, 3));
       const result = luxon.wrap(dt => dt.plus(Duration.fromObject({ month: 1 })));
@@ -551,6 +556,11 @@ describe('Vluxon', () => {
     test('any valid DateTime is valid and wrapped', () => {
       const now = DateTime.now();
       expectValid(now, Vluxon.dateTimeMillis(), new DateTimeMillisLuxon(now));
+    });
+
+    test('instances are accepted across context boundaries', () => {
+      const now = DateTime.now();
+      expectValid({ dateTime: now}, Vluxon.dateTimeMillis(), new DateTimeMillisLuxon(now));
     });
 
     test('wrap', () => {
