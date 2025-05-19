@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [9.1.0](https://github.com/finnair/v-validation/compare/v9.0.0...v9.1.0) (2025-05-19)
+
+### Features
+
+- support Luxon instances across context boundaries ([#136](https://github.com/finnair/v-validation/issues/136)) ([38ad711](https://github.com/finnair/v-validation/commit/38ad711dd8f64e36b2c2736fda7a8638ba26e059))
+
 # [9.0.0](https://github.com/finnair/v-validation/compare/v8.0.0...v9.0.0) (2025-03-13)
 
 **Note:** Version bump only for package @finnair/v-validation-luxon

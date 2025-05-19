@@ -3,6 +3,10 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [9.1.0](https://github.com/finnair/v-validation/compare/v9.0.0...v9.1.0) (2025-05-19)
+
+**Note:** Version bump only for package @finnair/v-validation-moment
+
 # [9.0.0](https://github.com/finnair/v-validation/compare/v8.0.0...v9.0.0) (2025-03-13)
 
 **Note:** Version bump only for package @finnair/v-validation-moment
