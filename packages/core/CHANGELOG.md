@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [9.1.1](https://github.com/finnair/v-validation/compare/v9.1.0...v9.1.1) (2025-05-19)
+
+### Bug Fixes
+
+- fix and simplify ComparableType ([#137](https://github.com/finnair/v-validation/issues/137)) ([2e4e321](https://github.com/finnair/v-validation/commit/2e4e32169af224c66e57f13eef44431066b4c2b6))
+
 # [9.1.0](https://github.com/finnair/v-validation/compare/v9.0.0...v9.1.0) (2025-05-19)
 
 **Note:** Version bump only for package @finnair/v-validation
