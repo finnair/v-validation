@@ -10,7 +10,7 @@ export abstract class LuxonDateTime {
       throw new Error('invalid input (null or undefined), expected DateTime or LuxonDateTime');
     } else if (input instanceof LuxonDateTime) {
       this.dateTime = this.normalize(input.dateTime);
-    } else if (input instanceof DateTime) {
+    } else if (DateTime.isDateTime(input)) {
       if (!input.isValid) {
         throw new Error('Invalid DateTime: ' + input.invalidExplanation);
       }

@@ -64,6 +64,9 @@ export class LuxonValidator<Out extends LuxonDateTime> extends Validator<Out> {
     if (value instanceof this.params.proto) {
       return Promise.resolve(value);
     }
+    if (DateTime.isDateTime(value?.dateTime)) {
+      return Promise.resolve(new this.params.proto(value.dateTime));
+    }
     return this.dateTimeValidator.validatePath(value, path, ctx).then(
       (result: DateTime) => {
         return new this.params.proto(result);
