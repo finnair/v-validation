@@ -459,6 +459,17 @@ describe('objects', () => {
     });
   });
 
+  test('unknown', async () => {
+    const validator = V.objectType().properties({ unknown: V.unknown() }).build();
+    type T = { unknown: unknown };
+    const value: T = { unknown: { foo: 'bar' } }
+    
+    assertType<EqualTypes<ComparableType<VType<typeof validator>>, ComparableType<T>>>(true);
+    const valid = await validator.getValid(value);
+
+    expect(valid).toEqual(value);
+  });
+
   test('input is not modified', async () => {
     const validator = V.check(
       V.object({

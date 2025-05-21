@@ -55,6 +55,7 @@ import {
   OptionalUndefinedValidator,
   NullableValidator,
   JsonBigIntValidator,
+  UnknownValidator,
 } from './validators.js';
 import {ObjectModel, ObjectValidator, ObjectNormalizer } from './objectValidator.js';
 import { ObjectValidatorBuilder } from './objectValidatorBuilder.js';
@@ -92,6 +93,8 @@ export const V = {
   ignore: () => ignoreValidator,
 
   any: <InOut = any>() => new AnyValidator<InOut>(),
+
+  unknown: <InOut = unknown>() => new UnknownValidator<InOut>(),
 
   check: <Out, In, T1, T2, T3, T4, T5>(...validators: CompositionParameters<Out, In, T1, T2, T3, T4, T5>) => 
     new CheckValidator<In>(maybeCompositionOf(...validators)),
