@@ -3,6 +3,16 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [9.2.0](https://github.com/finnair/v-validation/compare/v9.1.1...v9.2.0) (2025-05-21)
+
+### Bug Fixes
+
+- type-checking optional/undefined properties ([#138](https://github.com/finnair/v-validation/issues/138)) ([ac0ddec](https://github.com/finnair/v-validation/commit/ac0ddec3e2d61410bf4e5bb2ae148aa24f338c28))
+
+### Features
+
+- V.unknown() validator accepts any input but results in unknown ([#139](https://github.com/finnair/v-validation/issues/139)) ([046e543](https://github.com/finnair/v-validation/commit/046e5438aa43f425c1369aaa46e56f21b1ce1ca9))
+
 ## [9.1.1](https://github.com/finnair/v-validation/compare/v9.1.0...v9.1.1) (2025-05-19)
 
 ### Bug Fixes
