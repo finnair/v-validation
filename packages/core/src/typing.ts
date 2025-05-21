@@ -1,17 +1,36 @@
+/**
+ * Match both optional and "x | undefined" valued keys.
+ */
+export type OptionalKeys<T> =  Exclude<{
+  [K in keyof T]: undefined extends T[K] ? K : never;
+}[keyof T], undefined>;
 
-type KeysOfType<T, SelectedType> = {
-  [key in keyof T]: T[key] extends SelectedType ? key : never;
-}[keyof T];
+type OptionalProperties<T> = Pick<T, OptionalKeys<T>>;
+type RequiredProperties<T> = Omit<T, OptionalKeys<T>>;
 
-type OptionalProperties<T> = Pick<T, KeysOfType<T, undefined>>;
+type Optional<T> = { 'Optional<T>': T };
 
-type RequiredProperties<T> = Omit<T, KeysOfType<T, undefined>>;
+/**
+ * Wrap optional/undefined properties with required Optional<T> as TS only requires 
+ * that required properties match for types to be compatible.
+ */
+type ComparableOptional<T> = T extends object
+  ? { [K in keyof T]-?:  Optional<ComparableType<T[K]>> }
+  : T;
+
+type ComparableRequired<T> = T extends object
+  ? { [K in keyof T]:  ComparableType<T[K]> }
+  : T;
+
 
 export type UndefinedAsOptionalProperties<T> = RequiredProperties<T> & Partial<OptionalProperties<T>>;
 
-export type ComparableType<T> = T extends object ? Required<{
-    [K in keyof T]: ComparableType<Exclude<T[K], undefined>>;
-}>: Exclude<T, undefined>;
+/**
+ * Wrap all optional/undefined properties with Optional<T> recursively for strict type check
+ */
+export type ComparableType<T> = T extends object 
+  ? ComparableRequired<RequiredProperties<T>> & ComparableOptional<OptionalProperties<T>>
+  : T;
 
 /**
  * Verify mutual extensibility. When using this with both types wrapped in`ComparableType`, you get 
