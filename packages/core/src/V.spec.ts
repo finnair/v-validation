@@ -28,7 +28,7 @@ import { V } from './V.js';
 import { jsonClone, Path } from '@finnair/path';
 import { expectUndefined, expectValid, expectViolations, verifyValid } from './testUtil.spec.js';
 import { fail } from 'assert';
-import { EqualTypes, ComparableType, assertType } from './typing.js';
+import { EqualTypes, ComparableType, assertType, OptionalKeys } from './typing.js';
 
 const ROOT = Path.ROOT,
   index = Path.index,
@@ -304,6 +304,10 @@ describe('objects', () => {
   });
 
   describe('typing', () => {
+    test('OptionalKeys match both optional and undefined keys', () => {
+      type T = { optional?: string, undef: string | undefined, required: string };
+      assertType<EqualTypes<OptionalKeys<T>, 'optional' | 'undef'>>(true)
+    });
     describe('simple type', () => {
       const validator = V.objectType()
         .properties({
@@ -318,6 +322,17 @@ describe('objects', () => {
           ComparableType<VType<typeof validator>>,
           // @ts-expect-error
           ComparableType<{
+            optional?: string;
+          }>
+        >;
+      });
+      test('required property is optional', () => {
+        // @ts-ignore
+        type v = EqualTypes<
+          // @ts-expect-error
+          ComparableType<VType<typeof validator>>,
+          ComparableType<{
+            required?: string;
             optional?: string;
           }>
         >;
@@ -340,6 +355,17 @@ describe('objects', () => {
           ComparableType<{
             required: string;
             optional?: number;
+          }>
+        >;
+      });
+      test('optional property is required', () => {
+        // @ts-ignore
+        type v = EqualTypes<
+          // @ts-expect-error
+          ComparableType<VType<typeof validator>>,
+          ComparableType<{
+            required: string;
+            optional: string;
           }>
         >;
       });
@@ -431,7 +457,7 @@ describe('objects', () => {
           }>
         >;
       });
-      test('required.optional should be required', () => {
+      test('required.optional is not optional', () => {
         // @ts-ignore
         type v = EqualTypes<
           // @ts-expect-error 
@@ -439,11 +465,28 @@ describe('objects', () => {
           ComparableType<{
             required: {
               required: string;
-              optional?: number;
+              optional: string;
             }
             optional?: {
               required: string;
-              optional: string;
+              optional?: string;
+            }
+          }>
+        >;
+      });
+      test('optional.required is not required', () => {
+        // @ts-ignore
+        type v = EqualTypes<
+          // @ts-expect-error 
+          ComparableType<VType<typeof validator>>,
+          ComparableType<{
+            required: {
+              required: string;
+              optional?: string;
+            }
+            optional?: {
+              required?: string;
+              optional?: string;
             }
           }>
         >;
