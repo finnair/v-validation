@@ -735,6 +735,12 @@ export class AnyValidator<InOut = any> extends Validator<InOut> {
   }
 }
 
+export class UnknownValidator<InOut = unknown> extends Validator<InOut> {
+  validatePath(value: InOut, path: Path, ctx: ValidationContext): PromiseLike<InOut> {
+    return Promise.resolve(value);
+  }
+}
+
 export function isString(value: any): value is string {
   return typeof value === 'string';
 }
