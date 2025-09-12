@@ -1,4 +1,6 @@
 # WARNING! This is the original grammar, but the result has been modified for typescript and ESM!
+# Dead code fix RegExp replace: \(lexer\.has\("[a-zA-Z]+"\) \? \{type: "([a-zA-Z]+)"\} : [a-zA-Z]+\) => {type: "$1"}
+# Unused id-function coverage: /* v8 ignore next */
 
 # Usage: https://nearley.js.org/
 @preprocessor typescript
@@ -11,11 +13,11 @@ const lexer = moo.compile({
   qqString: /"(?:\\["bfnrt\/\\]|\\u[a-fA-F0-9]{4}|[^"\\])*?"/,
   integer: /[0-9]+/,
   property: /[a-zA-Z_][a-zA-Z0-9_]*/,
-  comma: /\s*,\s*/,
+  comma: /, ?/,
+  lbracket: /\[ ?/,
+  rbracket: / ?]/,
   '*': '*',
   '$': '$',
-  '[': '[',
-  ']': ']',
   '.': '.',
 });
 
@@ -29,8 +31,8 @@ function handleQString(qString: string) {
 Path -> "$" PathExpression:* {% d => d[1].reduce((result: any[], matcher: any) => result.concat(matcher), []) %}
 
 PathExpression -> "." PropertyExpression {% d => d[1] %}
-  | "[" IndexExpression "]" {% d => d[1] %}
-  | "[" UnionExpression "]" {% d => new matchers.UnionMatcher(d[1]) %}
+  | %lbracket IndexExpression %rbracket {% d => d[1] %}
+  | %lbracket UnionExpression %rbracket {% d => new matchers.UnionMatcher(d[1]) %}
 
 PropertyExpression -> "*" {% d => matchers.AnyProperty %}
   | %property {% d => new matchers.PropertyMatcher(d[0].value) %}

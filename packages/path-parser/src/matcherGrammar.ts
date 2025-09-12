@@ -1,9 +1,10 @@
 // Generated automatically by nearley, version 2.20.1
 // http://github.com/Hardmath123/nearley
 // Bypasses TS6133. Allow declared but unused functions.
-// NOTE: Manually edited to remove dead code
-/* v8 ignore next */ // @ts-ignore 
+/* v8 ignore next */ // @ts-ignore
 function id(d: any[]): any { return d[0]; }
+declare var lbracket: any;
+declare var rbracket: any;
 declare var property: any;
 declare var integer: any;
 declare var qqString: any;
@@ -18,11 +19,11 @@ const lexer = moo.compile({
   qqString: /"(?:\\["bfnrt\/\\]|\\u[a-fA-F0-9]{4}|[^"\\])*?"/,
   integer: /[0-9]+/,
   property: /[a-zA-Z_][a-zA-Z0-9_]*/,
-  comma: /\s*,\s*/,
+  comma: /, ?/,
+  lbracket: /\[ ?/,
+  rbracket: / ?]/,
   '*': '*',
   '$': '$',
-  '[': '[',
-  ']': ']',
   '.': '.',
 });
 
@@ -64,8 +65,8 @@ const grammar: Grammar = {
     {"name": "Path$ebnf$1", "symbols": ["Path$ebnf$1", "PathExpression"], "postprocess": (d) => d[0].concat([d[1]])},
     {"name": "Path", "symbols": [{"literal":"$"}, "Path$ebnf$1"], "postprocess": d => d[1].reduce((result: any[], matcher: any) => result.concat(matcher), [])},
     {"name": "PathExpression", "symbols": [{"literal":"."}, "PropertyExpression"], "postprocess": d => d[1]},
-    {"name": "PathExpression", "symbols": [{"literal":"["}, "IndexExpression", {"literal":"]"}], "postprocess": d => d[1]},
-    {"name": "PathExpression", "symbols": [{"literal":"["}, "UnionExpression", {"literal":"]"}], "postprocess": d => new matchers.UnionMatcher(d[1])},
+    {"name": "PathExpression", "symbols": [{type: "lbracket"}, "IndexExpression", {type: "rbracket"}], "postprocess": d => d[1]},
+    {"name": "PathExpression", "symbols": [{type: "lbracket"}, "UnionExpression", {type: "rbracket"}], "postprocess": d => new matchers.UnionMatcher(d[1])},
     {"name": "PropertyExpression", "symbols": [{"literal":"*"}], "postprocess": d => matchers.AnyProperty},
     {"name": "PropertyExpression", "symbols": [{type: "property"}], "postprocess": d => new matchers.PropertyMatcher(d[0].value)},
     {"name": "IndexExpression", "symbols": [{type: "integer"}], "postprocess": d => new matchers.IndexMatcher(parseInt(d[0].value))},

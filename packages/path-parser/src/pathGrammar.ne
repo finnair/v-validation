@@ -1,4 +1,6 @@
 # WARNING! This is the original grammar, but the result has been modified for typescript and ESM!
+# Dead code fix RegExp replace: \(lexer\.has\("[a-zA-Z]+"\) \? \{type: "([a-zA-Z]+)"\} : [a-zA-Z]+\) => {type: "$1"}
+# Unused id-function coverage: /* v8 ignore next */
 
 # Usage: https://nearley.js.org/
 @preprocessor typescript
