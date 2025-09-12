@@ -3,7 +3,7 @@
 # Usage: https://nearley.js.org/
 @preprocessor typescript
 @{%
-const moo = require('moo');
+import moo from 'moo';
 
 const lexer = moo.compile({
   qString: /'(?:\\["bfnrt\/\\]|\\u[a-fA-F0-9]{4}|[^"\\])*?'/,

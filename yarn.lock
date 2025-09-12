@@ -875,15 +875,15 @@
   resolved "https://registry.yarnpkg.com/@types/minimist/-/minimist-1.2.5.tgz#ec10755e871497bcd83efe927e43ec46e8c0747e"
   integrity sha512-hov8bUuiLiyFPGyFPE1lwWhmzYbirOXQNNo40+y3zow8aFVTeyn3VWL0VFFfdNddA8S4Vf0Tc062rzyNr7Paag==
 
-"@types/moo@0.5.1":
-  version "0.5.1"
-  resolved "https://registry.yarnpkg.com/@types/moo/-/moo-0.5.1.tgz#fc736ff825e8d8a1073e2051018c7e44b2c8a04e"
-  integrity sha512-bTsNF0m5yL8mGAZgIkUKay/lUHxKNRIb3D7COqeMksmJ5/0ky74T1Rwf7c26tpDoDk84bQndHt7E49e+TUO9zw==
+"@types/moo@0.5.10":
+  version "0.5.10"
+  resolved "https://registry.yarnpkg.com/@types/moo/-/moo-0.5.10.tgz#ad04e32e7cd730c44e8e184297528cbc2a5060b2"
+  integrity sha512-W6KzyZjXUYpwQfLK1O1UDzqcqYlul+lO7Bt71luyIIyNlOZwJaNeWWdqFs1C/f2hohZvUFHMk6oFNe9Rg48DbA==
 
-"@types/nearley@2.11.2":
-  version "2.11.2"
-  resolved "https://registry.yarnpkg.com/@types/nearley/-/nearley-2.11.2.tgz#ddd716fa4b9ab15acec51d39b7524709d4dd5cc8"
-  integrity sha512-jeyIDNBxxyWyEk6HemDC+t32b4fxthVsgWDxf88qD2WpX0QpOyY8JvA80AElPTBGRUsO0EKnr6OeVOjK3ZDdnA==
+"@types/nearley@2.11.5":
+  version "2.11.5"
+  resolved "https://registry.yarnpkg.com/@types/nearley/-/nearley-2.11.5.tgz#9087e1634e1c90efb25d661390702381789685cb"
+  integrity sha512-dM7TrN0bVxGGXTYGx4YhGear8ysLO5SOuouAWM9oltjQ3m9oYa13qi8Z1DJp5zxVMPukvQdsrnZmgzpeuTSEQA==
 
 "@types/node@20.8.4":
   version "20.8.4"

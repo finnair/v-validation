@@ -29,6 +29,11 @@ describe('parsePathMatcher', () => {
     expect(() => parsePathMatcher(path)).toThrow(),
   );
 
+  test('union matcher allows whitespace', () => 
+    expect(parsePathMatcher(`$.array[0][*].*['union' ,\n"of", properties\t , \n1]`)).toEqual(
+      PathMatcher.of('array', 0, AnyIndex, AnyProperty, new UnionMatcher(['union', 'of', 'properties', 1])),
+    ));
+
   test('documentation example', () =>
     expect(parsePathMatcher(`$.array[0][*].*['union',"of",properties,1]`)).toEqual(
       PathMatcher.of('array', 0, AnyIndex, AnyProperty, new UnionMatcher(['union', 'of', 'properties', 1])),

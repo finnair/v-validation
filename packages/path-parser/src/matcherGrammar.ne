@@ -4,19 +4,19 @@
 @preprocessor typescript
 @{%
 import * as matchers from '@finnair/path';
-const moo = require('moo');
+import moo from 'moo';
 
 const lexer = moo.compile({
   qString: /'(?:\\["bfnrt\/\\]|\\u[a-fA-F0-9]{4}|[^"\\])*?'/,
   qqString: /"(?:\\["bfnrt\/\\]|\\u[a-fA-F0-9]{4}|[^"\\])*?"/,
   integer: /[0-9]+/,
   property: /[a-zA-Z_][a-zA-Z0-9_]*/,
+  comma: /\s*,\s*/,
   '*': '*',
   '$': '$',
   '[': '[',
   ']': ']',
   '.': '.',
-  ',': ',',
 });
 
 function handleQString(qString: string) {
@@ -40,8 +40,8 @@ IndexExpression -> %integer {% d => new matchers.IndexMatcher(parseInt(d[0].valu
   | %qString {% d => new matchers.PropertyMatcher(handleQString(d[0].value)) %}
   | "*" {% d => matchers.AnyIndex %}
   
-UnionExpression -> ComponentExpression "," ComponentExpression {% d => [d[0], d[2]] %}
-  | ComponentExpression "," UnionExpression {% d => [ d[0], ...d[2]] %}
+UnionExpression -> ComponentExpression %comma ComponentExpression {% d => [d[0], d[2]] %}
+  | ComponentExpression %comma UnionExpression {% d => [ d[0], ...d[2]] %}
 
 ComponentExpression -> %integer {% d => parseInt(d[0].value) %}
   | %property {% d => d[0].value %}
