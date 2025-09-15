@@ -39,8 +39,8 @@
     "build:esm": "tsc -b . && cp ../../package.esm.json dist/esm/package.json"
   },
   "dependencies": {
-    "@types/moo": "0.5.1",
-    "@types/nearley": "2.11.2",
+    "@types/moo": "0.5.10",
+    "@types/nearley": "2.11.5",
     "nearley": "2.20.1"
   },
   "peerDependencies": {

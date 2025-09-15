@@ -25,12 +25,17 @@ describe('parsePathMatcher', () => {
     });
   });
 
-  test.each(['', '$.$', '$.white space', '$[0.1]', '$[foo', 'foo', '$"misquoted\'', '$[ "whitespace" ]'])(`"%s" is not valid path`, path =>
+  test.each(['', '$.$', '$.white space', '$[0.1]', '$[foo', 'foo', '$"misquoted\'', '$[\n"illegal whitespace"\n]'])(`"%s" is not valid path`, path =>
     expect(() => parsePathMatcher(path)).toThrow(),
   );
 
   test('documentation example', () =>
     expect(parsePathMatcher(`$.array[0][*].*['union',"of",properties,1]`)).toEqual(
+      PathMatcher.of('array', 0, AnyIndex, AnyProperty, new UnionMatcher(['union', 'of', 'properties', 1])),
+    ));
+
+  test('union matcher allows whitespace', () => 
+    expect(parsePathMatcher(`$.array[0][*].*[ 'union', "of", properties, 1 ]`)).toEqual(
       PathMatcher.of('array', 0, AnyIndex, AnyProperty, new UnionMatcher(['union', 'of', 'properties', 1])),
     ));
 });
