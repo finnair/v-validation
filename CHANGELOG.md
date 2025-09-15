@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [10.0.0](https://github.com/finnair/v-validation/compare/v9.2.0...v10.0.0) (2025-09-15)
+
+### Bug Fixes
+
+- .nvmrc version to 20 ([993b233](https://github.com/finnair/v-validation/commit/993b233aba612e275e49aff2b7425d03120f5d3d))
+
 # [9.2.0](https://github.com/finnair/v-validation/compare/v9.1.1...v9.2.0) (2025-05-21)
 
 ### Bug Fixes
