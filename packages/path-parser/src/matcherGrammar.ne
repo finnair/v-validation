@@ -9,8 +9,8 @@ import * as matchers from '@finnair/path';
 import moo from 'moo';
 
 const lexer = moo.compile({
-  qString: /'(?:\\["bfnrt\/\\]|\\u[a-fA-F0-9]{4}|[^"\\])*?'/,
-  qqString: /"(?:\\["bfnrt\/\\]|\\u[a-fA-F0-9]{4}|[^"\\])*?"/,
+  qString: /'(?:\\["bfnrt\/\\]|\\u[a-fA-F0-9]{4}|[^"\\])*?'/, // single quoted string
+  qqString: /"(?:\\["bfnrt\/\\]|\\u[a-fA-F0-9]{4}|[^"\\])*?"/, // double quoted string
   integer: /[0-9]+/,
   property: /[a-zA-Z_][a-zA-Z0-9_]*/,
   comma: /, ?/,
