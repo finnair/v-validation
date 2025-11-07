@@ -508,14 +508,14 @@ export class Conditional<Out = unknown, In = unknown> {
   }
 }
 
-export class WhenGroupValidator<When = unknown, Otherwise = unknown> extends Validator<When | Otherwise> {
+export class WhenGroupValidator<When = unknown, Otherwise = unknown, In = unknown> extends Validator<When | Otherwise, In> {
   constructor(public readonly whenGroups: WhenGroup<When>[], public readonly otherwiseValidator?: Validator<Otherwise>) {
     super();
     Object.freeze(this.whenGroups);
     Object.freeze(this);
   }
 
-  validatePath(value: unknown, path: Path, ctx: ValidationContext): PromiseLike<When | Otherwise> {
+  validatePath(value: In, path: Path, ctx: ValidationContext): PromiseLike<When | Otherwise> {
     if (ctx.options.group) {
       let passes: When[] = [];
       let violations: Violation[] = [];
@@ -560,6 +560,10 @@ export class WhenGroupValidator<When = unknown, Otherwise = unknown> extends Val
       throw new Error('Otherwise already defined.');
     }
     return new WhenGroupValidator<When, O>(this.whenGroups, validator);
+  }
+
+  otherwiseSuccess() {
+    return this.otherwise<In>(new IdentityValidator<In>());
   }
 }
 export class WhenGroup<T> {
@@ -1376,6 +1380,16 @@ export class ValueMapper<Out = unknown, In = unknown> extends Validator<Out, In>
       return ctx.failure(result, value);
     }
     return Promise.resolve(result);
+  }
+}
+
+export class IdentityValidator<Out = unknown> extends Validator<Out, Out> {
+  constructor() {
+    super();
+    Object.freeze(this);
+  }
+  validatePath(value: Out): PromiseLike<Out> {
+    return Promise.resolve(value);
   }
 }
 

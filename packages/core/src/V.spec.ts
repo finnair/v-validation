@@ -1593,6 +1593,19 @@ describe('groups', () => {
     expect(group.includes('qux')).toBe(false);
   });
 
+  describe('otherwiseSuccess', () => {
+    const normalize = new Groups().define('normalize');
+    const normalizer = V.map<number[], string>((value) => value.split(',').map((str) => Number(str)));
+    const optionalNormalization = V.whenGroup(normalize, normalizer)
+      .otherwiseSuccess()
+      .next(V.array(V.number()));
+
+    test('with normalization', () => expectGroupValid('1,2,3', normalize, optionalNormalization, [1,2,3]));
+    test('without normalization', () => expectValid([1,2,3], optionalNormalization));
+    test('invalid with normalization', () => expectGroupViolations([1,2,3], normalize, optionalNormalization, new ErrorViolation(ROOT, new TypeError('value.split is not a function'))));
+    test('invalid without normalization', () => expectViolations('1,2,3', optionalNormalization, new TypeMismatch(ROOT, 'array', '1,2,3')));
+  });
+
   describe('chaining', () => {
     const whenChainValidator = V.whenGroup(DEFAULT, V.notNull())
       .whenGroup(parent, V.notEmpty())
