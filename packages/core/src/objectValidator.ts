@@ -63,7 +63,7 @@ export interface ObjectModel<LocalType = unknown, InheritableType = unknown> {
   readonly localNext?: Validator | Validator[];
 }
 
-export class ObjectValidator<LocalType = unknown, InheritableType = LocalType> extends Validator<LocalType, unknown> {
+export class ObjectValidator<LocalType = unknown, InheritableType = LocalType, In = unknown> extends Validator<LocalType, In> {
   public readonly properties: Properties;
 
   public readonly localProperties: Properties;
@@ -120,11 +120,11 @@ export class ObjectValidator<LocalType = unknown, InheritableType = LocalType> e
     Object.freeze(this);
   }
 
-  validatePath(value: unknown, path: Path, ctx: ValidationContext): PromiseLike<LocalType> {
+  validatePath(value: In, path: Path, ctx: ValidationContext): PromiseLike<LocalType> {
     return this.validateFilteredPath(value, path, ctx, _ => true);
   }
 
-  validateFilteredPath(value: any, path: Path, ctx: ValidationContext, filter: PropertyFilter): PromiseLike<LocalType> {
+  validateFilteredPath(value: In, path: Path, ctx: ValidationContext, filter: PropertyFilter): PromiseLike<LocalType> {
     if (value === null || value === undefined) {
       return Promise.reject(defaultViolations.notNull(path));
     }
