@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [10.1.0](https://github.com/finnair/v-validation/compare/v10.0.0...v10.1.0) (2025-11-11)
+
+### Features
+
+- V.whenGroup(...).otherwiseSuccess() ([#141](https://github.com/finnair/v-validation/issues/141)) ([46db67b](https://github.com/finnair/v-validation/commit/46db67b18a0ac1c21459a195645ebddf8692e63a))
+
 # [10.0.0](https://github.com/finnair/v-validation/compare/v9.2.0...v10.0.0) (2025-09-15)
 
 ### Bug Fixes
