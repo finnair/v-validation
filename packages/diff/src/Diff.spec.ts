@@ -33,20 +33,22 @@ describe('Diff', () => {
       object: {
         name: 'Alexis',
       },
-      array: [0]
+      array: [
+        { name:'Foo' }
+      ]
     };
     const newObject = {};
 
     describe('remove nested object', () => {
       test('with includeObjects: false', () => {
         const paths = defaultDiff.changedPaths(oldObject, newObject);
-        const expected = new Set(['$.object.name', '$.array[0]']);
+        const expected = new Set(['$.object.name', '$.array[0].name']);
         expect(paths).toEqual(expected);
       });
       
       test('with includeObjects: true', () => {
         const paths = new Diff({ includeObjects: true }).changedPaths(oldObject, newObject);
-        const expected = new Set(['$.object', '$.object.name', '$.array', '$.array[0]']);
+        const expected = new Set(['$.object', '$.object.name', '$.array', '$.array[0]', '$.array[0].name']);
         expect(paths).toEqual(expected);
       });
     });
@@ -54,13 +56,13 @@ describe('Diff', () => {
     describe('add nested object', () => {
       test('with includeObjects: false', () => {
         const paths = defaultDiff.changedPaths(newObject, oldObject);
-        const expected = new Set(['$.object.name', '$.array[0]']);
+        const expected = new Set(['$.object.name', '$.array[0].name']);
         expect(paths).toEqual(expected);
       });
       
       test('with includeObjects: true', () => {
         const diff = new Diff({ includeObjects: true }).changedPaths(newObject, oldObject);
-        const expected = new Set(['$.object', '$.object.name', '$.array', '$.array[0]']);
+        const expected = new Set(['$.object', '$.object.name', '$.array', '$.array[0]', '$.array[0].name']);
         expect(diff).toEqual(expected);
       });
     });
