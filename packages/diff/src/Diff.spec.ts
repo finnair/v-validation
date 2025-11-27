@@ -1,20 +1,67 @@
 
 import { describe, test, expect } from 'vitest';
-import { Change, Diff } from './Diff.js';
-import { Path } from '@finnair/path';
+import { Diff } from './Diff.js';
+import { Node, Path } from '@finnair/path';
+import { Change } from './DiffNode.js';
 
 describe('Diff', () => {
   const defaultDiff = new Diff();
 
-  describe('allPaths', () => {
-    const object = { object: { string: "string"}, array: [0], 'undefined': undefined, 'null': null };
-    test('all paths with default filter (without undefined values)', () => {
-      const paths = defaultDiff.allPaths(object);
-      expect(paths).toEqual(new Set([ '$.object.string', '$.array[0]', '$.null']));
+  describe('helpers', () => {
+    const object = { 
+      object: { string: "string"}, 
+      array: [0], 
+      'undefined': undefined, 
+      'null': null
+    };
+    describe('allPaths', () => {
+      test('with default filter (without undefined values)', () => {
+        const paths = defaultDiff.allPaths(object);
+        expect(paths).toEqual(new Set([ '$.object.string', '$.array[0]', '$.null']));
+      });
+      test('including undefined paths', () => {
+        const paths = new Diff({ filter: () => true }).allPaths(object);
+        expect(paths).toEqual(new Set([ '$.object.string', '$.array[0]', '$.undefined', '$.null']));
+      });
+      test('including objects', () => {
+        const paths = new Diff({ includeObjects: true}).allPaths(object);
+        expect(paths).toEqual(new Set([ '$.object', '$.object.string', '$.array', '$.array[0]', '$.null']));
+      });
+      test('array', () => {
+        const paths = new Diff().allPaths([object]);
+        expect(paths).toEqual(new Set([ '$[0].object.string',  '$[0].array[0]', '$[0].null' ]));
+      });
     });
-    test('all, including undefined paths', () => {
-      const paths = new Diff({ filter: () => true }).allPaths(object);
-      expect(paths).toEqual(new Set([ '$.object.string', '$.array[0]', '$.undefined', '$.null']));
+  
+    describe('pathsAndValues', () => {
+      test('all pathsAndValues with default filter (without undefined values)', () => {
+        const pathsAndValues = defaultDiff.pathsAndValues(object);
+        expect(pathsAndValues).toEqual(new Map<string, Node>([ 
+          ['$.object.string', { path: Path.of('object', 'string'), value: 'string' }], 
+          ['$.array[0]', { path: Path.of('array', 0), value: 0 }], 
+          ['$.null', { path: Path.of('null'), value: null }],
+        ]));
+      });
+      test('all, including undefined pathsAndValues', () => {
+        const pathsAndValues = new Diff({ filter: () => true }).pathsAndValues(object);
+        expect(pathsAndValues).toEqual(new Map<string, Node>([ 
+          ['$.object.string', { path: Path.of('object', 'string'), value: 'string' }], 
+          ['$.array[0]', { path: Path.of('array', 0), value: 0 }], 
+          ['$.undefined', { path: Path.of('undefined'), value: undefined }],
+          ['$.null', { path: Path.of('null'), value: null }],
+        ]));
+      });
+      test('including objects', () => {
+        const pathsAndValues = new Diff({ includeObjects: true}).pathsAndValues(object);
+        expect(pathsAndValues).toEqual(new Map<string, Node>([ 
+          ['$', { path: Path.ROOT, value: {} }], 
+          ['$.object', { path: Path.of('object'), value: {} }], 
+          ['$.object.string', { path: Path.of('object', 'string'), value: 'string' }], 
+          ['$.array', { path: Path.of('array'), value: [] }], 
+          ['$.array[0]', { path: Path.of('array', 0), value: 0 }], 
+          ['$.null', { path: Path.of('null'), value: null }],
+        ]));
+      });
     });
   });
 

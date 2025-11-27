@@ -1,6 +1,7 @@
 import { Path, PathMatcher } from '@finnair/path';
 import { parsePath, parsePathMatcher } from '@finnair/path-parser';
-import { Change, Diff } from './Diff.js';
+import {  Diff } from './Diff.js';
+import { Change } from './DiffNode.js';
 
 export interface VersionInfoConfig {
   readonly diff: Diff;

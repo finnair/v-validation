@@ -12,7 +12,7 @@ export class Path {
     Object.freeze(this.path);
     Object.freeze(this);
   }
-
+  
   index(index: number): Path {
     Path.validateIndex(index);
     return new Path(this.path.concat(index));

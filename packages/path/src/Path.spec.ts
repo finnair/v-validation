@@ -2,7 +2,6 @@ import { describe, test, expect } from 'vitest'
 import { Path, PathComponent } from './Path.js';
 import { PathMatcher } from './PathMatcher.js';
 import { AnyProperty, AnyIndex } from './matchers.js';
-import path from 'path';
 
 describe('path', () => {
   test('toJSON', () => expect(Path.property('s p a c e s').index(5).property('regular').toJSON()).toEqual('$["s p a c e s"][5].regular'));
