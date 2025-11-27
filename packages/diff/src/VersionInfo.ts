@@ -1,10 +1,14 @@
 import { Path, PathMatcher } from '@finnair/path';
 import { parsePath, parsePathMatcher } from '@finnair/path-parser';
-import {  Diff } from './Diff.js';
-import { Change } from './DiffNode.js';
+import {  Diff, DiffConfig } from './Diff.js';
+import { Change, DiffNode, Patch } from './DiffNode.js';
 
 export interface VersionInfoConfig {
-  readonly diff: Diff;
+  /**
+   * @deprecated use diffConfig instead
+   */
+  readonly diff?: Diff;
+  readonly diffConfig?: DiffConfig;
   readonly previousValues?: PathMatcher[];
 }
 
@@ -14,13 +18,17 @@ export class VersionInfo<L> {
   private _changes?: Map<string, Change>;
   private _paths?: Set<string>;
   private _previousValues?: any;
+  private _diffNode?: DiffNode;
   public readonly config: VersionInfoConfig;
   constructor(
     public readonly current: L,
     public readonly previous?: L,
     config?: VersionInfoConfig
   ) {
-    this.config = config ?? { diff: new Diff({}) }
+    this.config = {
+      diffConfig: config?.diffConfig ?? config?.diff?.config,
+      previousValues: config?.previousValues,
+    };
   }
   map<T>(fn: (version: L) => T, config?: VersionInfoConfig) {
     return new VersionInfo<T>(
@@ -39,7 +47,10 @@ export class VersionInfo<L> {
   get changes(): undefined | Map<string, Change> {
     if (this.previous) {
       if (this._changes === undefined) {
-        this._changes = this.config.diff.changeset(this.previous, this.current);
+        this._changes = new Map<string, Change>();
+        for (const change of this.diffNode.getScalarChanges(this.config.diffConfig?.includeObjects)) {
+          this._changes.set(change.path.toJSON(), change);
+        }
       }
       return this._changes;
     }
@@ -59,7 +70,10 @@ export class VersionInfo<L> {
       if (this.previous) {
         this._paths = this.changedPaths!;
       } else {
-        this._paths = new Set(this.config.diff.allPaths(this.current));
+        this._paths = new Set<string>();
+        for (const path of this.diffNode.getChangedPaths(this.config.diffConfig?.includeObjects)) {
+          this._paths.add(path.toJSON());
+        }
       }
     }
     return this._paths;
@@ -81,6 +95,21 @@ export class VersionInfo<L> {
       return this._previousValues === NO_PREVIOUS_VALUES ? undefined : this._previousValues;
     }
     return undefined;
+  }
+  get diffNode(): DiffNode {
+    if (this._diffNode === undefined) {
+      this._diffNode = new DiffNode(
+        {
+        oldValue: this.previous,
+        newValue: this.current,
+        },
+        this.config.diffConfig
+      ); 
+    }
+    return this._diffNode;
+  }
+  get patch(): Patch[] {
+    return Array.from(this.diffNode.patch);
   }
   matches(pathExpression: string | PathMatcher) {
     const matcher = VersionInfo.toMatcher(pathExpression);
