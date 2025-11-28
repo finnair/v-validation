@@ -98,13 +98,7 @@ export class VersionInfo<L> {
   }
   get diffNode(): DiffNode {
     if (this._diffNode === undefined) {
-      this._diffNode = new DiffNode(
-        {
-        oldValue: this.previous,
-        newValue: this.current,
-        },
-        this.config.diffConfig
-      ); 
+      this._diffNode = new DiffNode({ oldValue: this.previous, newValue: this.current }, this.config.diffConfig); 
     }
     return this._diffNode;
   }

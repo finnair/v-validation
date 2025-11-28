@@ -156,17 +156,18 @@ export class DiffNode {
   }
   
   private getValueType(value: any): undefined | ValueType {
-    if ((this.config?.filter ?? defaultDiffFilter)(this.path, value)) {
-      if (isPrimitive(value) || this.config?.isPrimitive?.(value, this.path)) {
-        return 'primitive';
-      }
-      const compositeType = arrayOrPlainObject(value);
-      if (compositeType) {
-        return compositeType;
-      }
-      throw new Error(`only primitives, arrays and plain objects are supported, got "${value?.constructor.name}"`);
+    const filter = this.config?.filter ?? defaultDiffFilter;
+    if (!filter(this.path, value)) {
+      return undefined;
     }
-    return undefined;
+    if (isPrimitive(value) || this.config?.isPrimitive?.(value, this.path)) {
+      return 'primitive';
+    }
+    const compositeType = arrayOrPlainObject(value);
+    if (compositeType) {
+      return compositeType;
+    }
+    throw new Error(`only primitives, arrays and plain objects are supported, got "${value?.constructor.name}"`);
   }
 }
 
