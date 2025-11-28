@@ -3,6 +3,10 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [10.2.0-alpha.0](https://github.com/finnair/v-validation/compare/v10.1.0...v10.2.0-alpha.0) (2025-11-28)
+
+**Note:** Version bump only for package @finnair/v-validation
+
 # [10.1.0](https://github.com/finnair/v-validation/compare/v10.0.0...v10.1.0) (2025-11-11)
 
 ### Features
