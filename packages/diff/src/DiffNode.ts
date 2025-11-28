@@ -131,7 +131,7 @@ export class DiffNode {
   }
 
   get isPrimitive(): boolean {
-    return isIncludedPrimitiveType(this.oldType) || isIncludedPrimitiveType(this.newType);
+    return isPrimitiveType(this.oldType) || isPrimitiveType(this.newType);
   }
 
   get isComposite(): boolean {
@@ -189,7 +189,7 @@ export function arrayOrPlainObject(value: any): undefined | 'array' | 'object' {
   return undefined;
 }
 
-function isIncludedPrimitiveType(valueType: ValueType): valueType is 'primitive' | undefined {
+function isPrimitiveType(valueType: ValueType): valueType is 'primitive' | undefined {
   return valueType === 'primitive';
 }
 
