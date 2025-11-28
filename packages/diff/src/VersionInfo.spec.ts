@@ -1,7 +1,8 @@
 import { describe, test, expect } from 'vitest';
 import { AnyIndex, Path, PathMatcher } from '@finnair/path';
-import { Change, Diff } from './Diff.js';
+import { Diff } from './Diff.js';
 import { VersionInfo, VersionInfoConfig } from './VersionInfo.js';
+import { Change } from './DiffNode.js';
 
 describe('VersionInfo', () => {
   const a: any = Object.freeze({
@@ -25,7 +26,7 @@ describe('VersionInfo', () => {
   });
 
   const config: VersionInfoConfig = {
-    diff: new Diff({
+    diffConfig: {
       isPrimitive: (value: any) => value instanceof Date,
       isEqual: (a: any, b: any) => {
         if (a instanceof Date && b instanceof Date) {
@@ -34,9 +35,10 @@ describe('VersionInfo', () => {
         return false;
       },
       filter: (path: Path, value: any) => path.length === 0 || !String(path.componentAt(0)).startsWith('_'),
-    }),
+    },
     previousValues: [PathMatcher.of('id')],
   };
+  // Support still deprecated diff parameter
   const altConfig: VersionInfoConfig = { diff: new Diff({ filter: (_path: Path, value: any) => !(value instanceof Date) }) };
 
   const mapFn = (o: any) => {
@@ -48,8 +50,6 @@ describe('VersionInfo', () => {
   };
 
   const asyncMapFn = async (o: any) => mapFn(o);
-
-  const expectedChangedPaths = new Set([ '$.id', '$.name.first', '$.name.last', '$.null', '$.undefined' ]);
   
   const mappedChanges = new Map([
     ['$.firstName', <Change>{ path: Path.of('firstName'), oldValue: 'first', newValue: 'second' }],
@@ -65,6 +65,14 @@ describe('VersionInfo', () => {
   
   test('changes', async () => {
     const version = new VersionInfo(b, a, config);
+    const expectedChangedPaths = new Set([ '$.id', '$.name.first', '$.name.last', '$.null', '$.undefined' ]);
+    const extpectedPatch = [
+      { path: Path.of('id'), value: 12345 },
+      { path: Path.of('name', 'first'), value: 'second' },
+      { path: Path.of('name', 'last'), value: 'last' },
+      { path: Path.of('null') },
+      { path: Path.of('undefined') },
+    ];
 
     expect(version.changes).toEqual(new Map([
       ['$.id', <Change>{ path: Path.of('id'), oldValue: 1234, newValue: 12345 }],
@@ -74,6 +82,7 @@ describe('VersionInfo', () => {
       ['$.undefined', <Change>{ path: Path.of('undefined'), oldValue: undefined }],
     ]));
     expect(version.changedPaths).toEqual(expectedChangedPaths);
+    expect(version.patch).toEqual(extpectedPatch);
     expect(version.paths).toEqual(version.changedPaths);
     expect(version.previousValues).toEqual({ id: 1234 });
     expect(version.toJSON()).toEqual({
@@ -97,12 +106,24 @@ describe('VersionInfo', () => {
     expect((await version.mapAsync(asyncMapFn, altConfig)).changedPaths).toEqual(new Set(['$.firstName', '$.lastName']));
   });
 
-  test('apply chnanges', () => {
+  test('apply changes', () => {
     const version = new VersionInfo(b, a, config);
-    const aClone = { ...a, name: {...a.name} }
+    const aClone = structuredClone(a);
     expect(aClone).toEqual(a);
 
     version.changes!.forEach((change) => change.path.set(aClone, change.newValue));
+
+    expect(a).not.toEqual(b);
+    aClone._timestamp = b._timestamp;
+    expect(aClone).toEqual(b);
+  });
+
+  test('apply patch', () => {
+    const version = new VersionInfo(b, a, config);
+    const aClone = structuredClone(a);
+    expect(aClone).toEqual(a);
+
+    version.patch.forEach((patch) => patch.path.set(aClone, patch.value));
 
     expect(a).not.toEqual(b);
     aClone._timestamp = b._timestamp;
@@ -116,6 +137,7 @@ describe('VersionInfo', () => {
 
     expect(version.paths).toEqual(new Set());
     expect(version.changedPaths).toEqual(version.paths);
+    expect(version.patch).toEqual([]);
     expect(version.previousValues).toBeUndefined();
     expect(version.toJSON()).toEqual({ current: c, changedPaths: [] });
     expect(version.matches('$.name')).toBe(false);
@@ -126,8 +148,9 @@ describe('VersionInfo', () => {
     const version = new VersionInfo(a, undefined, config);
 
     expect(version.changedPaths).toBeUndefined();
-    expect(version.paths).toEqual(new Set(['$.id', '$.name.first', '$.null', '$.undefined']));
+    expect(version.paths).toEqual(new Set(['$', '$.id', '$.name.first', '$.null', '$.undefined']));
     expect(version.changes).toBeUndefined();
+    expect(version.patch).toEqual([{ path: Path.ROOT, value: a }])
     expect(version.matches('$.name')).toBe(true);
     expect(version.matchesAny(['$.foo', '$.name'])).toBe(true);
     expect(version.previousValues).toBeUndefined();
@@ -139,7 +162,7 @@ describe('VersionInfo', () => {
       lastName: undefined,
       timestamp: a._timestamp,
     });
-    expect((await version.mapAsync(asyncMapFn)).paths).toEqual(new Set(['$.firstName', '$.lastName', '$.timestamp']));
+    expect((await version.mapAsync(asyncMapFn)).paths).toEqual(new Set(['$', '$.firstName', '$.lastName', '$.timestamp']));
   });
 
   test('no previousValues matcher', () => {
@@ -148,7 +171,7 @@ describe('VersionInfo', () => {
 
   test('array as root', () => {
     expect(new VersionInfo([2], [1], {
-      diff: new Diff(), 
+      // Default diff/diffConfig
       previousValues: [PathMatcher.of(AnyIndex)],
     }).toJSON()).toEqual({
       current: [2],
