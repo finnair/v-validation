@@ -5,11 +5,11 @@ import { fail } from 'assert';
 
 export async function expectViolations<In>(value: In, validator: Validator<any, In>, ...violations: Violation[]) {
   await validator.validatePath(value, Path.ROOT, new ValidationContext({})).then(
-    success => {
+    (success) => {
       fail(`expected violations, got ${success}`)
     },
-    fail => {
-      expect(violationsOf(fail)).toEqual(violations);
+    (fail) => {
+      expect(violationsOf(fail, Path.ROOT)).toEqual(violations);
     }
   )
 }

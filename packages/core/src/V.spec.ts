@@ -1804,7 +1804,7 @@ test('V.schema', () =>
   ));
 
 describe('map function', () => {
-  test('exeption as violation', async () => {
+  test('exeption with message as violation', async () => {
     const error = new Error('Error message');
     await expectViolations(
       'anything',
@@ -1812,6 +1812,16 @@ describe('map function', () => {
         throw error;
       }),
       new ErrorViolation(ROOT, error),
+    );
+  });
+
+  test('string exeption as violation', async () => {
+    await expectViolations(
+      'anything',
+      V.map((value: any) => {
+        throw "error";
+      }),
+      new ErrorViolation(ROOT, "error"),
     );
   });
 
