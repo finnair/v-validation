@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [10.2.1](https://github.com/finnair/v-validation/compare/v10.2.0...v10.2.1) (2026-02-03)
+
+### Bug Fixes
+
+- error violation path and message ([#143](https://github.com/finnair/v-validation/issues/143)) ([8670a09](https://github.com/finnair/v-validation/commit/8670a09b24ce2ee9d65f3f1c43f44e4fb5f1050b))
+
 # [10.2.0](https://github.com/finnair/v-validation/compare/v10.2.0-alpha.0...v10.2.0) (2026-01-16)
 
 **Note:** Version bump only for package @finnair/v-validation-luxon
