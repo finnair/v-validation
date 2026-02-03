@@ -216,8 +216,9 @@ function validateProperty(key: string, currentValue: any, validator: Validator, 
   }
   // Assign for property order
   context.convertedObject[key] = undefined;
-  return validator.validatePath(currentValue, context.path.property(key), context.ctx).then(
-    result => {
+  const propertyPath = context.path.property(key);
+  return validator.validatePath(currentValue, propertyPath, context.ctx).then(
+    (result) => {
       if (result !== undefined) {
         context.convertedObject[key] = result;
       } else {
@@ -225,9 +226,9 @@ function validateProperty(key: string, currentValue: any, validator: Validator, 
       }
       return result;
     },
-    error => {
+    (error) => {
       delete context.convertedObject[key];
-      context.violations = context.violations.concat(violationsOf(error));
+      context.violations = context.violations.concat(violationsOf(error, propertyPath));
       return Promise.reject(context.violations);
     }
   );
@@ -242,22 +243,22 @@ async function validateAdditionalProperty(
   if (!context.filter(key)) {
     return Promise.resolve();
   }
-  const keyPath = context.path.property(key);
+  const path = context.path.property(key);
   let currentValue = originalValue;
   let validKey = false;
   let keyViolations: undefined | Violation[];
   for (let i = 0; i < additionalProperties.length; i++) {
     const entryValidator = additionalProperties[i];
     try {
-      await entryValidator.keyValidator.validatePath(key, keyPath, context.ctx);
+      await entryValidator.keyValidator.validatePath(key, path, context.ctx);
       validKey = true;
       try {
         currentValue = await validateProperty(key, currentValue, entryValidator.valueValidator, context);
       } catch (error) {
-        return Promise.reject(violationsOf(error));
+        return Promise.reject(violationsOf(error, path));
       }
     } catch (error) {
-      keyViolations = violationsOf(error);
+      keyViolations = violationsOf(error, path);
     }
   }
   if (!validKey) {

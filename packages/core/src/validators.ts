@@ -59,7 +59,7 @@ export abstract class Validator<Out = unknown, In = unknown> {
     try {
       return await this.validatePath(value, ROOT, new ValidationContext(options || {}));
     } catch (error) {
-      throw new ValidationError(violationsOf(error));
+      throw new ValidationError(violationsOf(error, ROOT));
     }
   }
 
@@ -75,7 +75,7 @@ export abstract class Validator<Out = unknown, In = unknown> {
       const result = await this.validatePath(value, ROOT, new ValidationContext(options || {}));
       return new ValidationResult(undefined, result);
     } catch (error) {
-      return new ValidationResult<Out>(violationsOf(error));
+      return new ValidationResult<Out>(violationsOf(error, ROOT));
     }
   }
 
@@ -159,8 +159,10 @@ export class EnumMismatch extends Violation {
 }
 
 export class ErrorViolation extends Violation {
+  public readonly message?: string;
   constructor(path: Path, public readonly error: any) {
     super(path, 'Error');
+    this.message = typeof error === 'object' ? error.message : undefined;
   }
 }
 
@@ -336,9 +338,10 @@ export class ArrayValidator<Out = unknown> extends Validator<Out[]> {
     let violations: Violation[] = [];
     for (let i = 0; i < value.length; i++) {
       const item = value[i];
-      promises[i] = this.itemsValidator.validatePath(item, path.index(i), ctx).then(
-        result => convertedArray[i] = result,
-        reject => violations = violations.concat(violationsOf(reject))
+      const itemPath = path.index(i);
+      promises[i] = this.itemsValidator.validatePath(item, itemPath, ctx).then(
+        (result) => convertedArray[i] = result,
+        (reject) => violations = violations.concat(violationsOf(reject, itemPath))
       );
     }
 
@@ -410,13 +413,13 @@ export class OneOfValidator<Out = unknown> extends Validator<Out> {
     const promises: PromiseLike<OneOfResult>[] = [];
     for (let i = 0; i < this.validators.length; i++) {
       promises[i] = this.validators[i].validatePath(value, path, ctx).then(
-        result => {
+        (result) => {
           matches++;
           newValue = result;
           return { success: true };
         },
-        error => {
-          return { violations: violationsOf(error) };
+        (error) => {
+          return { violations: violationsOf(error, path) };
         }
       );
     }
@@ -442,11 +445,11 @@ export class AnyOfValidator<Out = unknown, In = unknown> extends Validator<Out, 
     for (const validator of this.validators) {
       promises.push(
         validator.validatePath(value, path, ctx).then(
-          result => {
+          (result) => {
             passes.push(result);
           },
           (error) => {
-            violations = violations.concat(violationsOf(error));
+            violations = violations.concat(violationsOf(error, path));
           }
         )
       );
@@ -524,11 +527,11 @@ export class WhenGroupValidator<When = unknown, Otherwise = unknown, In = unknow
         const whenGroup = this.whenGroups[i];
         if (ctx.options.group.includes(whenGroup.group)) {
           promises.push(whenGroup.validator.validatePath(value, path, ctx).then(
-            result => {
+            (result) => {
               passes.push(result);
             },
-            error => {
-              violations = violations.concat(violationsOf(error));
+            (error) => {
+              violations = violations.concat(violationsOf(error, path));
             }
           ));
         }
@@ -594,8 +597,10 @@ export class MapValidator<K = unknown, V = unknown, E extends boolean = true> ex
     let i = 0;
     for (const [key, value] of map) {
       const entryPath = path.index(i);
-      const keyPromise = this.keys.validatePath(key, entryPath.index(0), ctx);
-      const valuePromise = this.values.validatePath(value, entryPath.index(1), ctx);
+      const keyPath = entryPath.index(0);
+      const valuePath = entryPath.index(1);
+      const keyPromise = this.keys.validatePath(key, keyPath, ctx);
+      const valuePromise = this.values.validatePath(value, valuePath, ctx);
       promises[i] = Promise.allSettled([keyPromise, valuePromise]).then(results => {
         const keyResult = results[0];
         const valueResult = results[1];
@@ -603,10 +608,10 @@ export class MapValidator<K = unknown, V = unknown, E extends boolean = true> ex
           convertedMap.set(keyResult.value, valueResult.value);
         } else {
           if (keyResult.status === 'rejected') {
-            violations = violations.concat(violationsOf(keyResult.reason));
+            violations = violations.concat(violationsOf(keyResult.reason, keyPath));
           }
           if (valueResult.status === 'rejected') {
-            violations = violations.concat(violationsOf(valueResult.reason));
+            violations = violations.concat(violationsOf(valueResult.reason, valuePath));
           }
         }
       });
@@ -682,11 +687,11 @@ export class SetValidator<T = unknown, E extends boolean = true> extends Validat
     for (const entry of value) {
       const entryPath = path.index(i);
       promises[i] = this.values.validatePath(entry, entryPath, ctx).then(
-        result => {
+        (result) => {
           convertedSet.add(result);
         },
-        error => {
-          violations = violations.concat(violationsOf(error));
+        (error) => {
+          violations = violations.concat(violationsOf(error,  entryPath));
         }
       );
       ++i;
@@ -1198,7 +1203,7 @@ export class AllOfValidator<Out, In> extends Validator<Out, In> {
     for (let i = 0; i < this.validators.length; i++) {
       const validator = this.validators[i];
       promises[i] = validator.validatePath(value, path, ctx).then(
-        result => {
+        (result) => {
           if (firstResult) {
             convertedValue = result;
             firstResult = false;
@@ -1206,8 +1211,8 @@ export class AllOfValidator<Out, In> extends Validator<Out, In> {
             violations.push(new Violation(path, 'ConflictingConversions', value));
           }
         },
-        error => {
-          violations = violations.concat(violationsOf(error));
+        (error) => {
+          violations = violations.concat(violationsOf(error, path));
         }
       );
     }
@@ -1365,13 +1370,13 @@ export class ValueMapper<Out = unknown, In = unknown> extends Validator<Out, In>
       if (isPromise(maybePromise)) {
         return maybePromise.then(
           (result: any) => this.handleResult(result, value, ctx),
-          (error: any) => Promise.reject(violationsOf(error)),
+          (error: any) => Promise.reject(violationsOf(error, path)),
         );
       } else {
         return this.handleResult(maybePromise, value, ctx);
       }
     } catch (error) {
-      return Promise.reject(violationsOf(error));
+      return Promise.reject(violationsOf(error, path));
     }
   }
 
@@ -1451,7 +1456,7 @@ export function maybeAllOfValidator<Out, In>(validators: [Validator<Out, In>, ..
   return new AllOfValidator<Out, In>(validators);
 }
 
-export function violationsOf<Out>(error: any): Violation[] {
+export function violationsOf<Out>(error: any, path: Path): Violation[] {
   if (error instanceof Violation) {
     return [error];
   }
@@ -1461,5 +1466,5 @@ export function violationsOf<Out>(error: any): Violation[] {
   if (Array.isArray(error) && error[0] instanceof Violation) {
     return error as Violation[];
   }
-  return [new ErrorViolation(ROOT, error)];
+  return [new ErrorViolation(path, error)];
 }
