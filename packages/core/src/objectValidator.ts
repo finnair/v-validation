@@ -123,10 +123,6 @@ export class ObjectValidator<LocalType = unknown, InheritableType = LocalType, I
   }
 
   validatePathV2(value: In, path: Path, ctx: ValidationContext, success: SuccessCallback<LocalType>, failure: FailureCallback): void {
-    this.validateFilteredPath(value, path, ctx, success, failure, _ => true);
-  }
-
-  validateFilteredPath(value: In, path: Path, ctx: ValidationContext, success: SuccessCallback<LocalType>, failure: FailureCallback, filter: PropertyFilter) {
     if (value === null || value === undefined) {
       failure([defaultViolations.notNull(path)]);
       return;
@@ -233,10 +229,6 @@ export class ObjectValidator<LocalType = unknown, InheritableType = LocalType, I
 
     for (const key of keys) {
       convertedObject[key] = undefined;
-      if (!filter(key)) {
-        reportSuccess(key, undefined);
-        continue;
-      }
       const valuePath = path.property(key);
       const propertyValue = anyValue[key];
       try {
