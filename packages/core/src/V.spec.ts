@@ -70,6 +70,16 @@ class DeferredValidator<T> extends Validator<T> {
   }
 }
 
+class DeprecatedValidator extends Validator<string> {
+  async validatePath(value: any, path: Path, ctx: ValidationContext): Promise<string> {
+    if (String(value) === 'true') {
+      return Promise.resolve('true');
+    } else {
+      return Promise.reject(new Violation(path, 'DeprecatedValidator', value));
+    }
+  }
+}
+
 describe('ValidationResult', () => {
   test('getValue() returns valid value', async () => {
     const result = await V.string().validate('123');
@@ -225,7 +235,7 @@ describe('strings', () => {
 
     test('null is not allowed', () => expectViolations(null, V.size(1, 2), defaultViolations.notNull(ROOT)));
 
-    test('length is missing', () => expectViolations({}, V.size(1, 2), new TypeMismatch(ROOT, 'value with numeric length field')));
+    test('length is missing', () => expectViolations({}, V.size(1, 2), new TypeMismatch(ROOT, 'value with numeric length field', {})));
 
     test('length property', () => expectValid({ length: 2 }, V.size(1, 2)));
 
@@ -650,6 +660,14 @@ describe('objects', () => {
       await expectValid({ A: 1, B: 2, C: 3 }, validator);
       await expectViolations({ D: 4 }, validator, defaultViolations.enum('Keys', 'D', Path.of('D')));
     });
+    test('optionalProperties with deprecated validator', async () => {
+      const validator = V.optionalProperties(new DeprecatedValidator(), new DeprecatedValidator());
+      await expectValid({}, validator);
+      await expectValid({ 'true': 'true' }, validator);
+      await expectViolations({ 'true': 'false' }, validator, new Violation(Path.of('true'), 'DeprecatedValidator', 'false'));
+      await expectViolations({ 'false': 'true' }, validator, new Violation(Path.of('false'), 'DeprecatedValidator', 'false'));
+      await expectViolations({ 'false': 'false' }, validator, new Violation(Path.of('false'), 'DeprecatedValidator', 'false'));
+    });
   });
 
   describe('cross-property rules', () => {
@@ -927,13 +945,18 @@ describe('inheritance', () => {
       } satisfies VType<typeof multiParentChild>,
       multiParentChild,
     ));
+    
   test('invalid multi-parent object', () =>
-    expectViolations(
-      { additionalProperty: 123, name: '' },
-      multiParentChild,
-      defaultViolations.notEmpty(property('name')),
-      defaultViolations.notNull(property('anything')),
-      defaultViolations.notNull(property('id')),
+    multiParentChild.validatePath({ additionalProperty: 123, name: '' }, Path.ROOT, new ValidationContext({})).then(
+      (success) => {
+        fail(`expected violations, got ${success}`)
+      },
+      (violations) => {
+        expect(violations).toHaveLength(3);
+        expect(violations).toContainEqual(defaultViolations.notEmpty(property('name')));
+        expect(violations).toContainEqual(defaultViolations.notNull(property('anything')));
+        expect(violations).toContainEqual(defaultViolations.notNull(property('id')));
+      }
     ));
 
   test("child's extended property validators are only run after successful parent property validation", async () => {

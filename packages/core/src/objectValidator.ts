@@ -141,6 +141,11 @@ export class ObjectValidator<LocalType = unknown, InheritableType = LocalType, I
     let expectedResponses = keys.size;
     let violations: Violation[] = [];
 
+    if (expectedResponses === 0) {
+      success(convertedObject as LocalType);
+      return;
+    }
+
     const reportResult = () => {
       if (--expectedResponses === 0) {
         if (violations.length > 0) {
@@ -234,12 +239,16 @@ export class ObjectValidator<LocalType = unknown, InheritableType = LocalType, I
       }
       const valuePath = path.property(key);
       const propertyValue = anyValue[key];
-      if (this.properties[key]) {
-        validateProperty(key, propertyValue, valuePath);
-      } else if (this.localProperties[key]) {
-        validateLocalProperty(key, propertyValue, valuePath);
-      } else {
-        validateAdditionalProperty(key, propertyValue, valuePath, 0, 0);
+      try {
+        if (this.properties[key]) {
+          validateProperty(key, propertyValue, valuePath);
+        } else if (this.localProperties[key]) {
+          validateLocalProperty(key, propertyValue, valuePath);
+        } else {
+          validateAdditionalProperty(key, propertyValue, valuePath, 0, 0);
+        }
+      } catch (error) {
+        reportFailure(key, error);
       }
     }
   }
@@ -291,16 +300,18 @@ export class ObjectNormalizer<InOut> extends Validator<undefined | InOut | {}> {
     super();
     Object.freeze(this);
   }
-  validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<undefined | {}> {
+  validatePathV2(value: InOut, path: Path, ctx: ValidationContext, success: SuccessCallback<undefined | InOut | {}>, failure: FailureCallback): void {
     if (value === undefined) {
-      return Promise.resolve(undefined);
+      success(undefined);
+      return;
     }
     if (typeof value !== 'object' || value === null) {
       const object: any = {};
       object[this.property] = value;
-      return Promise.resolve(object);
+      success(object);
+      return;
     }
-    return Promise.resolve(value);
+    success(value);
   }
 }
 

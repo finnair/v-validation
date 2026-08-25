@@ -1,4 +1,4 @@
-import { Validator, ValidationContext, isNullOrUndefined, defaultViolations, isString, TypeMismatch } from '@finnair/v-validation';
+import { Validator, ValidationContext, isNullOrUndefined, defaultViolations, isString, TypeMismatch, SuccessCallback, FailureCallback } from '@finnair/v-validation';
 import { Path } from '@finnair/path';
 import moment, { Moment, MomentInput } from 'moment';
 
@@ -7,34 +7,34 @@ export class MomentValidator extends Validator<Moment, string | Moment> {
     super();
     Object.freeze(this);
   }
-  async validatePath(value: string | Moment, path: Path, ctx: ValidationContext): Promise<Moment> {
+  validatePathV2(value: any, path: Path, ctx: ValidationContext, success: SuccessCallback<Moment>, failure: FailureCallback): void {
     if (isNullOrUndefined(value)) {
-      return Promise.reject(defaultViolations.notNull(path));
+      return failure(defaultViolations.notNull(path));
     }
     if (isString(value) || moment.isMoment(value)) {
       const convertedValue = this.parse(value);
       if (convertedValue.isValid()) {
-        return Promise.resolve(convertedValue);
+        return success(convertedValue);
       }
     }
-    return Promise.reject(defaultViolations.date(value, path, this.type));
+    return failure(defaultViolations.date(value, path, this.type));
   }
 }
 
 const durationPattern =
   /^P(?!$)(\d+(?:\.\d+)?Y)?(\d+(?:\.\d+)?M)?(\d+(?:\.\d+)?W)?(\d+(?:\.\d+)?D)?(T(?=\d)(\d+(?:\.\d+)?H)?(\d+(?:\.\d+)?M)?(\d+(?:\.\d+)?S)?)?$/;
 export class DurationValidator extends Validator<moment.Duration> {
-  async validatePath(value: any, path: Path, ctx: ValidationContext): Promise<moment.Duration> {
+  validatePathV2(value: any, path: Path, ctx: ValidationContext, success: SuccessCallback<moment.Duration>, failure: FailureCallback): void {
     if (isNullOrUndefined(value)) {
-      return Promise.reject(defaultViolations.notNull(path));
+      return failure(defaultViolations.notNull(path));
     }
     if ((isString(value) && durationPattern.test(value)) || moment.isDuration(value)) {
       const convertedValue = moment.duration(value);
       if (convertedValue.isValid()) {
-        return Promise.resolve(convertedValue);
+        return success(convertedValue);
       }
     }
-    return Promise.reject(new TypeMismatch(path, 'Duration', value));
+    return failure(new TypeMismatch(path, 'Duration', value));
   }
 }
 
