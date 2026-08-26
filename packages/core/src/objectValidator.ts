@@ -124,12 +124,10 @@ export class ObjectValidator<LocalType = unknown, InheritableType = LocalType, I
 
   validatePathV2(value: In, path: Path, ctx: ValidationContext, success: SuccessCallback<LocalType>, failure: FailureCallback): void {
     if (value === null || value === undefined) {
-      failure([defaultViolations.notNull(path)]);
-      return;
+      return failure([defaultViolations.notNull(path)]);
     }
     if (typeof value !== 'object' || Array.isArray(value)) {
-      failure([defaultViolations.object(path)]);
-      return;
+      return failure([defaultViolations.object(path)]);
     }
     const anyValue = value as any;
     const convertedObject: any = {} as LocalType;
@@ -138,8 +136,7 @@ export class ObjectValidator<LocalType = unknown, InheritableType = LocalType, I
     let violations: Violation[] = [];
 
     if (expectedResponses === 0) {
-      success(convertedObject as LocalType);
-      return;
+      return success(convertedObject as LocalType);
     }
 
     const reportResult = () => {
@@ -294,16 +291,14 @@ export class ObjectNormalizer<InOut> extends Validator<undefined | InOut | {}> {
   }
   validatePathV2(value: InOut, path: Path, ctx: ValidationContext, success: SuccessCallback<undefined | InOut | {}>, failure: FailureCallback): void {
     if (value === undefined) {
-      success(undefined);
-      return;
+      return success(undefined);
     }
     if (typeof value !== 'object' || value === null) {
       const object: any = {};
       object[this.property] = value;
-      success(object);
-      return;
+      return success(object);
     }
-    success(value);
+    return success(value);
   }
 }
 

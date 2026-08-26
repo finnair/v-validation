@@ -5,7 +5,7 @@ import { validate as uuidValidate, version as uuidVersion } from 'uuid';
 const ROOT = Path.ROOT;
 
 export interface ValidatorFn<Out = unknown, In = unknown> {
-  (value: In, path: Path, ctx: ValidationContext): PromiseLike<Out>;
+  (value: In, path: Path, ctx: ValidationContext): Out | PromiseLike<Out>;
 }
 
 export interface ValidatorFnV2<Out = unknown, In = unknown> {
@@ -28,6 +28,7 @@ export class ValidationContext {
 
   /**
   * Optionally ignore an error for backwards compatible changes (enum values, new properties).
+  * @deprecated use failureV2 instead
   */
   failure<Out = unknown, In = unknown>(violation: Violation | Violation[], value: In) {
     return new Promise((resolve, reject) => {
@@ -45,7 +46,7 @@ export class ValidationContext {
       failure(violations);
     }
   }
-  private ignoreViolation(violation: Violation) {
+  protected ignoreViolation(violation: Violation) {
     return (
       (this.options.ignoreUnknownEnumValues && violation.type === ValidatorType.EnumMismatch) ||
       (this.options.ignoreUnknownProperties && violation.type === ValidatorType.UnknownProperty)
@@ -378,7 +379,13 @@ export class ValidatorFnWrapperV2<Out = unknown, In = unknown> extends Validator
   }
 
   validatePathV2(value: In, path: Path, ctx: ValidationContext, success: SuccessCallback<Out>, failure: FailureCallback): void {
-    this.fn(value, path, ctx, success, failure);
+    try {
+      this.fn(value, path, ctx, 
+        success, 
+        error => ctx.failureV2(error, value, success, failure));
+    } catch (error) {
+      ctx.failureV2(violationsOf(error, path), value, success, failure);
+    }
   }
 }
 
@@ -390,12 +397,10 @@ export class ArrayValidator<Out = unknown> extends Validator<Out[]> {
 
   validatePathV2(value: unknown, path: Path, ctx: ValidationContext, success: SuccessCallback<Out[]>, failure: FailureCallback): void {
     if (isNullOrUndefined(value)) {
-      failure([defaultViolations.notNull(path)]);
-      return;
+      return failure([defaultViolations.notNull(path)]);
     }
     if (!Array.isArray(value)) {
-      failure([new TypeMismatch(path, 'array', value)]);
-      return;
+      return failure([new TypeMismatch(path, 'array', value)]);
     }
     const convertedArray: Out[] = [];
     if (value.length === 0) {
@@ -566,13 +571,11 @@ export class IfValidator<If = unknown, In = unknown, Else = unknown> extends Val
     for (let i = 0; i < this.conditionals.length; i++) {
       const conditional = this.conditionals[i];
       if (conditional.fn(value, path, ctx)) {
-        conditional.validator.validatePathV2(value, path, ctx, success, failure);
-        return;
+        return conditional.validator.validatePathV2(value, path, ctx, success, failure);
       }
     }
     if (this.elseValidator) {
-      this.elseValidator.validatePathV2(value, path, ctx, success, failure);
-      return;
+      return this.elseValidator.validatePathV2(value, path, ctx, success, failure);
     }
     failure(new Violation(path, 'NoMatchingCondition', value));
   }
@@ -768,13 +771,11 @@ export class MapNormalizer<K = unknown, V = unknown, E extends boolean = true> e
         }
       }
       if (violations.length > 0) {
-        failure(violations);
-        return;
+        return failure(violations);
       }
-      super.validatePathV2(map, path, ctx, success, failure);
-      return; 
+      return super.validatePathV2(map, path, ctx, success, failure);
     }
-    failure(new TypeMismatch(path, 'Map OR array of [key, value] arrays'));
+    return failure(new TypeMismatch(path, 'Map OR array of [key, value] arrays'));
   }
 }
 
@@ -1100,8 +1101,7 @@ export abstract class NumberValidatorBase<In> extends Validator<number, In> {
     switch (format) {
       case NumberFormat.integer:
         if (!Number.isInteger(value)) {
-          failure(defaultViolations.number(value, format, path));
-          return;
+          return failure(defaultViolations.number(value, format, path));
         }
         break;
     }
@@ -1259,14 +1259,12 @@ export class EnumValidator<Out extends Record<string, string | number>> extends 
 
   validatePathV2(value: unknown, path: Path, ctx: ValidationContext, success: SuccessCallback<Out[keyof Out]>, failure: FailureCallback): void {
     if (isNullOrUndefined(value)) {
-      failure([defaultViolations.notNull(path)]);
-      return;
+      return failure([defaultViolations.notNull(path)]);
     } 
     if (typeof value === 'string' || typeof value === 'number') {
       const isValid = Object.values(this.enumType).includes(value);
       if (isValid) {
-        success(value as Out[keyof Out]);
-        return;
+        return success(value as Out[keyof Out]);
       }
     }
     ctx.failureV2(defaultViolations.enum(this.name, value, path), value, success, failure);
@@ -1324,9 +1322,6 @@ export class HasValueValidator<InOut> extends Validator<InOut> {
 export class AllOfValidator<Out, In> extends Validator<Out, In> {
   constructor(public readonly validators: [Validator<Out, In>, ...Validator<Out, In>[]]) {
     super();
-    if (this.validators.length === 0) {
-      throw new Error('AllOfValidator: At least one validator required');
-    }
     Object.freeze(this.validators);
     Object.freeze(this);
   }
