@@ -361,7 +361,7 @@ export class ValidatorFnWrapper<Out = unknown, In = unknown> extends Validator<O
       if (isPromise(maybePromise)) {
         maybePromise.then(
           success,
-          error => ctx.failureV2(error, value, success, failure)
+          error => ctx.failureV2(violationsOf(error, path), value, success, failure)
         );
       } else {
         success(maybePromise);

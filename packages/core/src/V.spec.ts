@@ -766,7 +766,7 @@ describe('objects', () => {
 
     test('recursive type', () => expectValid(({ first: 'first', next: { first: 'second', next: { first: 'third' } } }) satisfies VType<typeof validator>, validator));
 
-    test.skip('cyclic data is invalid ', async () => {
+    test('cyclic data is invalid ', async () => {
       const first: any = { first: 'first' };
       const second: any = { first: 'second', next: first };
       first.next = second;
