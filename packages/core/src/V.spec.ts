@@ -513,7 +513,7 @@ describe('objects', () => {
     test('next allows conversion to string', () => {
       const validator = V.objectType()
         .properties({ value: V.string() })
-        .next(V.map( value => JSON.stringify(value) ))
+        .next(V.map(value => JSON.stringify(value)))
         .build();
       assertType<EqualTypes<VType<typeof validator>, string>>(true);
     });
@@ -523,7 +523,7 @@ describe('objects', () => {
     const validator = V.objectType().properties({ unknown: V.unknown() }).build();
     type T = { unknown: unknown };
     const value: T = { unknown: { foo: 'bar' } }
-    
+
     assertType<EqualTypes<ComparableType<VType<typeof validator>>, ComparableType<T>>>(true);
     const valid = await validator.getValid(value);
 
@@ -690,16 +690,16 @@ describe('objects', () => {
   describe('properties', () => {
     test('valid properties', async () => {
       const validator = V.properties(V.string(), V.string());
-      
-      assertType<EqualTypes<ComparableType<VType<typeof validator>>, ComparableType<{ [ key: string ]: string}>>>(true)
+
+      assertType<EqualTypes<ComparableType<VType<typeof validator>>, ComparableType<{ [key: string]: string }>>>(true)
       await expectValid({ foo: 'bar' }, validator);
     });
-    
+
     test('enum keys', async () => {
       enum Keys { A = 'A', B = 'B', C = 'C' };
       type type = { [key in Keys]?: number };
       const validator = V.optionalProperties(V.enum(Keys, 'Keys'), V.number());
-      
+
       assertType<EqualTypes<ComparableType<VType<typeof validator>>, ComparableType<type>>>(true)
       await expectValid({ A: 5 }, validator);
       await expectValid({ A: 1, B: 2, C: 3 }, validator);
@@ -946,7 +946,7 @@ describe('inheritance', () => {
       } satisfies VType<typeof multiParentChild>,
       multiParentChild,
     ));
-    
+
   test('invalid multi-parent object', () =>
     multiParentChild.validatePath({ additionalProperty: 123, name: '' }, Path.ROOT, new ValidationContext({})).then(
       (success) => {
@@ -1205,17 +1205,17 @@ describe('oneOf', () => {
 
     test('valid date', () => expectValid(validDateString, validator, validDate));
 
-    test('invalid value matching two', () => expectViolations(dateValue, validator, 
+    test('invalid value matching two', () => expectViolations(dateValue, validator,
       defaultViolations.oneOf(2, [
-        { success: true }, 
-        { success: true }, 
+        { success: true },
+        { success: true },
         { violations: [defaultViolations.enum('EnumType', dateValue, ROOT)] },
       ])));
 
-    test('no matches', () => expectViolations('ABD', validator, 
+    test('no matches', () => expectViolations('ABD', validator,
       defaultViolations.oneOf(0, [
-        { violations: [new HasValueViolation(ROOT, dateValue, 'ABD')] }, 
-        { violations: [defaultViolations.date('ABD', ROOT)] }, 
+        { violations: [new HasValueViolation(ROOT, dateValue, 'ABD')] },
+        { violations: [defaultViolations.date('ABD', ROOT)] },
         { violations: [defaultViolations.enum('EnumType', 'ABD', ROOT)] },
       ])));
   });
@@ -1520,11 +1520,11 @@ describe('async validation', () => {
     });
 
     test('invalid', async () => {
-      await expectViolations(true, V.oneOf(defer(V.number()), defer(V.string())), 
-      defaultViolations.oneOf(0, [
-        { violations: [new TypeMismatch(ROOT, 'number', true)] },
-        { violations: [new TypeMismatch(ROOT, 'string', true)] },
-      ]));
+      await expectViolations(true, V.oneOf(defer(V.number()), defer(V.string())),
+        defaultViolations.oneOf(0, [
+          { violations: [new TypeMismatch(ROOT, 'number', true)] },
+          { violations: [new TypeMismatch(ROOT, 'string', true)] },
+        ]));
     });
   });
 
@@ -1636,9 +1636,9 @@ describe('groups', () => {
       .otherwiseSuccess()
       .next(V.array(V.number()));
 
-    test('with normalization', () => expectGroupValid('1,2,3', normalize, optionalNormalization, [1,2,3]));
-    test('without normalization', () => expectValid([1,2,3], optionalNormalization));
-    test('invalid with normalization', () => expectGroupViolations([1,2,3], normalize, optionalNormalization, new ErrorViolation(ROOT, new TypeError('value.split is not a function'))));
+    test('with normalization', () => expectGroupValid('1,2,3', normalize, optionalNormalization, [1, 2, 3]));
+    test('without normalization', () => expectValid([1, 2, 3], optionalNormalization));
+    test('invalid with normalization', () => expectGroupViolations([1, 2, 3], normalize, optionalNormalization, new ErrorViolation(ROOT, new TypeError('value.split is not a function'))));
     test('invalid without normalization', () => expectViolations('1,2,3', optionalNormalization, new TypeMismatch(ROOT, 'array', '1,2,3')));
   });
 
@@ -1889,10 +1889,10 @@ describe('Map', () => {
   describe('toMapType', () => {
     const validator = V.toMapType(
       V.objectType()
-      .properties({ 
-        key1: V.required(V.string()), 
-        key2: V.required(V.string()),
-      }).build(),
+        .properties({
+          key1: V.required(V.string()),
+          key2: V.required(V.string()),
+        }).build(),
       V.string(),
       true,
     );
@@ -1905,7 +1905,7 @@ describe('Map', () => {
       expect(map.get(key)).toEqual('value');
       let result = (await validator.validate(map));
       expect(result.isFailure()).toBe(false);
-      result.getValue() satisfies JsonMap<{key1: string, key2: string}, string>
+      result.getValue() satisfies JsonMap<{ key1: string, key2: string }, string>
 
       // Serializes to JSON as array
       const jsonString = JSON.stringify(result.getValue());
@@ -1930,7 +1930,7 @@ describe('Map', () => {
     test('empty array component is not allowed', () => expectViolations([[]], validator, new SizeViolation(Path.of(0), 1, 2)));
 
     test('object is not allowed', () => expectViolations({}, validator, new TypeMismatch(Path.ROOT, 'Map OR array of [key, value] arrays')));
-    
+
     describe('typing', () => {
       test('JsonMap', () => {
         const validator = V.toMapType(V.string(), V.number(), true);
@@ -1953,7 +1953,7 @@ describe('Map', () => {
     test('Map has invalid value', () => expectViolations(new Map([['foo', 0]]), validator, new TypeMismatch(Path.of(0, 1), 'string', 0)));
 
     test('Map has invalid key', () => expectViolations(new Map([[0, 'foo']]), validator, new TypeMismatch(Path.of(0, 0), 'string', 0)));
-    
+
     describe('typing', () => {
       test('JsonMap', () => {
         const validator = V.mapType(V.string(), V.number(), true);
@@ -2017,7 +2017,7 @@ describe('Set', () => {
 
 describe('JsonBigInt', () => {
   const largeBigInt = 9007199254740993n;
-  
+
   test('JsonBigInt', async () => expectValid(new JsonBigInt(largeBigInt), V.jsonBigInt()));
   test('bigint', async () => expectValid(largeBigInt, V.jsonBigInt(), new JsonBigInt(largeBigInt)));
   test('string', async () => expectValid(largeBigInt.toString(), V.jsonBigInt(), new JsonBigInt(largeBigInt)));
@@ -2058,14 +2058,14 @@ describe('ValidationContext', () => {
   describe('deprecated api', () => {
     test('ValidationContext.failure', async () => {
       const violation = defaultViolations.unknownProperty(Path.of('foo'));
-     const result = await new ValidationContext({ ignoreUnknownProperties: true }).failure(violation, 'value');
-     expect(result).toEqual('value');
-     try {
-       await new ValidationContext({ ignoreUnknownProperties: false }).failure(violation, 'value');
-       fail('Expected an error');
+      const result = await new ValidationContext({ ignoreUnknownProperties: true }).failure(violation, 'value');
+      expect(result).toEqual('value');
+      try {
+        await new ValidationContext({ ignoreUnknownProperties: false }).failure(violation, 'value');
+        fail('Expected an error');
       } catch (e) {
         expect(e).toEqual([violation]);
-     }
+      }
     });
   });
 });

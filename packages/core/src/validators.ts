@@ -110,8 +110,8 @@ export abstract class Validator<Out = unknown, In = unknown> {
   */
   validatePath(value: In, path: Path, ctx: ValidationContext): PromiseLike<Out> {
     return new Promise((resolve: (value: Out) => void, reject: (violations: Violation[]) => void) => {
-      this.validatePathV2(value, path, ctx, 
-        resolve, 
+      this.validatePathV2(value, path, ctx,
+        resolve,
         (error) => {
           reject(violationsOf(error, path));
         });
@@ -380,8 +380,8 @@ export class ValidatorFnWrapperV2<Out = unknown, In = unknown> extends Validator
 
   validatePathV2(value: In, path: Path, ctx: ValidationContext, success: SuccessCallback<Out>, failure: FailureCallback): void {
     try {
-      this.fn(value, path, ctx, 
-        success, 
+      this.fn(value, path, ctx,
+        success,
         error => ctx.failureV2(error, value, success, failure));
     } catch (error) {
       ctx.failureV2(violationsOf(error, path), value, success, failure);
@@ -423,7 +423,7 @@ export class ArrayValidator<Out = unknown> extends Validator<Out[]> {
       const item = value[i];
       const itemPath = path.index(i);
       try {
-        this.itemsValidator.validatePathV2(item, itemPath, ctx, 
+        this.itemsValidator.validatePathV2(item, itemPath, ctx,
           (convertedItem) => {
             convertedArray[i] = convertedItem;
             reportResult();
@@ -502,14 +502,8 @@ export class OneOfValidator<Out = unknown> extends Validator<Out> {
     let newValue: any = null;
     const results: OneOfResult[] = [];
 
-    const reportResults = () => {
-      if (matches === 1) {
-        success(newValue);
-      } else {
-        failure(defaultViolations.oneOf(matches, results, path));
-      }
-    };
-    
+    const reportResults = () => matches === 1 ? success(newValue) : failure(defaultViolations.oneOf(matches, results, path));
+
     const validateNext = (index: number) => {
       if (index < this.validators.length) {
         this.validators[index].validatePathV2(value, path, ctx,
@@ -917,15 +911,15 @@ export class NextStringValidator extends StringValidatorBase<string> {
     Object.freeze(this);
   }
 
-  validatePathV2(value: string, path: Path, ctx: ValidationContext, success: SuccessCallback<string>, failure: FailureCallback): void{
-    this.firstValidator.validatePathV2(value, path, ctx, 
-      (firstResult) => this.nextValidator.validatePathV2(firstResult, path, ctx, success, failure), 
+  validatePathV2(value: string, path: Path, ctx: ValidationContext, success: SuccessCallback<string>, failure: FailureCallback): void {
+    this.firstValidator.validatePathV2(value, path, ctx,
+      (firstResult) => this.nextValidator.validatePathV2(firstResult, path, ctx, success, failure),
       failure);
   }
 }
 
 export class StringValidator extends StringValidatorBase<string> {
-  validatePathV2(value: string, path: Path, ctx: ValidationContext, success: SuccessCallback<string>, failure: FailureCallback): void{
+  validatePathV2(value: string, path: Path, ctx: ValidationContext, success: SuccessCallback<string>, failure: FailureCallback): void {
     if (isNullOrUndefined(value)) {
       failure([defaultViolations.notNull(path)]);
     } else if (isString(value)) {
@@ -937,7 +931,7 @@ export class StringValidator extends StringValidatorBase<string> {
 }
 
 export class StringNormalizer extends StringValidatorBase<unknown> {
-  validatePathV2(value: any, path: Path, ctx: ValidationContext, success: SuccessCallback<string>, failure: FailureCallback): void{
+  validatePathV2(value: any, path: Path, ctx: ValidationContext, success: SuccessCallback<string>, failure: FailureCallback): void {
     if (isNullOrUndefined(value)) {
       failure([defaultViolations.notNull(path)]);
     } else if (isString(value)) {
@@ -1150,8 +1144,8 @@ export class NextNumberValidator<In> extends NumberValidatorBase<In> {
   }
 
   validatePathV2(value: In, path: Path, ctx: ValidationContext, success: SuccessCallback<number>, failure: FailureCallback): void {
-    this.firstValidator.validatePathV2(value, path, ctx, 
-      (firstResult) => this.nextValidator.validatePathV2(firstResult, path, ctx, success, failure), 
+    this.firstValidator.validatePathV2(value, path, ctx,
+      (firstResult) => this.nextValidator.validatePathV2(firstResult, path, ctx, success, failure),
       failure);
   }
 }
@@ -1260,7 +1254,7 @@ export class EnumValidator<Out extends Record<string, string | number>> extends 
   validatePathV2(value: unknown, path: Path, ctx: ValidationContext, success: SuccessCallback<Out[keyof Out]>, failure: FailureCallback): void {
     if (isNullOrUndefined(value)) {
       return failure([defaultViolations.notNull(path)]);
-    } 
+    }
     if (typeof value === 'string' || typeof value === 'number') {
       const isValid = Object.values(this.enumType).includes(value);
       if (isValid) {
