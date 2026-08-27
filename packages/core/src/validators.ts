@@ -118,8 +118,18 @@ export abstract class Validator<Out = unknown, In = unknown> {
     });
   }
 
+  /**
+   * Validate value and call success callback with valid/converted value or failure callback with Violation[].
+   * 
+   * NOTE: Default implementation calls validatePath() for backwards compatibility. Subclasses should override this to provide a more efficient implementation.
+   * 
+   * @param value 
+   * @param path 
+   * @param ctx 
+   * @param success 
+   * @param failure 
+   */
   validatePathV2(value: In, path: Path, ctx: ValidationContext, success: SuccessCallback<Out>, failure: FailureCallback): void {
-    // Default implementation for backwards compatibility. Subclasses should override this to provide a more efficient implementation.
     this.validatePath(value, path, ctx).then(
       success,
       (error) => {
