@@ -1012,6 +1012,16 @@ describe('inheritance', () => {
 
     test('invalid child', () => expectViolations({ pwd1: 'pwd1', pwd2: 'pwd2', min: 2, max: 1 }, child, new Violation(ROOT, 'PasswordsMatch'), new Violation(ROOT, 'MinLoeMax')));
   });
+
+  test('prototype inheritance', async () => {
+    const parent = { parentProp: 'parentProp' };
+    const child = Object.create(parent);
+    await expectViolations(
+      child,
+      V.objectType().allowAdditionalProperties(false).build(), 
+      defaultViolations.unknownPropertyDenied(ROOT.property('parentProp'))
+    );
+  });
 });
 
 describe('object next', () => {

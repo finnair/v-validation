@@ -162,9 +162,14 @@ export class PropertiesValidator<LocalType = unknown, In = unknown> extends Vali
     }
     const anyValue = value as any;
     const convertedObject: any = {} as LocalType;
-    const keys = new Set<string>([...Object.keys(this.properties), ...Object.keys(this.localProperties), ...Object.keys(value)]);
-    let expectedResponses = keys.size;
     let violations: Violation[] = [];
+    
+    const keys = new Set<string>([...Object.keys(this.properties), ...Object.keys(this.localProperties)]);
+    // Add all, including inherited keys
+    for (const key in anyValue) {
+      keys.add(key);
+    }
+    let expectedResponses = keys.size;
 
     if (expectedResponses === 0) {
       return success(convertedObject as LocalType);
