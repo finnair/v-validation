@@ -76,7 +76,7 @@ export class ObjectValidator<LocalType = unknown, InheritableType = LocalType, I
 
   public readonly nextValidator?: Validator;
 
-  public readonly localNextValidator?: Validator;
+  private readonly validator: Validator<LocalType, In>;
 
   constructor(public readonly model: ObjectModel<LocalType, InheritableType>) {
     super();
@@ -103,25 +103,56 @@ export class ObjectValidator<LocalType = unknown, InheritableType = LocalType, I
     this.additionalProperties = additionalProperties.concat(getMapEntryValidators(model.additionalProperties));
     this.properties = mergeProperties(getPropertyValidators(model.properties), properties);
     this.localProperties = getPropertyValidators(model.localProperties);
+
+    let validator: Validator = new PropertiesValidator<LocalType, In>(this.properties, this.localProperties, this.additionalProperties);
     const next = nextValidators.length > 0 ? maybeCompositionOf(...(nextValidators as CompositionParameters)) : undefined;
     if (next) {
       this.nextValidator = next;
+      validator = validator.next(next);
     }
     if (model.localNext) {
+      let localNextValidator: Validator | undefined = undefined;
       if (!Array.isArray(model.localNext)) {
-        this.localNextValidator = model.localNext;
+        localNextValidator = model.localNext;
       } else if (model.localNext.length > 0) {
-        this.localNextValidator = maybeCompositionOf(...(model.localNext as CompositionParameters));
+        localNextValidator = maybeCompositionOf(...(model.localNext as CompositionParameters));
+      }
+      if (localNextValidator) {
+        validator = validator.next(localNextValidator);
       }
     }
-
-    Object.freeze(this.properties);
-    Object.freeze(this.localProperties);
-    Object.freeze(this.additionalProperties);
+    this.validator = validator as Validator<LocalType, In>;
     Object.freeze(this.parentValidators);
     Object.freeze(this);
   }
 
+  validatePathV2(value: In, path: Path, ctx: ValidationContext, success: SuccessCallback<LocalType>, failure: FailureCallback): void {
+    this.validator.validatePathV2(value, path, ctx, success, failure);
+  }
+
+  omit<T, K extends keyof (any & (InheritableType | LocalType))>(...keys: K[]) {
+    return new ObjectValidator<Omit<LocalType, K extends keyof LocalType ? K : never>, Omit<InheritableType, K extends keyof InheritableType ? K : never>>({
+      properties: pick(this.properties, key => !keys.includes(key as any)),
+      localProperties: pick(this.localProperties, key => !keys.includes(key as any)),
+    });
+  }
+
+  pick<T, K extends keyof (any & (InheritableType | LocalType))>(...keys: K[]) {
+    return new ObjectValidator<Pick<LocalType, K extends keyof LocalType ? K : never>, Pick<InheritableType, K extends keyof InheritableType ? K : never>>({
+      properties: pick(this.properties, key => keys.includes(key as any)),
+      localProperties: pick(this.localProperties, key => keys.includes(key as any)),
+    });
+  }
+}
+
+export class PropertiesValidator<LocalType = unknown, In = unknown> extends Validator<LocalType, In> {
+  constructor(readonly properties: Properties, readonly localProperties: Properties, readonly additionalProperties: MapEntryValidator[]) {
+    super();
+    Object.freeze(this.properties);
+    Object.freeze(this.localProperties);
+    Object.freeze(this.additionalProperties);
+    Object.freeze(this);
+  }
   validatePathV2(value: In, path: Path, ctx: ValidationContext, success: SuccessCallback<LocalType>, failure: FailureCallback): void {
     if (value === null || value === undefined) {
       return failure([defaultViolations.notNull(path)]);
@@ -143,18 +174,6 @@ export class ObjectValidator<LocalType = unknown, InheritableType = LocalType, I
       if (--expectedResponses === 0) {
         if (violations.length > 0) {
           failure(violations);
-        } else if (this.nextValidator) {
-          this.nextValidator.validatePathV2(convertedObject, path, ctx, 
-            (result) => {
-              if (this.localNextValidator) {
-                this.localNextValidator.validatePathV2(result, path, ctx, (result) => success(result as LocalType), failure);
-              } else {
-                success(result as LocalType);
-              }
-            }, 
-            failure);
-        } else if (this.localNextValidator) {
-          this.localNextValidator.validatePathV2(convertedObject, path, ctx, (result) => success(result as LocalType), failure);
         } else {
           success(convertedObject as LocalType);
         }
@@ -241,21 +260,8 @@ export class ObjectValidator<LocalType = unknown, InheritableType = LocalType, I
       }
     }
   }
-
-  omit<T, K extends keyof (any & (InheritableType | LocalType))>(...keys: K[]) {
-    return new ObjectValidator<Omit<LocalType, K extends keyof LocalType ? K : never>, Omit<InheritableType, K extends keyof InheritableType ? K : never>>({
-      properties: pick(this.properties, key => !keys.includes(key as any)),
-      localProperties: pick(this.localProperties, key => !keys.includes(key as any)),
-    });
-  }
-
-  pick<T, K extends keyof (any & (InheritableType | LocalType))>(...keys: K[]) {
-    return new ObjectValidator<Pick<LocalType, K extends keyof LocalType ? K : never>, Pick<InheritableType, K extends keyof InheritableType ? K : never>>({
-      properties: pick(this.properties, key => keys.includes(key as any)),
-      localProperties: pick(this.localProperties, key => keys.includes(key as any)),
-    });
-  }
 }
+
 
 function pick(properties: Properties, fn: (key: keyof any) => boolean): Properties {
   return Object.entries(properties).reduce((current: Properties, [key, validator]) => {
