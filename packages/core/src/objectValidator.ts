@@ -1,21 +1,21 @@
 import { Path } from "@finnair/path";
-import { 
-  AnyValidator, 
-  CompositionParameters, 
-  defaultViolations, 
-  FailureCallback, 
-  HasValueValidator, 
-  isNullOrUndefined, 
-  isNumber, 
-  isString, 
-  maybeAllOfValidator, 
-  maybeCompositionOf, 
-  SuccessCallback, 
-  ValidationContext, 
-  Validator, 
-  ValidatorFnWrapperV2, 
+import {
+  AnyValidator,
+  CompositionParameters,
+  defaultViolations,
+  FailureCallback,
+  HasValueValidator,
+  isNullOrUndefined,
+  isNumber,
+  isString,
+  maybeAllOfValidator,
+  maybeCompositionOf,
+  SuccessCallback,
+  ValidationContext,
+  Validator,
+  ValidatorFnWrapperV2,
   Violation,
-  violationsOf, 
+  violationsOf,
 } from "./validators";
 
 export type PropertyModel = { [s: string]: string | number | Validator };
@@ -188,22 +188,22 @@ export class PropertiesValidator<LocalType = unknown, In = unknown> extends Vali
       }
       reportResult();
     };
-    
+
     const reportFailure = (key: string, error: any) => {
       delete convertedObject[key];
       violations = violations.concat(violationsOf(error, path.property(key)));
       reportResult();
     };
-    
+
     const validateLocalProperty = (key: string, propertyValue: unknown, propertyPath: Path) => {
-      this.localProperties[key].validatePathV2(propertyValue, propertyPath, ctx, 
+      this.localProperties[key].validatePathV2(propertyValue, propertyPath, ctx,
         (result) => reportSuccess(key, result),
         (error) => reportFailure(key, error)
       )
     };
 
     const validateProperty = (key: string, propertyValue: unknown, propertyPath: Path) => {
-      this.properties[key].validatePathV2(propertyValue, propertyPath, ctx, 
+      this.properties[key].validatePathV2(propertyValue, propertyPath, ctx,
         (result) => {
           if (this.localProperties[key]) {
             validateLocalProperty(key, propertyValue, propertyPath);
@@ -218,7 +218,7 @@ export class PropertiesValidator<LocalType = unknown, In = unknown> extends Vali
     const validateAdditionalProperty = (key: string, propertyValue: unknown, propertyPath: Path, index: number, keySuccessCount: number, keyError?: Violation[]) => {
       if (index < this.additionalProperties.length) {
         const { keyValidator, valueValidator } = this.additionalProperties[index];
-        keyValidator.validatePathV2(key, propertyPath, ctx, 
+        keyValidator.validatePathV2(key, propertyPath, ctx,
           () => {
             valueValidator.validatePathV2(propertyValue, propertyPath, ctx,
               (result) => validateAdditionalProperty(key, result, propertyPath, index + 1, keySuccessCount + 1),
@@ -354,7 +354,7 @@ function getMapEntryValidators(additionalProperties?: boolean | MapEntryModel | 
 export const lenientUnknownPropertyValidator = new ValidatorFnWrapperV2((value: any, path: Path, ctx: ValidationContext, success: SuccessCallback<any>, failure: FailureCallback) =>
   ctx.failureV2(defaultViolations.unknownProperty(path), value, success, failure));
 
-export const strictUnknownPropertyValidator = new ValidatorFnWrapperV2((value: any, path: Path, ctx: ValidationContext, _success: SuccessCallback<any>, failure: FailureCallback) => 
+export const strictUnknownPropertyValidator = new ValidatorFnWrapperV2((value: any, path: Path, ctx: ValidationContext, _success: SuccessCallback<any>, failure: FailureCallback) =>
   failure([defaultViolations.unknownPropertyDenied(path)]));
 
 const allowAllMapEntries: MapEntryValidator = new MapEntryValidator({
