@@ -23,7 +23,7 @@ Or [`npm`](https://www.npmjs.com/):
 npm install @finnair/v-validation
 ```
 
-## Major Changes in Version 11
+## Major Changes Coming in Version 11
 
 Version 11 introduces better performing internal validator architecture. 
 
