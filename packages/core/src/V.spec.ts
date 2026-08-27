@@ -979,12 +979,12 @@ describe('inheritance', () => {
   test('property order', async () => {
     const value = (
       await multiParentChild.validate({
-        id: '123',
-        name: 'multi-parent',
-        anything: true,
         firstAdditional: 'firstAdditional',
+        name: 'multi-parent',
         additionalProperty: 2,
         thirdAdditional: 'thirdAdditional',
+        anything: true,
+        id: '123',
       })
     ).getValue();
     expect(Object.keys(value)).toEqual(['id', 'name', 'anything', 'firstAdditional', 'additionalProperty', 'thirdAdditional']);
