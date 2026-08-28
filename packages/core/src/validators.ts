@@ -62,8 +62,6 @@ export interface FailureCallback {
 }
 
 export abstract class Validator<Out = unknown, In = unknown> {
-  constructor(public readonly allowsUndefined: boolean = false) {}
-
   validateGroup(value: In, group: Group): Promise<ValidationResult<Out>> {
     return this.validate(value, { group });
   }
@@ -138,6 +136,10 @@ export abstract class Validator<Out = unknown, In = unknown> {
         failure(violationsOf(error, path));
       }
     );
+  }
+
+  allowsUndefined(): boolean {
+    return false;
   }
 
   next<NextOut = unknown, T1 = unknown, T2 = unknown, T3 = unknown, T4 = unknown>(...validators: NextCompositionParameters<NextOut, Out, T1, T2, T3, T4>) {
@@ -478,10 +480,20 @@ export class CheckValidator<In> extends Validator<In, In> {
   }
 }
 
-export class CompositionValidator<Out = unknown, In = any> extends Validator<Out, In> {
+export abstract class CompositeValidator<Out = unknown, In = unknown> extends Validator<Out, In> {
+  constructor(private readonly _allowsUndefined: boolean) {
+    super();
+  }
+
+  allowsUndefined(): boolean {
+    return this._allowsUndefined;
+  }
+}
+
+export class CompositionValidator<Out = unknown, In = any> extends CompositeValidator<Out, In> {
   public readonly validators: Validator[];
   constructor(validators: Validator[]) {
-    super();
+    super(validators.every((v) => v.allowsUndefined()));
     this.validators = ([] as Validator[]).concat(validators);
     Object.freeze(this.validators);
     Object.freeze(this);
@@ -502,9 +514,9 @@ export class CompositionValidator<Out = unknown, In = any> extends Validator<Out
   }
 }
 
-export class OneOfValidator<Out = unknown> extends Validator<Out> {
+export class OneOfValidator<Out = unknown> extends CompositeValidator<Out> {
   constructor(public readonly validators: [Validator<Out>, ...Validator<Out>[]]) {
-    super();
+    super(validators.filter((v) => v.allowsUndefined()).length === 1);
     Object.freeze(this.validators);
     Object.freeze(this);
   }
@@ -538,12 +550,13 @@ export class OneOfValidator<Out = unknown> extends Validator<Out> {
   }
 }
 
-export class AnyOfValidator<Out = unknown, In = unknown> extends Validator<Out, In> {
+export class AnyOfValidator<Out = unknown, In = unknown> extends CompositeValidator<Out, In> {
   constructor(public readonly validators: Validator<Out>[]) {
-    super();
+    super(validators.some((v) => v.allowsUndefined()));
     Object.freeze(this.validators);
     Object.freeze(this);
   }
+
   validatePathV2(value: In, path: Path, ctx: ValidationContext, success: SuccessCallback<Out>, failure: FailureCallback): void {
     let violations: Violation[] = [];
     const validateNext = (index: number) => {
@@ -1325,9 +1338,9 @@ export class HasValueValidator<InOut> extends Validator<InOut> {
   }
 }
 
-export class AllOfValidator<Out, In> extends Validator<Out, In> {
+export class AllOfValidator<Out, In> extends CompositeValidator<Out, In> {
   constructor(public readonly validators: [Validator<Out, In>, ...Validator<Out, In>[]]) {
-    super();
+    super(validators.every(v => v.allowsUndefined()));
     Object.freeze(this.validators);
     Object.freeze(this);
   }
@@ -1443,8 +1456,12 @@ export class PatternNormalizer extends PatternValidator {
 
 export class OptionalValidator<Out, In> extends Validator<null | undefined | Out, null | undefined | In> {
   constructor(private readonly validator: Validator<Out, In>) {
-    super(true);
+    super();
     Object.freeze(this);
+  }
+
+  allowsUndefined(): boolean {
+    return true;
   }
 
   validatePathV2(value: null | undefined | In, path: Path, ctx: ValidationContext, success: SuccessCallback<null | undefined | Out>, failure: FailureCallback): void {
@@ -1458,8 +1475,12 @@ export class OptionalValidator<Out, In> extends Validator<null | undefined | Out
 
 export class OptionalUndefinedValidator<Out, In> extends Validator<undefined | Out, undefined | In> {
   constructor(private readonly validator: Validator<Out, In>) {
-    super(true);
+    super();
     Object.freeze(this);
+  }
+
+  allowsUndefined(): boolean {
+    return true;
   }
 
   validatePathV2(value: undefined | In, path: Path, ctx: ValidationContext, success: SuccessCallback<undefined | Out>, failure: FailureCallback): void {
@@ -1549,9 +1570,8 @@ export function isPromise(value: any): value is PromiseLike<any> {
 }
 
 export class IgnoreValidator extends Validator<undefined> {
-  constructor() {
-    super(true);
-    Object.freeze(this);
+  allowsUndefined(): boolean {
+    return true;
   }
   validatePathV2(value: any, path: Path, ctx: ValidationContext, success: SuccessCallback<undefined>, failure: FailureCallback): void {
     return success(undefined);

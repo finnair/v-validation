@@ -12,12 +12,23 @@ export class ObjectValidatorBuilder<Props, Next, LocalProps, LocalNext> {
   private _localNext?: Validator[] = [];
   private _propertyOrder: undefined | string[];
   constructor() {}
+  /**
+   * Extends the current object validator with the properties and additional properties of the given parent validator.
+   * The property order of the parent validator will be merged with the current property order, if defined.
+   * The order in which `extends` and `propertyOrder` are called matters. The property order of the parent validator will 
+   * be merged with the current property order in the order in which extends is called.
+   * 
+   * @param parent 
+   * @returns 
+   */
   extends<X>(parent: ObjectValidator<any, X>) {
     this._extends.push(parent);
-    if (this._propertyOrder === undefined) {
-      this._propertyOrder = parent.propertyOrder;
-    } else if (parent.propertyOrder !== undefined) {
-      this._propertyOrder = [...this._propertyOrder, ...parent.propertyOrder];
+      if (parent.propertyOrder) {
+      if (this._propertyOrder === undefined) {
+        this._propertyOrder = inheritablePropertyOrder(parent);
+      } else {
+        this._propertyOrder = [...this._propertyOrder, ...inheritablePropertyOrder(parent)];
+      }
     }
     return this as ObjectValidatorBuilder<Props & X, Next, LocalProps, LocalNext>;
   }
@@ -52,10 +63,22 @@ export class ObjectValidatorBuilder<Props, Next, LocalProps, LocalNext> {
     this._localNext?.push(validator);
     return this as unknown as ObjectValidatorBuilder<Props, Next, LocalProps, NextOut>;
   }
+  /**
+   * Override possibly inherited property order.
+   * 
+   * @param propertyOrder 
+   * @returns 
+   */
   propertyOrder(propertyOrder: undefined | string[]) {
     this._propertyOrder = propertyOrder;
     return this;
   }
+  /**
+   * Append to possibly inherited property order.
+   * 
+   * @param propertyOrder 
+   * @returns 
+   */
   additionalPropertyOrder(propertyOrder: string[]) {
     if (this._propertyOrder === undefined) {
       this._propertyOrder = propertyOrder;
@@ -79,3 +102,7 @@ export class ObjectValidatorBuilder<Props, Next, LocalProps, LocalNext> {
     });
   }
 };
+
+function inheritablePropertyOrder(parent: ObjectValidator<any, any>) {
+  return parent.propertyOrder!.filter((key) => Object.hasOwn(parent.properties, key));
+}

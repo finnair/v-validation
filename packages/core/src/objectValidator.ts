@@ -125,7 +125,7 @@ export class ObjectValidator<LocalType = unknown, InheritableType = LocalType, I
     this.additionalProperties = additionalProperties.concat(getMapEntryValidators(model.additionalProperties));
     this.properties = mergeProperties(getPropertyValidators(model.properties), properties);
     this.localProperties = getPropertyValidators(model.localProperties);
-    this.propertyOrder = model.propertyOrder;
+    this.propertyOrder = model.propertyOrder ? [...model.propertyOrder] : undefined;
 
     let validator: Validator = new PropertiesValidator<LocalType, In>(this.properties, this.localProperties, this.additionalProperties, this.propertyOrder);
     const next = nextValidators.length > 0 ? maybeCompositionOf(...(nextValidators as CompositionParameters)) : undefined;
@@ -158,6 +158,7 @@ export class ObjectValidator<LocalType = unknown, InheritableType = LocalType, I
     return new ObjectValidator<Omit<LocalType, K extends keyof LocalType ? K : never>, Omit<InheritableType, K extends keyof InheritableType ? K : never>>({
       properties: pick(this.properties, key => !keys.includes(key as any)),
       localProperties: pick(this.localProperties, key => !keys.includes(key as any)),
+      propertyOrder: this.propertyOrder?.filter(key => !keys.includes(key as any)),
     });
   }
 
@@ -165,6 +166,7 @@ export class ObjectValidator<LocalType = unknown, InheritableType = LocalType, I
     return new ObjectValidator<Pick<LocalType, K extends keyof LocalType ? K : never>, Pick<InheritableType, K extends keyof InheritableType ? K : never>>({
       properties: pick(this.properties, key => keys.includes(key as any)),
       localProperties: pick(this.localProperties, key => keys.includes(key as any)),
+      propertyOrder: this.propertyOrder?.filter(key => keys.includes(key as any)),
     });
   }
 }
@@ -179,14 +181,14 @@ export class PropertiesValidator<LocalType = unknown, In = unknown> extends Vali
       Object.keys(localProperties).forEach(key => validationOrder.add(key));
     } else {
       propertyOrder.forEach(key => {
-        if (properties[key] || localProperties[key]) {
+        if (Object.hasOwn(properties, key) || Object.hasOwn(localProperties, key)) {
           validationOrder.add(key);
         } else {
           throw new Error(`Unknown property: '${key}'`);
         }
       });
       const registerMandatoryProperty = ([key, validator]: [string, Validator<unknown, unknown>]) => {
-        if (!validator.allowsUndefined) {
+        if (!validator.allowsUndefined()) {
           validationOrder.add(key);
         }
       };

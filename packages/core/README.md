@@ -37,7 +37,7 @@ ObjectValidator's property filter (which was available for subclasses to utilize
 
 ### New feature: Configurable `propertyOrder` and Optimized Optional Properties Validation
 
-ObjectValidator allows defining custom `propertyOrder`, and when it's is defined, validation of missing optional properties is fully skipped. Using `propertyOrder` results in significantly better performance for object types with many optional properties.
+ObjectValidator allows defining custom `propertyOrder`, and when it's defined, validation of missing optional properties is fully skipped. Using `propertyOrder` results in significantly better performance for object types with many optional properties.
 
 ## Major Changes in Version 8
 

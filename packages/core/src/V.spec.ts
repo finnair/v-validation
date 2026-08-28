@@ -22,6 +22,8 @@ import {
   VType,
   JsonMap,
   JsonBigInt,
+  SuccessCallback,
+  FailureCallback,
 } from './validators.js';
 import { ObjectValidator, VInheritableType } from './objectValidator.js';
 import { V } from './V.js';
@@ -976,8 +978,8 @@ describe('inheritance', () => {
     await expectViolations({}, type, defaultViolations.notNull(property('required')));
   });
 
-  describe('property order', () => {
-    test('default property order', async () => {
+  describe('propertyOrder', () => {
+    test('default propertyOrder', async () => {
       const value = (
         await multiParentChild.validate({
           firstAdditional: 'firstAdditional', // 4. input order
@@ -990,7 +992,8 @@ describe('inheritance', () => {
       ).getValue();
       expect(Object.keys(value)).toEqual(['id', 'name', 'anything', 'firstAdditional', 'additionalProperty', 'thirdAdditional']);
     });
-    test('custom property order', async () => {
+
+    test('custom propertyOrder', async () => {
       const properties = {
           optionalStrict: V.optionalStrict(V.string()),
           optional: V.optional(V.string()),
@@ -1015,10 +1018,12 @@ describe('inheritance', () => {
           optionalLocal: 'optionalLocal',
         }))).toEqual(['optionalStrict', 'optional', 'required', 'requiredLocal', 'additional', 'optionalLocal'])
     });
+
     test('unknown property in propertyOrder throws', () => {
       expect(() => V.object({ propertyOrder: ['unknown'] })).toThrow();
     });
-    test('inherited property order', async () => {
+
+    test('inherited propertyOrder', async () => {
       expect(Object.keys(await V.objectType()
         .extends(V.objectType().properties({ first: V.string() }).additionalPropertyOrder(['first']).build())
         .extends(V.objectType().properties({ second: V.string() }).propertyOrder(['second']).build())
@@ -1031,7 +1036,8 @@ describe('inheritance', () => {
           second: 'second',
         }))).toEqual(['first', 'second', 'third']);
     });
-    test('override inherited property order', async () => {
+
+    test('override inherited propertyOrder', async () => {
       expect(Object.keys(await V.objectType()
         .extends(V.objectType().properties({ first: V.optionalStrict(V.string()) }).additionalPropertyOrder(['first']).build())
         .properties({ second: V.optionalStrict(V.string()) })
@@ -1043,6 +1049,40 @@ describe('inheritance', () => {
           first: 'first',
           additional: 'additional',
         }))).toEqual(['second', 'first', 'additional']);
+    });
+
+    test('propertyOrder of localProperties is not inherited', async () => {
+      const parent = V.objectType()
+        .localProperties({ first: V.optionalStrict(V.string()) })
+        .propertyOrder(['first'])
+        .build();
+      const child = V.objectType()
+        .extends(parent)
+        .localProperties({ second: V.optionalStrict(V.string()) })
+        .build();
+      expect(child.propertyOrder).toEqual([]);
+    });
+
+    test('pick', () => expect(V.objectType()
+        .properties({ a: V.string(), b: V.string() })
+        .propertyOrder(['a', 'b'])
+        .build()
+        .pick('b')
+        .propertyOrder
+      ).toEqual(['b'])
+    );
+
+    test('omit', () => expect(V.objectType()
+        .properties({ a: V.string(), b: V.string() })
+        .propertyOrder(['a', 'b'])
+        .build()
+        .omit('a')
+        .propertyOrder
+      ).toEqual(['b'])
+    );
+
+    test('inherited functions are not allowed', () => {
+      expect(() => V.objectType().propertyOrder(['toString']).build()).toThrow();
     });
   });
 
@@ -1077,6 +1117,84 @@ describe('inheritance', () => {
       V.objectType().allowAdditionalProperties(false).build(), 
       defaultViolations.unknownPropertyDenied(ROOT.property('parentProp'))
     );
+  });
+});
+
+describe('allowsUndefined', () => {
+  const optional = V.optionalStrict(V.string());
+  const mandatory = V.string();
+
+  test('optionalStrict', () => expect(V.optionalStrict(V.string()).allowsUndefined()).toBe(true));
+  
+  test('optional', () => expect(V.optional(V.string()).allowsUndefined()).toBe(true));
+  
+  test('next', () => {
+    expect(optional.next(optional).allowsUndefined()).toBe(true);
+    expect(optional.next(mandatory).allowsUndefined()).toBe(false);
+    expect(mandatory.next(optional).allowsUndefined()).toBe(false);
+  });
+  
+  test('composition', () => {
+    expect(V.compositionOf(optional, optional, optional).allowsUndefined()).toBe(true);
+    expect(V.compositionOf(optional, optional, mandatory).allowsUndefined()).toBe(false);
+  });
+  
+  test('allOf', () => {
+    expect(V.allOf(optional, optional, optional).allowsUndefined()).toBe(true);
+    expect(V.allOf(optional, optional, mandatory).allowsUndefined()).toBe(false);
+  });
+
+  test('oneOf', () => {
+    // Only one can allow undefined for the whole validator to allow undefined!
+    expect(V.oneOf(optional, mandatory, optional).allowsUndefined()).toBe(false);
+    expect(V.oneOf(mandatory, mandatory, mandatory).allowsUndefined()).toBe(false);
+    expect(V.oneOf(mandatory, optional, mandatory).allowsUndefined()).toBe(true);
+  });
+
+  test('anyOf', () => {
+    expect(V.anyOf(mandatory, mandatory, optional).allowsUndefined()).toBe(true);
+    expect(V.anyOf(mandatory, mandatory, mandatory).allowsUndefined()).toBe(false);
+  });
+
+  describe('missing properties validation', () => {
+    class CallTraking extends Validator<any, any> {
+      public isCalled = false;
+      validatePathV2(value: any, path: Path, ctx: ValidationContext, success: SuccessCallback<any>, failure: FailureCallback): void {
+        this.isCalled = true;
+        success(value);
+      }
+      allowsUndefined(): boolean {
+        return true;
+      }
+    };
+    test('missing optional property is not validated when propertyOrder is defined', async () => {
+      const callTracking = new CallTraking();
+      const validator = V.objectType()
+        .properties({ optional: callTracking })
+        .propertyOrder([])
+        .build();
+      await validator.validate({});
+      expect(callTracking.isCalled).toBe(false);
+    });
+
+    test('missing optional property is validated when propertyOrder is not defined', async () => {
+      const callTracking = new CallTraking();
+      const validator = V.objectType()
+        .properties({ optional: callTracking })
+        .build();
+      await validator.validate({});
+      expect(callTracking.isCalled).toBe(true);
+    });
+
+    test('missing optional property is validated when included in propertyOrder', async () => {
+      const callTracking = new CallTraking();
+      const validator = V.objectType()
+        .properties({ optional: callTracking })
+        .propertyOrder(['optional'])
+        .build();
+      await validator.validate({});
+      expect(callTracking.isCalled).toBe(true);
+    });
   });
 });
 
