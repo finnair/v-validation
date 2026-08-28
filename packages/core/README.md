@@ -23,6 +23,17 @@ Or [`npm`](https://www.npmjs.com/):
 npm install @finnair/v-validation
 ```
 
+## Major Changes Coming in Version 11
+
+Version 11 introduces better performing internal validator architecture. 
+
+This version refactors the internal architecture to be fully callback based which allows both synchronous and asynchronous validators to run without additional Promise/async-await overhead. From public API perspective (`Validator.validate/getValid`) nothing changes. Old and new validators can also be combined. However, **custom validators that extend internal validators (e.g. `ObjectValidator`) may need to be refactored**. 
+
+Performance was tested using ~126K MCT rules and resulted in around 3x faster validation (from 3 to 1 sec).
+
+**Drop support for ObjectValidator property filters**
+ObjectValidator's property filter (which was available for subclasses to utilize) has been dropped. That feature broke typing, and the use case to conditionally validate only selected properties, is nowdays better implemented with `V.if` and `ObjectValidator.pick/omit`.
+
 ## Major Changes in Version 8
 
 Drop (partial) support for cyclic data: There are cases where validation result (i.e. converted object) simply cannot retain cycles, e.g. the same object being validated with `V.oneOf` in different branches of the validator tree and resulting in different versions of the object. The rare use-cases for cyclic data simply do not justify the added complexity. 
@@ -624,22 +635,28 @@ V.map(...)
 
 // 3) If a validator doesn't have any parameters, but needs access to path and context,
 // it can be defined as a simple anonymous function
+// Depredated - use V.fn2 instead!
 V.fn((value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult> => {
   // return either successful or rejected Promise or throw an error
+})
+
+V.fn2((value: In, path: Path, ctx: ValidationContext, success: SuccessCallback<Out>, failure: FailureCallback) => {
+   // call either success or failure callback with the results (valid/converted value or Violations).
 })
 
 
 // 4) Full parametrizable validators extend Validator
 class MyValidator extends Validator {
-  // Validators should be immutable
+  // Validators should be immutable!
   constructor(public readonly myParameter: any) {
     super();
   }
-  async validatePath(value: any, path: Path, ctx: ValidationContext) {
+  // NOTE: validatePath() works is deprecated!
+  async validatePathV2(value: In, path: Path, ctx: ValidationContext, success: SuccessCallback<Out>, failure: FailureCallback): void {
     if (isOK(value)) {
-      return Promise.resolve(value);
+      return success(value);
     } else {
-      return Promise.reject(new MyViolation(path, myParameter, value));
+      return failure(new MyViolation(path, myParameter, value));
     }
   }
 }

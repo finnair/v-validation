@@ -23,7 +23,7 @@ import {
   JsonMap,
   JsonBigInt,
 } from './validators.js';
-import { ObjectValidator, ObjectModel, VInheritableType } from './objectValidator.js';
+import { ObjectValidator, VInheritableType } from './objectValidator.js';
 import { V } from './V.js';
 import { jsonClone, Path } from '@finnair/path';
 import { expectUndefined, expectValid, expectViolations, verifyValid } from './testUtil.spec.js';
@@ -67,6 +67,23 @@ class DeferredValidator<T> extends Validator<T> {
     });
   }
 }
+
+class DeprecatedValidator extends Validator<string> {
+  async validatePath(value: any, path: Path, ctx: ValidationContext): Promise<string> {
+    if (String(value) === 'true') {
+      return Promise.resolve('true');
+    } else {
+      return Promise.reject(new Violation(path, 'DeprecatedValidator', value));
+    }
+  }
+}
+
+class ThrowingValidator extends Validator<string> {
+  public static readonly error = new Error('ThrowingValidator');
+  validatePathV2(value: any, path: Path, ctx: ValidationContext, success: (value: string) => void, failure: (violations: Violation[]) => void): void {
+    throw ThrowingValidator.error;
+  }
+};
 
 describe('ValidationResult', () => {
   test('getValue() returns valid value', async () => {
@@ -223,7 +240,7 @@ describe('strings', () => {
 
     test('null is not allowed', () => expectViolations(null, V.size(1, 2), defaultViolations.notNull(ROOT)));
 
-    test('length is missing', () => expectViolations({}, V.size(1, 2), new TypeMismatch(ROOT, 'value with numeric length field')));
+    test('length is missing', () => expectViolations({}, V.size(1, 2), new TypeMismatch(ROOT, 'value with numeric length field', {})));
 
     test('length property', () => expectValid({ length: 2 }, V.size(1, 2)));
 
@@ -496,7 +513,7 @@ describe('objects', () => {
     test('next allows conversion to string', () => {
       const validator = V.objectType()
         .properties({ value: V.string() })
-        .next(V.map( value => JSON.stringify(value) ))
+        .next(V.map(value => JSON.stringify(value)))
         .build();
       assertType<EqualTypes<VType<typeof validator>, string>>(true);
     });
@@ -506,7 +523,7 @@ describe('objects', () => {
     const validator = V.objectType().properties({ unknown: V.unknown() }).build();
     type T = { unknown: unknown };
     const value: T = { unknown: { foo: 'bar' } }
-    
+
     assertType<EqualTypes<ComparableType<VType<typeof validator>>, ComparableType<T>>>(true);
     const valid = await validator.getValid(value);
 
@@ -533,92 +550,132 @@ describe('objects', () => {
 
   test('missing property value', () => expectViolations({}, validator, defaultViolations.notNull(property('requiredProperty'))));
 
-  test('requiredProperty should be a string', () =>
-    expectViolations(
-      {
-        requiredProperty: true,
-      },
-      validator,
-      new TypeMismatch(property('requiredProperty'), 'string', true),
-    ));
+  describe('additionalProperties', () => {
+    test('requiredProperty should be a string', () =>
+      expectViolations(
+        {
+          requiredProperty: true,
+        },
+        validator,
+        new TypeMismatch(property('requiredProperty'), 'string', true),
+      ));
 
-  describe('ignoreUnknownProperties', () => {
-    test('ignore unknown properties by default', () => {
-      const object = { unknownProperty: true };
-      return expectValid(object, V.object({}), object, { ignoreUnknownProperties: true });
-    });
-
-    test('log warning using warnLogger', async () => {
-      const object = { unknownProperty: true };
-      const warnings: Violation[] = [];
-      await expectValid(object, V.object({}), object, {
-        ignoreUnknownProperties: true,
-        warnLogger: (violation: Violation) => warnings.push(violation),
+    describe('ignoreUnknownProperties', () => {
+      test('ignore unknown properties by default', () => {
+        const object = { unknownProperty: true };
+        return expectValid(object, V.object({}), object, { ignoreUnknownProperties: true });
       });
-      expect(warnings).toEqual([defaultViolations.unknownProperty(property('unknownProperty'))]);
+
+      test('log warning using warnLogger', async () => {
+        const object = { unknownProperty: true };
+        const warnings: Violation[] = [];
+        await expectValid(object, V.object({}), object, {
+          ignoreUnknownProperties: true,
+          warnLogger: (violation: Violation) => warnings.push(violation),
+        });
+        expect(warnings).toEqual([defaultViolations.unknownProperty(property('unknownProperty'))]);
+      });
+
+      test('explicitly denied additionalProperties are still not allowed', async () => {
+        const object = { unknownProperty: true };
+        const result = await V.objectType().allowAdditionalProperties(false).build().validate(object, { ignoreUnknownProperties: true });
+        expect(result).toEqual(new ValidationResult([defaultViolations.unknownPropertyDenied(property('unknownProperty'))]));
+      });
     });
 
-    test('explicitly denied additionalProperties are still not allowed', async () => {
+    test('deny unknown/additional properties', async () => {
       const object = { unknownProperty: true };
-      const result = await V.objectType().allowAdditionalProperties(false).build().validate(object, { ignoreUnknownProperties: true });
+      const result = await V.object({ additionalProperties: false }).validate(object);
       expect(result).toEqual(new ValidationResult([defaultViolations.unknownPropertyDenied(property('unknownProperty'))]));
     });
-  });
 
-  test('deny unknown/additional properties', async () => {
-    const object = { unknownProperty: true };
-    const result = await V.object({ additionalProperties: false }).validate(object);
-    expect(result).toEqual(new ValidationResult([defaultViolations.unknownPropertyDenied(property('unknownProperty'))]));
-  });
+    test('additional properties not allowed', () =>
+      expectViolations(
+        {
+          requiredProperty: 'requiredProperty',
+          additionalProperty: 'additionalProperty',
+        },
+        validator,
+        defaultViolations.unknownProperty(property('additionalProperty')),
+      ));
 
-  test('additional properties not allowed', () =>
-    expectViolations(
-      {
-        requiredProperty: 'requiredProperty',
-        additionalProperty: 'additionalProperty',
-      },
-      validator,
-      defaultViolations.unknownProperty(property('additionalProperty')),
-    ));
-
-  test('additional properties allowed', () => {
-    const validator = V.object({
-      properties: {},
-      additionalProperties: true,
-    });
-    return expectValid(
-      {
-        additionalProperty: 'additionalProperty',
-      },
-      validator,
-    );
-  });
-
-  describe('extending additional property validations', () => {
-    const parent = V.object({
-      additionalProperties: {
-        keys: V.any(),
-        values: V.toInteger(),
-      },
-    });
-    const validator = V.object({
-      extends: parent,
-      additionalProperties: {
-        keys: V.any(),
-        values: V.min(1),
-      },
+    test('additional properties allowed', () => {
+      const validator = V.object({
+        properties: {},
+        additionalProperties: true,
+      });
+      return expectValid(
+        {
+          additionalProperty: 'additionalProperty',
+        },
+        validator,
+      );
     });
 
-    test('parent conversion is available for child validator', () => expectValid({ foo: '1' }, validator, { foo: 1 }));
+    describe('extending additional property validations', () => {
+      const parent = V.object({
+        additionalProperties: {
+          keys: V.any(),
+          values: V.toInteger(),
+        },
+      });
+      const validator = V.object({
+        extends: parent,
+        additionalProperties: {
+          keys: V.any(),
+          values: V.min(1),
+        },
+      });
 
-    test("invalid value for parent doesn't run child validator", () =>
-      expectViolations({ foo: 'a' }, validator, defaultViolations.number('a', NumberFormat.integer, property('foo'))));
+      test('parent conversion is available for child validator', () => expectValid({ foo: '1' }, validator, { foo: 1 }));
 
-    test('invalid value for child validator', () => expectViolations({ foo: 0 }, validator, defaultViolations.min(1, true, 0, property('foo'))));
+      test("invalid value for parent doesn't run child validator", () =>
+        expectViolations({ foo: 'a' }, validator, defaultViolations.number('a', NumberFormat.integer, property('foo'))));
+
+      test('invalid value for child validator', () => expectViolations({ foo: 0 }, validator, defaultViolations.min(1, true, 0, property('foo'))));
+    });
+
+    test('disallow all properties', () =>
+      expectViolations({ property: 'value' }, V.object({ additionalProperties: false }), defaultViolations.unknownPropertyDenied(ROOT.property('property'))));
+
+    describe('additionalProperty rules', () => {
+      const allowXString = V.objectType()
+        .additionalProperties(V.pattern(/^x-.+/), V.string())
+        .build();
+      assertType<EqualTypes<ComparableType<VType<typeof allowXString>>, ComparableType<Partial<Record<string, string>>>>>(true);
+
+      const allowYStringRestrictX = V.object({
+        extends: allowXString,
+        additionalProperties: [
+          {
+            keys: V.pattern(/^y-.+/),
+            values: V.string(),
+          },
+          {
+            keys: V.pattern(/^x-.+/),
+            values: V.check(V.toInteger()),
+          },
+        ],
+      });
+
+      test('x-property: "foo" allowed', () => expectValid({ 'x-property': 'foo' }, allowXString));
+
+      test('x-property: 123 not allowed', () => expectViolations({ 'x-property': 123 }, allowXString, defaultViolations.string(123, property('x-property'))));
+
+      test('y-property not allowed', () =>
+        expectViolations({ 'y-property': 'foo' }, allowXString, defaultViolations.pattern(/^x-.+/, 'y-property', property('y-property'))));
+
+      test('y-property allowed', () => expectValid({ 'y-property': 'foo' }, allowYStringRestrictX));
+
+      test('x-property restricted to numeric string', () =>
+        expectViolations({ 'x-property': 'foo' }, allowYStringRestrictX, defaultViolations.number('foo', NumberFormat.integer, property('x-property'))));
+
+      test('x-property numeric string is valid', () => expectValid({ 'x-property': '123' }, allowYStringRestrictX));
+
+      test('z-property not allowed', () =>
+        expectViolations({ 'z-property': 'foo' }, allowYStringRestrictX, defaultViolations.unknownProperty(property('z-property'))));
+    });
   });
-
-  test('disallow all properties', () =>
-    expectViolations({ property: 'value' }, V.object({ additionalProperties: false }), defaultViolations.unknownPropertyDenied(ROOT.property('property'))));
 
   test('string not allowed', () => expectViolations('string', V.object({}), defaultViolations.object(ROOT)));
 
@@ -633,20 +690,28 @@ describe('objects', () => {
   describe('properties', () => {
     test('valid properties', async () => {
       const validator = V.properties(V.string(), V.string());
-      
-      assertType<EqualTypes<ComparableType<VType<typeof validator>>, ComparableType<{ [ key: string ]: string}>>>(true)
+
+      assertType<EqualTypes<ComparableType<VType<typeof validator>>, ComparableType<{ [key: string]: string }>>>(true)
       await expectValid({ foo: 'bar' }, validator);
     });
-    
+
     test('enum keys', async () => {
       enum Keys { A = 'A', B = 'B', C = 'C' };
       type type = { [key in Keys]?: number };
       const validator = V.optionalProperties(V.enum(Keys, 'Keys'), V.number());
-      
+
       assertType<EqualTypes<ComparableType<VType<typeof validator>>, ComparableType<type>>>(true)
       await expectValid({ A: 5 }, validator);
       await expectValid({ A: 1, B: 2, C: 3 }, validator);
       await expectViolations({ D: 4 }, validator, defaultViolations.enum('Keys', 'D', Path.of('D')));
+    });
+    test('optionalProperties with deprecated validator', async () => {
+      const validator = V.optionalProperties(new DeprecatedValidator(), new DeprecatedValidator());
+      await expectValid({}, validator);
+      await expectValid({ 'true': 'true' }, validator);
+      await expectViolations({ 'true': 'false' }, validator, new Violation(Path.of('true'), 'DeprecatedValidator', 'false'));
+      await expectViolations({ 'false': 'true' }, validator, new Violation(Path.of('false'), 'DeprecatedValidator', 'false'));
+      await expectViolations({ 'false': 'false' }, validator, new Violation(Path.of('false'), 'DeprecatedValidator', 'false'));
     });
   });
 
@@ -710,44 +775,6 @@ describe('objects', () => {
       const violation = result.getViolations()[0];
       expect(violation).toBeInstanceOf(ErrorViolation);
       expect((violation as ErrorViolation).error.message).toEqual('Maximum call stack size exceeded');
-    });
-  });
-
-  describe('custom property filtering ObjectValidator extension', () => {
-    class DropAllPropertiesValidator<T> extends ObjectValidator<Partial<T>> {
-      constructor(model: ObjectModel) {
-        super(model);
-      }
-      validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<Partial<T>> {
-        return this.validateFilteredPath(value, path, ctx, _ => false);
-      }
-    }
-
-    test('required property validation skipped', async () =>
-      expectValid(
-        { property: 'to-be-dropped' },
-        new DropAllPropertiesValidator({
-          properties: { requiredProperty: V.string() }, // Not reported
-        }),
-        {},
-      ));
-
-    test('additional property validation skipped', async () =>
-      expectValid(
-        { foo: 'NaN' },
-        new DropAllPropertiesValidator({
-          additionalProperties: {
-            keys: V.hasValue('bar'),
-            values: V.integer(),
-          },
-        }),
-        {},
-      ));
-
-    test('filtered-out properties are dropped', async () => {
-      const result = await new DropAllPropertiesValidator({}).validate({ foo: 'foo', bar: 'bar' });
-      expect(result.isSuccess()).toBe(true);
-      expect(Object.keys(result.getValue()).length).toBe(0);
     });
   });
 
@@ -838,44 +865,39 @@ describe('objects', () => {
       expectValid(value, pick);
     })
   });
-});
 
-describe('additionalProperties', () => {
-  const allowXString = V.objectType()
-    .additionalProperties(V.pattern(/^x-.+/), V.string())
-    .build();
-  assertType<EqualTypes<ComparableType<VType<typeof allowXString>>, ComparableType<Partial<Record<string, string>>>>>(true);
-
-  const allowYStringRestrictX = V.object({
-    extends: allowXString,
-    additionalProperties: [
-      {
-        keys: V.pattern(/^y-.+/),
-        values: V.string(),
-      },
-      {
-        keys: V.pattern(/^x-.+/),
-        values: V.check(V.toInteger()),
-      },
-    ],
+  describe('thrown errors', () => {
+    test('all propertiers throwing', async () => {
+      const result = await V.objectType()
+        .properties({
+          property: new ThrowingValidator(),
+        })
+        .localProperties({
+          localProperty: new ThrowingValidator(),
+        })
+        .additionalProperties(V.string(), new ThrowingValidator())
+        .build()
+        .validate({
+          additional: 'additional',
+        });
+      expect(result.getViolations()).toEqual([
+        new ErrorViolation(property('property'), ThrowingValidator.error),
+        new ErrorViolation(property('localProperty'), ThrowingValidator.error),
+        new ErrorViolation(property('additional'), ThrowingValidator.error),
+      ]);
+    });
+    test('additional property key throwing', async () => {
+      const result = await V.objectType()
+        .additionalProperties(new ThrowingValidator(), V.string())
+        .build()
+        .validate({
+          additional: 'additional',
+        });
+      expect(result.getViolations()).toEqual([
+        new ErrorViolation(property('additional'), ThrowingValidator.error),
+      ]);
+    });
   });
-
-  test('x-property: "foo" allowed', () => expectValid({ 'x-property': 'foo' }, allowXString));
-
-  test('x-property: 123 not allowed', () => expectViolations({ 'x-property': 123 }, allowXString, defaultViolations.string(123, property('x-property'))));
-
-  test('y-property not allowed', () =>
-    expectViolations({ 'y-property': 'foo' }, allowXString, defaultViolations.pattern(/^x-.+/, 'y-property', property('y-property'))));
-
-  test('y-property allowed', () => expectValid({ 'y-property': 'foo' }, allowYStringRestrictX));
-
-  test('x-property restricted to numeric string', () =>
-    expectViolations({ 'x-property': 'foo' }, allowYStringRestrictX, defaultViolations.number('foo', NumberFormat.integer, property('x-property'))));
-
-  test('x-property numeric string is valid', () => expectValid({ 'x-property': '123' }, allowYStringRestrictX));
-
-  test('z-property not allowed', () =>
-    expectViolations({ 'z-property': 'foo' }, allowYStringRestrictX, defaultViolations.unknownProperty(property('z-property'))));
 });
 
 describe('inheritance', () => {
@@ -924,13 +946,18 @@ describe('inheritance', () => {
       } satisfies VType<typeof multiParentChild>,
       multiParentChild,
     ));
+
   test('invalid multi-parent object', () =>
-    expectViolations(
-      { additionalProperty: 123, name: '' },
-      multiParentChild,
-      defaultViolations.notNull(property('anything')),
-      defaultViolations.notNull(property('id')),
-      defaultViolations.notEmpty(property('name')),
+    multiParentChild.validatePath({ additionalProperty: 123, name: '' }, Path.ROOT, new ValidationContext({})).then(
+      (success) => {
+        fail(`expected violations, got ${success}`)
+      },
+      (violations) => {
+        expect(violations).toHaveLength(3);
+        expect(violations).toContainEqual(defaultViolations.notEmpty(property('name')));
+        expect(violations).toContainEqual(defaultViolations.notNull(property('anything')));
+        expect(violations).toContainEqual(defaultViolations.notNull(property('id')));
+      }
     ));
 
   test("child's extended property validators are only run after successful parent property validation", async () => {
@@ -952,12 +979,12 @@ describe('inheritance', () => {
   test('property order', async () => {
     const value = (
       await multiParentChild.validate({
-        id: '123',
-        name: 'multi-parent',
-        anything: true,
         firstAdditional: 'firstAdditional',
+        name: 'multi-parent',
         additionalProperty: 2,
         thirdAdditional: 'thirdAdditional',
+        anything: true,
+        id: '123',
       })
     ).getValue();
     expect(Object.keys(value)).toEqual(['id', 'name', 'anything', 'firstAdditional', 'additionalProperty', 'thirdAdditional']);
@@ -984,6 +1011,16 @@ describe('inheritance', () => {
     test('valid child', () => expectValid({ pwd1: 'pwd', pwd2: 'pwd', min: 1, max: 2 } satisfies VType<typeof child>, child))
 
     test('invalid child', () => expectViolations({ pwd1: 'pwd1', pwd2: 'pwd2', min: 2, max: 1 }, child, new Violation(ROOT, 'PasswordsMatch'), new Violation(ROOT, 'MinLoeMax')));
+  });
+
+  test('prototype inheritance', async () => {
+    const parent = { parentProp: 'parentProp' };
+    const child = Object.create(parent);
+    await expectViolations(
+      child,
+      V.objectType().allowAdditionalProperties(false).build(), 
+      defaultViolations.unknownPropertyDenied(ROOT.property('parentProp'))
+    );
   });
 });
 
@@ -1178,17 +1215,17 @@ describe('oneOf', () => {
 
     test('valid date', () => expectValid(validDateString, validator, validDate));
 
-    test('invalid value matching two', () => expectViolations(dateValue, validator, 
+    test('invalid value matching two', () => expectViolations(dateValue, validator,
       defaultViolations.oneOf(2, [
-        { success: true }, 
-        { success: true }, 
+        { success: true },
+        { success: true },
         { violations: [defaultViolations.enum('EnumType', dateValue, ROOT)] },
       ])));
 
-    test('no matches', () => expectViolations('ABD', validator, 
+    test('no matches', () => expectViolations('ABD', validator,
       defaultViolations.oneOf(0, [
-        { violations: [new HasValueViolation(ROOT, dateValue, 'ABD')] }, 
-        { violations: [defaultViolations.date('ABD', ROOT)] }, 
+        { violations: [new HasValueViolation(ROOT, dateValue, 'ABD')] },
+        { violations: [defaultViolations.date('ABD', ROOT)] },
         { violations: [defaultViolations.enum('EnumType', 'ABD', ROOT)] },
       ])));
   });
@@ -1315,6 +1352,15 @@ describe('arrays', () => {
     test('too short', () => expectViolations([1], V.size(2, 3), defaultViolations.size(2, 3)));
 
     test('too long', () => expectViolations([1, 2], V.size(1, 1), defaultViolations.size(1, 1)));
+  });
+
+  test('thrown errors', async () => {
+    const validator = V.array(new ThrowingValidator());
+    const result = await validator.validate([1]);
+    expect(result.isSuccess()).toBe(false);
+    const violations = result.getViolations();
+    expect(violations).toHaveLength(1);
+    expect(violations[0]).toBeInstanceOf(ErrorViolation);
   });
 });
 
@@ -1448,7 +1494,7 @@ describe('null or undefined', () => {
 
 describe('async validation', () => {
   describe('allOf', () => {
-    test('results ordered by timeout', async () => {
+    test('violations ordered by timeout', async () => {
       const validator = V.allOf(defer(V.notEmpty(), 10), defer(V.toNumber(), 5), V.date());
       await expectViolations(
         '',
@@ -1484,11 +1530,11 @@ describe('async validation', () => {
     });
 
     test('invalid', async () => {
-      await expectViolations(true, V.oneOf(defer(V.number()), defer(V.string())), 
-      defaultViolations.oneOf(0, [
-        { violations: [new TypeMismatch(ROOT, 'number', true)] },
-        { violations: [new TypeMismatch(ROOT, 'string', true)] },
-      ]));
+      await expectViolations(true, V.oneOf(defer(V.number()), defer(V.string())),
+        defaultViolations.oneOf(0, [
+          { violations: [new TypeMismatch(ROOT, 'number', true)] },
+          { violations: [new TypeMismatch(ROOT, 'string', true)] },
+        ]));
     });
   });
 
@@ -1600,9 +1646,9 @@ describe('groups', () => {
       .otherwiseSuccess()
       .next(V.array(V.number()));
 
-    test('with normalization', () => expectGroupValid('1,2,3', normalize, optionalNormalization, [1,2,3]));
-    test('without normalization', () => expectValid([1,2,3], optionalNormalization));
-    test('invalid with normalization', () => expectGroupViolations([1,2,3], normalize, optionalNormalization, new ErrorViolation(ROOT, new TypeError('value.split is not a function'))));
+    test('with normalization', () => expectGroupValid('1,2,3', normalize, optionalNormalization, [1, 2, 3]));
+    test('without normalization', () => expectValid([1, 2, 3], optionalNormalization));
+    test('invalid with normalization', () => expectGroupViolations([1, 2, 3], normalize, optionalNormalization, new ErrorViolation(ROOT, new TypeError('value.split is not a function'))));
     test('invalid without normalization', () => expectViolations('1,2,3', optionalNormalization, new TypeMismatch(ROOT, 'array', '1,2,3')));
   });
 
@@ -1853,10 +1899,10 @@ describe('Map', () => {
   describe('toMapType', () => {
     const validator = V.toMapType(
       V.objectType()
-      .properties({ 
-        key1: V.required(V.string()), 
-        key2: V.required(V.string()),
-      }).build(),
+        .properties({
+          key1: V.required(V.string()),
+          key2: V.required(V.string()),
+        }).build(),
       V.string(),
       true,
     );
@@ -1869,7 +1915,7 @@ describe('Map', () => {
       expect(map.get(key)).toEqual('value');
       let result = (await validator.validate(map));
       expect(result.isFailure()).toBe(false);
-      result.getValue() satisfies JsonMap<{key1: string, key2: string}, string>
+      result.getValue() satisfies JsonMap<{ key1: string, key2: string }, string>
 
       // Serializes to JSON as array
       const jsonString = JSON.stringify(result.getValue());
@@ -1894,7 +1940,7 @@ describe('Map', () => {
     test('empty array component is not allowed', () => expectViolations([[]], validator, new SizeViolation(Path.of(0), 1, 2)));
 
     test('object is not allowed', () => expectViolations({}, validator, new TypeMismatch(Path.ROOT, 'Map OR array of [key, value] arrays')));
-    
+
     describe('typing', () => {
       test('JsonMap', () => {
         const validator = V.toMapType(V.string(), V.number(), true);
@@ -1917,7 +1963,7 @@ describe('Map', () => {
     test('Map has invalid value', () => expectViolations(new Map([['foo', 0]]), validator, new TypeMismatch(Path.of(0, 1), 'string', 0)));
 
     test('Map has invalid key', () => expectViolations(new Map([[0, 'foo']]), validator, new TypeMismatch(Path.of(0, 0), 'string', 0)));
-    
+
     describe('typing', () => {
       test('JsonMap', () => {
         const validator = V.mapType(V.string(), V.number(), true);
@@ -1928,6 +1974,18 @@ describe('Map', () => {
         assertType<EqualTypes<VType<typeof validator>, Map<string, number>>>(true);
       });
     });
+  });
+
+  test('empty map is valid', async () => expectValid(new Map(), V.mapType(V.string(), V.string(), false)));
+
+  test('thrown errors', async () => {
+    const result = await V.mapType(new ThrowingValidator(), new ThrowingValidator(), false)
+      .validate(new Map([['key', 'value']]));
+    expect(result.isSuccess()).toBe(false);
+    const violations = result.getViolations();
+    expect(violations).toHaveLength(2);
+    expect(violations[0]).toBeInstanceOf(ErrorViolation);
+    expect(violations[1]).toBeInstanceOf(ErrorViolation);
   });
 });
 
@@ -1941,6 +1999,8 @@ describe('Set', () => {
   test('object is not valid', () => expectViolations({}, V.setType(V.number(), false), new TypeMismatch(ROOT, 'Set')));
 
   test('Set has invalid value', () => expectViolations(new Set(['foo']), V.setType(V.number(), false), new TypeMismatch(Path.of(0), 'number', 'foo')));
+
+  test('empty set is valida', async () => expectValid(new Set(), V.setType(V.number(), false)));
 
   test('json round-trip', async () => {
     const setArray = [1, 2, 3];
@@ -1967,7 +2027,7 @@ describe('Set', () => {
 
 describe('JsonBigInt', () => {
   const largeBigInt = 9007199254740993n;
-  
+
   test('JsonBigInt', async () => expectValid(new JsonBigInt(largeBigInt), V.jsonBigInt()));
   test('bigint', async () => expectValid(largeBigInt, V.jsonBigInt(), new JsonBigInt(largeBigInt)));
   test('string', async () => expectValid(largeBigInt.toString(), V.jsonBigInt(), new JsonBigInt(largeBigInt)));
@@ -2004,6 +2064,22 @@ describe('JsonBigInt', () => {
   });
 });
 
+describe('ValidationContext', () => {
+  describe('deprecated api', () => {
+    test('ValidationContext.failure', async () => {
+      const violation = defaultViolations.unknownProperty(Path.of('foo'));
+      const result = await new ValidationContext({ ignoreUnknownProperties: true }).failure(violation, 'value');
+      expect(result).toEqual('value');
+      try {
+        await new ValidationContext({ ignoreUnknownProperties: false }).failure(violation, 'value');
+        fail('Expected an error');
+      } catch (e) {
+        expect(e).toEqual([violation]);
+      }
+    });
+  });
+});
+
 describe('json', () => {
   const validator = V.json(V.array(V.string()));
 
@@ -2018,4 +2094,67 @@ describe('json', () => {
   test('Invalid JSON', () => expectViolations('["foo", "bar"', validator, new TypeMismatch(Path.of(), 'JSON', '["foo", "bar"')));
 
   test('Non-string input is invalid', () => expectViolations(123 as any, validator, new TypeMismatch(Path.of(), 'string', 123)));
+});
+
+describe('fn', () => {
+  test('synchronous', async () => {
+    const result = await V.fn((value: string) => value.toUpperCase()).getValid('test');
+    expect(result).toEqual('TEST');
+  });
+  test('asynchronous', async () => {
+    const result = await V.fn(async (value: string) => value.toUpperCase()).getValid('test');
+    expect(result).toEqual('TEST');
+  });
+  test('Throws Error', async () => {
+    const error = new Error('Error message');
+    try {
+      await V.fn(() => { throw error; }).getValid('test');
+      fail('Expected an error');
+    } catch (e) {
+      expect(e).toBeInstanceOf(ValidationError);
+      const violation = (e as ValidationError).violations[0];
+      expect(violation).toBeInstanceOf(ErrorViolation);
+      expect((violation as ErrorViolation).error).toBe(error);
+    }
+  });
+  test('Throws ignored violation', async () => {
+    const violation = defaultViolations.unknownProperty(Path.of('foo'));
+    const result = await V.fn(() => { throw violation; }).getValid('test', { ignoreUnknownProperties: true });
+    expect(result).toEqual('test');
+  });
+});
+
+describe('fn2', () => {
+  test('successful', async () => {
+    const result = await V.fn2((value: string, _path, _ctx, success) => success(value.toUpperCase())).getValid('test');
+    expect(result).toEqual('TEST');
+  });
+  test('failure', async () => {
+    const violation = defaultViolations.string(123);
+    const result = await V.fn2((_value, _path, _ctx, _success, failure) => failure(violation)).validate(123);
+    expect(result.isFailure()).toBe(true);
+    expect(result.getViolations()).toEqual([violation]);
+  });
+  test('Throws Error', async () => {
+    const error = new Error('Error message');
+    try {
+      await V.fn2(() => { throw error; }).getValid('test');
+      fail('Expected an error');
+    } catch (e) {
+      expect(e).toBeInstanceOf(ValidationError);
+      const violation = (e as ValidationError).violations[0];
+      expect(violation).toBeInstanceOf(ErrorViolation);
+      expect((violation as ErrorViolation).error).toBe(error);
+    }
+  });
+  test('Throws ignored violation', async () => {
+    const violation = defaultViolations.unknownProperty(Path.of('foo'));
+    const result = await V.fn2(() => { throw violation; }).getValid('test', { ignoreUnknownProperties: true });
+    expect(result).toEqual('test');
+  });
+  test('Reports ignored violation', async () => {
+    const violation = defaultViolations.unknownProperty(Path.of('foo'));
+    const result = await V.fn2((_value, _path, _ctx, _success, failure) => { failure(violation) }).getValid('test', { ignoreUnknownProperties: true });
+    expect(result).toEqual('test');
+  });
 });

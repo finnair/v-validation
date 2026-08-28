@@ -1,4 +1,4 @@
-import { ValidationContext, isNullOrUndefined, defaultViolations, isString, V, Validator, TypeMismatch } from '@finnair/v-validation';
+import { ValidationContext, isNullOrUndefined, defaultViolations, isString, V, Validator, TypeMismatch, SuccessCallback, FailureCallback } from '@finnair/v-validation';
 import { Path } from '@finnair/path';
 import { DateTime, DateTimeJSOptions, DateTimeOptions, Duration, FixedOffsetZone } from 'luxon';
 import {
@@ -30,25 +30,28 @@ export class DateTimeValidator extends Validator<DateTime> {
     Object.freeze(params);
     Object.freeze(this);
   }
-  validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<DateTime> {
+  validatePathV2(value: any, path: Path, ctx: ValidationContext, success: SuccessCallback<DateTime>, failure: FailureCallback): void {
     const params = this.params;
     if (isNullOrUndefined(value)) {
-      return Promise.reject(defaultViolations.notNull(path));
-    }
+      failure(defaultViolations.notNull(path));
+      return;
+    } 
     if (DateTime.isDateTime(value)) {
       if (value.isValid) {
-        return Promise.resolve(value as DateTime);
+        success(value as DateTime);
+        return;
       }
     } else if (isString(value)) {
       const match = params.pattern.exec(value);
       if (match) {
         const dateTime = params.parser(value, match);
         if (dateTime.isValid) {
-          return Promise.resolve(dateTime);
+          success(dateTime);
+          return;
         }
       }
     }
-    return Promise.reject(defaultViolations.date(value, path, params.type));
+    failure(defaultViolations.date(value, path, params.type));
   }
 }
 
@@ -60,18 +63,16 @@ export class LuxonValidator<Out extends LuxonDateTime> extends Validator<Out> {
     Object.freeze(this);
   }
 
-  validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<Out> {
+  validatePathV2(value: any, path: Path, ctx: ValidationContext, success: SuccessCallback<Out>, failure: FailureCallback): void {
     if (value instanceof this.params.proto) {
-      return Promise.resolve(value);
+      success(value);
+    } else if (DateTime.isDateTime(value?.dateTime)) {
+      success(new this.params.proto(value.dateTime));
+    } else {
+      this.dateTimeValidator.validatePathV2(value, path, ctx,
+        (result: DateTime) => success(new this.params.proto(result)),
+        failure);
     }
-    if (DateTime.isDateTime(value?.dateTime)) {
-      return Promise.resolve(new this.params.proto(value.dateTime));
-    }
-    return this.dateTimeValidator.validatePath(value, path, ctx).then(
-      (result: DateTime) => {
-        return new this.params.proto(result);
-      }
-    );
   }
 }
 
@@ -232,34 +233,34 @@ const durationPattern =
   /^P(?!$)(\d+(?:\.\d+)?Y)?(\d+(?:\.\d+)?M)?(\d+(?:\.\d+)?W)?(\d+(?:\.\d+)?D)?(T(?=\d)(\d+(?:\.\d+)?H)?(\d+(?:\.\d+)?M)?(\d+(?:\.\d+)?S)?)?$/;
 
 export class DurationValidator extends Validator<Duration> {
-  async validatePath(value: any, path: Path, ctx: ValidationContext): Promise<Duration> {
+  validatePathV2(value: any, path: Path, ctx: ValidationContext, success: SuccessCallback<Duration>, failure: FailureCallback): void {
     if (isNullOrUndefined(value)) {
-      return Promise.reject(defaultViolations.notNull(path));
+      return failure(defaultViolations.notNull(path));
     } else if (Duration.isDuration(value)) {
-      return Promise.resolve(value);
+      return success(value);
     } else if (isString(value) && durationPattern.test(value)) {
       const duration = Duration.fromISO(value);
       if (duration.isValid) {
-        return Promise.resolve(duration);
+        return success(duration);
       }
     }
-    return Promise.reject(new TypeMismatch(path, 'Duration', value));
+    return failure(new TypeMismatch(path, 'Duration', value));
   }
 }
 
 export class TimeDurationValidator extends Validator<Duration> {
-  async validatePath(value: any, path: Path, ctx: ValidationContext): Promise<Duration> {
+  validatePathV2(value: any, path: Path, ctx: ValidationContext, success: SuccessCallback<Duration>, failure: FailureCallback): void {
     if (isNullOrUndefined(value)) {
-      return Promise.reject(defaultViolations.notNull(path));
+      return failure(defaultViolations.notNull(path));
     } else if (Duration.isDuration(value)) {
-      return Promise.resolve(value);
+      return success(value);
     } else if (isString(value)) {
       const duration = Duration.fromISOTime(value);
       if (duration.isValid) {
-        return Promise.resolve(duration);
+        return success(duration);
       }
     }
-    return Promise.reject(new TypeMismatch(path, 'TimeDuration', value));
+    return failure(new TypeMismatch(path, 'TimeDuration', value));
   }
 }
 
