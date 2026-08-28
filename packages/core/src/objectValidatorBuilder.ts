@@ -14,9 +14,8 @@ export class ObjectValidatorBuilder<Props, Next, LocalProps, LocalNext> {
   constructor() {}
   /**
    * Extends the current object validator with the properties and additional properties of the given parent validator.
-   * The property order of the parent validator will be merged with the current property order, if defined.
-   * The order in which `extends` and `propertyOrder` are called matters. The property order of the parent validator will 
-   * be merged with the current property order in the order in which extends is called.
+   * The property order of the parent validator will be merged with the current property order.
+   * The order in which `extends`, `propertyOrder` and `additionalPropertyOrder` are called matters!
    * 
    * @param parent 
    * @returns 
