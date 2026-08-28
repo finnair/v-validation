@@ -62,6 +62,8 @@ export interface FailureCallback {
 }
 
 export abstract class Validator<Out = unknown, In = unknown> {
+  constructor(public readonly allowsUndefined: boolean = false) {}
+
   validateGroup(value: In, group: Group): Promise<ValidationResult<Out>> {
     return this.validate(value, { group });
   }
@@ -1441,7 +1443,7 @@ export class PatternNormalizer extends PatternValidator {
 
 export class OptionalValidator<Out, In> extends Validator<null | undefined | Out, null | undefined | In> {
   constructor(private readonly validator: Validator<Out, In>) {
-    super();
+    super(true);
     Object.freeze(this);
   }
 
@@ -1456,7 +1458,7 @@ export class OptionalValidator<Out, In> extends Validator<null | undefined | Out
 
 export class OptionalUndefinedValidator<Out, In> extends Validator<undefined | Out, undefined | In> {
   constructor(private readonly validator: Validator<Out, In>) {
-    super();
+    super(true);
     Object.freeze(this);
   }
 
@@ -1547,6 +1549,10 @@ export function isPromise(value: any): value is PromiseLike<any> {
 }
 
 export class IgnoreValidator extends Validator<undefined> {
+  constructor() {
+    super(true);
+    Object.freeze(this);
+  }
   validatePathV2(value: any, path: Path, ctx: ValidationContext, success: SuccessCallback<undefined>, failure: FailureCallback): void {
     return success(undefined);
   }

@@ -23,16 +23,21 @@ Or [`npm`](https://www.npmjs.com/):
 npm install @finnair/v-validation
 ```
 
-## Major Changes Coming in Version 11
+## Major Changes (Coming) in Version 11
 
+### Breaking Changes
 Version 11 introduces better performing internal validator architecture. 
 
 This version refactors the internal architecture to be fully callback based which allows both synchronous and asynchronous validators to run without additional Promise/async-await overhead. From public API perspective (`Validator.validate/getValid`) nothing changes. Old and new validators can also be combined. However, **custom validators that extend internal validators (e.g. `ObjectValidator`) may need to be refactored**. 
 
 Performance was tested using ~126K MCT rules and resulted in around 3x faster validation (from 3 to 1 sec).
 
-**Drop support for ObjectValidator property filters**
+### Drop support for ObjectValidator Property Filters
 ObjectValidator's property filter (which was available for subclasses to utilize) has been dropped. That feature broke typing, and the use case to conditionally validate only selected properties, is nowdays better implemented with `V.if` and `ObjectValidator.pick/omit`.
+
+### New feature: Configurable `propertyOrder` and Optimized Optional Properties Validation
+
+ObjectValidator allows defining custom `propertyOrder`, and when it's is defined, validation of missing optional properties is fully skipped. Using `propertyOrder` results in significantly better performance for object types with many optional properties.
 
 ## Major Changes in Version 8
 

@@ -10,9 +10,15 @@ export class ObjectValidatorBuilder<Props, Next, LocalProps, LocalNext> {
   private _additionalProperties: MapEntryModel[] = [];
   private _next?: Validator[] = [];
   private _localNext?: Validator[] = [];
+  private _propertyOrder: undefined | string[];
   constructor() {}
   extends<X>(parent: ObjectValidator<any, X>) {
     this._extends.push(parent);
+    if (this._propertyOrder === undefined) {
+      this._propertyOrder = parent.propertyOrder;
+    } else if (parent.propertyOrder !== undefined) {
+      this._propertyOrder = [...this._propertyOrder, ...parent.propertyOrder];
+    }
     return this as ObjectValidatorBuilder<Props & X, Next, LocalProps, LocalNext>;
   }
   properties<X>(properties: { [K in keyof X]: Validator<X[K]> }) {
@@ -46,6 +52,18 @@ export class ObjectValidatorBuilder<Props, Next, LocalProps, LocalNext> {
     this._localNext?.push(validator);
     return this as unknown as ObjectValidatorBuilder<Props, Next, LocalProps, NextOut>;
   }
+  propertyOrder(propertyOrder: undefined | string[]) {
+    this._propertyOrder = propertyOrder;
+    return this;
+  }
+  additionalPropertyOrder(propertyOrder: string[]) {
+    if (this._propertyOrder === undefined) {
+      this._propertyOrder = propertyOrder;
+    } else {
+      this._propertyOrder = [...this._propertyOrder, ...propertyOrder];
+    }
+    return this;
+  }
   build() {
     return new ObjectValidator<
         (Next extends {} ? Next : Props) & (LocalNext extends {} ? LocalNext : LocalProps), 
@@ -57,6 +75,7 @@ export class ObjectValidatorBuilder<Props, Next, LocalProps, LocalNext> {
       next: this._next,
       localProperties: this._localProperties,
       localNext: this._localNext,
+      propertyOrder: this._propertyOrder,
     });
   }
 };

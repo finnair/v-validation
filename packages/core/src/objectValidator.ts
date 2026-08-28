@@ -63,6 +63,26 @@ export interface ObjectModel<LocalType = unknown, InheritableType = unknown> {
    * Local, non-inheritable rules. 
    */
   readonly localNext?: Validator | Validator[];
+  /**
+   * Output property ordering:
+   * 
+   * Default is `undefined` (for backwards compatibility), which means that properties will be ordered in 
+   * 1) inherited properties first in inheritance order,
+   * 2) properties
+   * 3) localProperties
+   * 4) additionalProperties in input order.
+   * 
+   * If `propertyOrder` is defined, output properties will be ordered in
+   * 1) propertyOrder
+   * 2) inherited mandatory properties in inheritance order
+   * 3) mandatory properties
+   * 4) mandatory localProperties
+   * 5) optional and additionalProperties in input order.
+   * 
+   * For optimal performance it is recommended to define at least an empty array for `propertyOrder`. 
+   * That way missing optional properties are skipped entirely. 
+   */
+  readonly propertyOrder?: string[];
 }
 
 export class ObjectValidator<LocalType = unknown, InheritableType = LocalType, In = unknown> extends Validator<LocalType, In> {
@@ -75,6 +95,8 @@ export class ObjectValidator<LocalType = unknown, InheritableType = LocalType, I
   public readonly parentValidators: ObjectValidator[];
 
   public readonly nextValidator?: Validator;
+
+  public readonly propertyOrder?: string[];
 
   private readonly validator: Validator<LocalType, In>;
 
@@ -103,8 +125,9 @@ export class ObjectValidator<LocalType = unknown, InheritableType = LocalType, I
     this.additionalProperties = additionalProperties.concat(getMapEntryValidators(model.additionalProperties));
     this.properties = mergeProperties(getPropertyValidators(model.properties), properties);
     this.localProperties = getPropertyValidators(model.localProperties);
+    this.propertyOrder = model.propertyOrder;
 
-    let validator: Validator = new PropertiesValidator<LocalType, In>(this.properties, this.localProperties, this.additionalProperties);
+    let validator: Validator = new PropertiesValidator<LocalType, In>(this.properties, this.localProperties, this.additionalProperties, this.propertyOrder);
     const next = nextValidators.length > 0 ? maybeCompositionOf(...(nextValidators as CompositionParameters)) : undefined;
     if (next) {
       this.nextValidator = next;
@@ -122,6 +145,7 @@ export class ObjectValidator<LocalType = unknown, InheritableType = LocalType, I
       }
     }
     this.validator = validator as Validator<LocalType, In>;
+    Object.freeze(this.propertyOrder);
     Object.freeze(this.parentValidators);
     Object.freeze(this);
   }
@@ -146,11 +170,35 @@ export class ObjectValidator<LocalType = unknown, InheritableType = LocalType, I
 }
 
 export class PropertiesValidator<LocalType = unknown, In = unknown> extends Validator<LocalType, In> {
-  constructor(readonly properties: Properties, readonly localProperties: Properties, readonly additionalProperties: MapEntryValidator[]) {
+  private readonly validationOrder: string[];
+  constructor(readonly properties: Properties, readonly localProperties: Properties, readonly additionalProperties: MapEntryValidator[], propertyOrder?: string[]) {
     super();
+    const validationOrder: Set<string> = new Set();
+    if (propertyOrder === undefined) {
+      Object.keys(properties).forEach(key => validationOrder.add(key));
+      Object.keys(localProperties).forEach(key => validationOrder.add(key));
+    } else {
+      propertyOrder.forEach(key => {
+        if (properties[key] || localProperties[key]) {
+          validationOrder.add(key);
+        } else {
+          throw new Error(`Unknown property: '${key}'`);
+        }
+      });
+      const registerMandatoryProperty = ([key, validator]: [string, Validator<unknown, unknown>]) => {
+        if (!validator.allowsUndefined) {
+          validationOrder.add(key);
+        }
+      };
+      Object.entries(properties).forEach(registerMandatoryProperty);
+      Object.entries(localProperties).forEach(registerMandatoryProperty);
+    }
+    this.validationOrder = Array.from(validationOrder);
+
     Object.freeze(this.properties);
     Object.freeze(this.localProperties);
     Object.freeze(this.additionalProperties);
+    Object.freeze(this.validationOrder);
     Object.freeze(this);
   }
   validatePathV2(value: In, path: Path, ctx: ValidationContext, success: SuccessCallback<LocalType>, failure: FailureCallback): void {
@@ -164,7 +212,7 @@ export class PropertiesValidator<LocalType = unknown, In = unknown> extends Vali
     const convertedObject: any = {} as LocalType;
     let violations: Violation[] = [];
     
-    const keys = new Set<string>([...Object.keys(this.properties), ...Object.keys(this.localProperties)]);
+    const keys = new Set<string>(this.validationOrder);
     // Add all, including inherited keys
     for (const key in anyValue) {
       keys.add(key);

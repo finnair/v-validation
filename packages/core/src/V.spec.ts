@@ -976,18 +976,74 @@ describe('inheritance', () => {
     await expectViolations({}, type, defaultViolations.notNull(property('required')));
   });
 
-  test('property order', async () => {
-    const value = (
-      await multiParentChild.validate({
-        firstAdditional: 'firstAdditional',
-        name: 'multi-parent',
-        additionalProperty: 2,
-        thirdAdditional: 'thirdAdditional',
-        anything: true,
-        id: '123',
-      })
-    ).getValue();
-    expect(Object.keys(value)).toEqual(['id', 'name', 'anything', 'firstAdditional', 'additionalProperty', 'thirdAdditional']);
+  describe('property order', () => {
+    test('default property order', async () => {
+      const value = (
+        await multiParentChild.validate({
+          firstAdditional: 'firstAdditional', // 4. input order
+          name: 'multi-parent', // 2. extends(childValidator).properties
+          additionalProperty: 2, // 5. input order
+          thirdAdditional: 'thirdAdditional', // 6. input order
+          anything: true, // 3. (own) properties
+          id: '123', // 1. parentValidator.properties
+        })
+      ).getValue();
+      expect(Object.keys(value)).toEqual(['id', 'name', 'anything', 'firstAdditional', 'additionalProperty', 'thirdAdditional']);
+    });
+    test('custom property order', async () => {
+      const properties = {
+          optionalStrict: V.optionalStrict(V.string()),
+          optional: V.optional(V.string()),
+          required: V.string(),
+          ignore: V.ignore(),
+        };
+      const localProperties = {
+          requiredLocal: V.string(),
+          optionalLocal: V.optionalStrict(V.string()),
+        };
+      expect(Object.keys(await V.objectType().properties(properties).localProperties(localProperties)
+        .propertyOrder(['optionalStrict', 'optional'])
+        .allowAdditionalProperties(true)
+        .build()
+        .getValid({
+          ignore: 'ignore',
+          additional: 'additional',
+          requiredLocal: 'requiredLocal',
+          optional: 'optional',
+          required: 'required',
+          optionalStrict: 'optionalStrict',
+          optionalLocal: 'optionalLocal',
+        }))).toEqual(['optionalStrict', 'optional', 'required', 'requiredLocal', 'additional', 'optionalLocal'])
+    });
+    test('unknown property in propertyOrder throws', () => {
+      expect(() => V.object({ propertyOrder: ['unknown'] })).toThrow();
+    });
+    test('inherited property order', async () => {
+      expect(Object.keys(await V.objectType()
+        .extends(V.objectType().properties({ first: V.string() }).additionalPropertyOrder(['first']).build())
+        .extends(V.objectType().properties({ second: V.string() }).propertyOrder(['second']).build())
+        .properties({ third: V.optionalStrict(V.string()) })
+        .additionalPropertyOrder(['third'])
+        .build()
+        .getValid({
+          third: 'third',
+          first: 'first',
+          second: 'second',
+        }))).toEqual(['first', 'second', 'third']);
+    });
+    test('override inherited property order', async () => {
+      expect(Object.keys(await V.objectType()
+        .extends(V.objectType().properties({ first: V.optionalStrict(V.string()) }).additionalPropertyOrder(['first']).build())
+        .properties({ second: V.optionalStrict(V.string()) })
+        .allowAdditionalProperties(true)
+        .propertyOrder([])
+        .build()
+        .getValid({
+          second: 'second',
+          first: 'first',
+          additional: 'additional',
+        }))).toEqual(['second', 'first', 'additional']);
+    });
   });
 
   describe('allOf parent next validators', async () => {
