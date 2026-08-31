@@ -1373,10 +1373,10 @@ export class AssertTrueValidator<In> extends Validator<In, In> {
       if (!this.fn(value, path, ctx)) {
         return failure(new Violation(this.path ? this.path.connectTo(path) : path, this.type));
       }
-      return success(value);
     } catch (error) {
       return failure(violationsOf(error, this.path ? this.path.connectTo(path) : path));
     }
+    return success(value);
   }
 }
 
