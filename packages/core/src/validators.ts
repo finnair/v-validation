@@ -551,29 +551,63 @@ export class OneOfValidator<Out = unknown> extends Validator<Out> {
   }
 }
 
-export class AnyOfValidator<Out = unknown, In = unknown> extends CompositeValidator<Out, In> {
+/**
+ * Runs input through all validators requiring that one or more succeed. Returns the first 
+ * successful result. If multiple validators succeed, they must return deepEqual value.
+ * Consider wrapping child validators with `V.check()` to ensure that there are no
+ * conflicting conversions.
+ */
+export class AnyOfValidator<Out = unknown, In = unknown> extends Validator<Out, In> {
   constructor(public readonly validators: Validator<Out>[]) {
-    super(validators.some((v) => v.allowsUndefined()));
+    super();
+    if (this.validators.length === 0) {
+      throw new Error('At least one validator required');
+    }
+    // NOTE: This doesn't extend CompositeValidator because even if some of the validators would allow undefined,
+    // others may convert the value, e.g. V.anyOf(V.nullTo('default'), V.optionalStrict(V.string()))
     Object.freeze(this.validators);
     Object.freeze(this);
   }
 
   validatePathV2(value: In, path: Path, ctx: ValidationContext, success: SuccessCallback<Out>, failure: FailureCallback): void {
     let violations: Violation[] = [];
-    const validateNext = (index: number) => {
-      if (index < this.validators.length) {
-        this.validators[index].validatePathV2(value, path, ctx,
-          success,
-          (error) => {
-            violations = violations.concat(violationsOf(error, path));
-            validateNext(index + 1);
-          }
-        );
-      } else {
-        failure(violations);
+    let conversionViolation: Violation | undefined;
+    let foundMatch = false;
+    let convertedValue: any;
+    let expectedResponses = this.validators.length;
+
+    const reportResult = (result: undefined | Out, error: any) => {
+      if (error) {
+        violations = violations.concat(violationsOf(error, path));
+      } else if (!foundMatch) {
+        convertedValue = result;
+        foundMatch = true;
+      } else if (!deepEqual(result, convertedValue)) {
+        conversionViolation = new Violation(path, 'ConflictingConversions', result);
+      }
+      if (--expectedResponses === 0) {
+        if (conversionViolation) {
+          failure([conversionViolation]);
+        } else if (foundMatch) {
+          success(convertedValue);
+        } else {
+          failure(violations);
+        }
       }
     }
-    validateNext(0);
+    for (const validator of this.validators) {
+      try {
+        validator.validatePathV2(
+          value,
+          path,
+          ctx,
+          (result) => reportResult(result, undefined),
+          (error) => reportResult(undefined, error)
+        );
+      } catch (error) {
+        reportResult(undefined, error);
+      }
+    }
   }
 }
 

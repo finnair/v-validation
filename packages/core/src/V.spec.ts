@@ -1441,34 +1441,68 @@ describe('oneOf', () => {
   })
 });
 
+describe('allOf', () => {
+  // Other cases handled else where
+  test('throws', async () => {
+    const validator = new AllOfValidator([V.string(), new ThrowingValidator()]);
+    const result = await validator.validate('value');
+    expect(result.isSuccess()).toBe(false);
+    const violations = result.getViolations();
+    expect(violations).toHaveLength(1);
+    expect(violations[0]).toBeInstanceOf(ErrorViolation);
+  });
+
+  test('at least one validator require internally', () => expect(() => new AllOfValidator([] as any)).toThrow());
+});
+
 describe('anyOf', () => {
   enum EnumType {
     A = 'ABC',
   }
 
-  const violationHasValue = new HasValueViolation(ROOT, '2019-01-24T09:10:00Z', 'ABD');
+  const violationHasValue = new HasValueViolation(ROOT, 'ABC', 'ABD');
   const violationTypeMismatch = new TypeMismatch(ROOT, 'Date', 'ABD');
   const violationEnumMismatch = new EnumMismatch(ROOT, 'EnumType', 'ABD');
 
   const noMatchesViolations: Violation[] = [violationHasValue, violationTypeMismatch, violationEnumMismatch];
 
-  const validator = V.anyOf(V.hasValue('2019-01-24T09:10:00Z'), V.date(), V.enum(EnumType, 'EnumType'));
+  const threeOptions = V.anyOf(V.hasValue('ABC'), V.date(), V.enum(EnumType, 'EnumType'));
 
   describe('single context', () => {
-    test('valid enum', () => expectValid('ABC', validator, EnumType.A));
-    test('valid date', () => expectValid(validDateString, validator, validDate));
-    test('no matches', () => expectViolations('ABD', validator, ...noMatchesViolations));
+    test('valid value & enum', () => expectValid('ABC', threeOptions, EnumType.A));
+    test('valid date', () => expectValid(validDateString, threeOptions, validDate));
+    test('no matches', () => expectViolations('ABD', threeOptions, ...noMatchesViolations));
   });
 
+  test('at least one validator required', () => expect(() => new AnyOfValidator([])).toThrow());
+
+  test('throws', async () => {
+    const validator = V.anyOf(new ThrowingValidator());
+    const result = await validator.validate('value');
+    expect(result.isSuccess()).toBe(false);
+    const violations = result.getViolations();
+    expect(violations).toHaveLength(1);
+    expect(violations[0]).toBeInstanceOf(ErrorViolation);
+  });
+
+  describe('conflicting validators', async () => {
+    const validator = V.anyOf(V.string(), V.string().nextMap(v => v.toUpperCase()));
+
+    test('valid value', () => expectValid('ABC', validator));
+
+    test('conflicting conversions', () => expectViolations('abc', validator, new Violation(ROOT, 'ConflictingConversions', 'ABC')));
+  });
+  
   describe('array context', () => {
-    const matchingArray = ['2019-01-24T09:10:00Z', validDate, 'ABC'];
-    const arrayValidator = V.array(validator);
+    const matchingArray = [validDate, 'ABC'];
+    const arrayValidator = V.array(threeOptions);
 
     test('valid items in array', async () =>
       arrayValidator.validate(matchingArray).then(result => {
-        expect(result.getValue().length).toBe(3);
+        expect(result.getValue().length).toBe(2);
         expect(result.getViolations()).toEqual([]);
       }));
+
     test('fails due to invalid item added', async () =>
       arrayValidator.validate([...matchingArray, 'ABD']).then(result => {
         expect(result.getViolations().length).toBe(3);
