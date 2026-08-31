@@ -885,8 +885,10 @@ export class SetValidator<T = unknown, E extends boolean = true> extends Validat
     const items: T[] = [];
     let violations: Violation[] = [];
     let expectedResponses = (value instanceof Set ? value.size : value.length);
+    let done = false;
 
     const reportResult = () => {
+      done = true;
       if (violations.length > 0) {
         failure(violations);
       } else {
@@ -912,10 +914,18 @@ export class SetValidator<T = unknown, E extends boolean = true> extends Validat
     let i = 0;
     for (const entry of value) {
       const index = i++
-      this.values.validatePathV2(entry, path.index(index), ctx,
-        (result) => reportItem(index, result, undefined),
-        (error) => reportItem(index, undefined, error)
-      );
+      try {
+        this.values.validatePathV2(entry, path.index(index), ctx,
+          (result) => reportItem(index, result, undefined),
+          (error) => reportItem(index, undefined, error)
+        );
+      } catch (error) {
+        if (done) {
+          // Already reported: the throw came from downstream, not from this item.
+          throw error;
+        }
+        reportItem(index, undefined, error);
+      }
     }
   }
 }

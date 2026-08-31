@@ -2275,6 +2275,31 @@ describe('Set', () => {
     expect(parsedArray).toEqual(setArray);
   });
 
+  test('thrown errors', async () => {
+    const result = await V.setType(new ThrowingValidator(), false).validate(new Set([1]));
+    expect(result.isSuccess()).toBe(false);
+    const violations = result.getViolations();
+    expect(violations).toHaveLength(1);
+    expect(violations[0]).toBeInstanceOf(ErrorViolation);
+  });
+
+  test('item level thrown errors are reported per item and accumulated', async () => {
+    const result = await V.setType(new ThrowingValidator(), false).validate(new Set([1, 2]));
+    expect(result.getViolations()).toEqual([
+      new ErrorViolation(Path.of(0), ThrowingValidator.error),
+      new ErrorViolation(Path.of(1), ThrowingValidator.error),
+    ]);
+  });
+
+  test('Set validation must settle when a downstream validator throws', async () => {
+    const validator = V.setType(V.any(), false).next(new ThrowingValidator());
+
+    const result = await validator.validate(new Set([1]));
+
+    expect(result.isSuccess()).toBe(false);
+    expect(result.getViolations().map(v => v.type)).toEqual(['Error']);
+  }, 1000);
+
   describe('typing', () => {
     test('JsonSet', async () => {
       const validator = V.setType(V.string(), true);
