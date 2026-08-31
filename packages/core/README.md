@@ -26,18 +26,25 @@ npm install @finnair/v-validation
 ## Major Changes (Coming) in Version 11
 
 ### Breaking Changes
+
+#### Internal Architecture
 Version 11 introduces better performing internal validator architecture. 
 
 This version refactors the internal architecture to be fully callback based which allows both synchronous and asynchronous validators to run without additional Promise/async-await overhead. From public API perspective (`Validator.validate/getValid`) nothing changes. Old and new validators can also be combined. However, **custom validators that extend internal validators (e.g. `ObjectValidator`) may need to be refactored**. 
 
 Performance was tested using ~126K MCT rules and resulted in around 3x faster validation (from 3 to 1 sec).
 
+#### AnyOf Semantics Clarified
+`V.anyOf` validator no longer short-circuits on first success. Also just like `V.allOf` it now expects all succeeding 
+child validators to return `deepEquals` result. This is to make the result of this validator predicatable regardless 
+of whether underlying validators are sync or async.
+
 ### Drop support for ObjectValidator Property Filters
 ObjectValidator's property filter (which was available for subclasses to utilize) has been dropped. That feature broke typing, and the use case to conditionally validate only selected properties, is nowdays better implemented with `V.if` and `ObjectValidator.pick/omit`.
 
 ### New feature: Configurable `propertyOrder` and Optimized Optional Properties Validation
 
-ObjectValidator allows defining custom `propertyOrder`, and when it's defined, validation of missing optional properties is fully skipped. Using `propertyOrder` results in significantly better performance for object types with many optional properties.
+ObjectValidator allows defining custom `propertyOrder`, and when it's defined, validation of missing optional properties that are not included in `propertyOrder` are fully skipped. Using `propertyOrder` results in significantly better performance for object types with many optional properties.
 
 ## Major Changes in Version 8
 
@@ -329,8 +336,8 @@ but that something may then cause "is declared but never used" -error.
 
 - All validators have [`Validator.next`](#next) function to chain validator rules. 
 - `compositionOf` - validators are run one after another against the (current) converted value (a shortcut for [`Validator.next`](#next)).
-- `allOf` - the input value must satisfy all the validators. Validators are run in parallel and must return the same value (deepEquals).
-- `anyOf` - at least one of the validators must match.
+- `allOf` - the input value must satisfy all the validators. All validators must return the same value (deepEquals).
+- `anyOf` - at least one of the validators must match. All matching validators must return the same value (deepEquals).
 - `oneOf` - exactly one validator must match while others should return false.
 
 ## <a name="object">V.object</a>
@@ -723,8 +730,8 @@ Unless otherwise stated, all validators require non-null and non-undefined value
 | array                   | ...items: Validator[]                                            | [Array validator](#array)                                                                                                                 |
 | toArray                 | items: Validator                                                 | Converts undefined to an empty array and non-arrays to single-valued arrays.                                                              |
 | size                    | min: number, max: number                                         | Asserts that input's numeric `length` property is between min and max (both inclusive).                                                   |
-| allOf                   | ...validators: Validator[]                                       | Requires that all given validators match. Validators are run in parallel and must provide the same output.                                |
-| anyOf                   | ...validators: Validator[]                                       | Requires minimum one of given validators matches. Validators are run in parallel and in case of failure, all violations will be returned. |
+| allOf                   | ...validators: Validator[]                                       | Requires that all given validators match. All chidl validators must result in the same output.                                |
+| anyOf                   | ...validators: Validator[]                                       | Requires minimum one of given validators matches. All matching validators must result in the same output.  |
 | oneOf                   | ...validators: Validator[]                                       | Requires that exactly one of the given validators match.                                                                                  |
 | emptyToUndefined        |                                                                  | Converts null or empty string to undefined. Does not touch any other values.                                                              |
 | emptyToNull             |                                                                  | Converts undefined or empty string to null. Does not touch any other values.                                                              |

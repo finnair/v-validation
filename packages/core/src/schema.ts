@@ -36,6 +36,14 @@ export interface ClassModel {
   readonly additionalProperties?: boolean | MapEntryModel | MapEntryModel[];
   readonly next?: Validator;
   readonly localNext?: Validator;
+  /**
+   * The order in which properties should be validated. If not specified, the order is undefined.
+   * NOTE: This property is not inherited automatically from parent classes. If you want to 
+   * inherit the property order, you must explicitly specify it in the child class.
+   * 
+   * Consider using `V.objectType().propertyOrder(...)` to define the property order in a class model.
+   */
+  readonly propertyOrder?: string[];
 }
 
 export class ModelRef extends Validator {
@@ -173,6 +181,7 @@ export class SchemaValidator extends Validator {
         localProperties,
         next: classModel.next,
         localNext: classModel.localNext,
+        propertyOrder: classModel.propertyOrder,
       };
       validator = new ObjectValidator(model);
     }

@@ -129,7 +129,7 @@ describe('schema', () => {
     test('new proxies cannot be created after constructor is finished', () =>
       expect(() => new SchemaValidator(schema => ({ discriminator: 'type', models: {} })).of('NewModel')).toThrow());
 
-    test('property order', async () => {
+    test('default property order', async () => {
       const value = (
         await schema.validate({
           property: 'property',
@@ -143,6 +143,44 @@ describe('schema', () => {
       ).getValue() as any;
       expect(Object.keys(value)).toEqual(['type', 'extends', 'properties', 'property']);
       expect(Object.keys(value.properties)).toEqual(['first', 'second']);
+    });
+
+    test('custom property order', async () => {
+      const schemaWithOrder = new SchemaValidator(schema => ({
+        discriminator: 'type',
+        models: {
+          Parent: {
+            properties: {
+              type: V.string(),
+              first: V.string(),
+              second: V.string(),
+            },
+            propertyOrder: ['type', 'second', 'first'],
+          },
+          Child: {
+            extends: 'Parent',
+            properties: {
+              third: V.string(),
+            },
+            propertyOrder: ['third', 'second', 'first'],
+          },
+        },
+      }));
+
+      const parentValue = await schemaWithOrder.getValid({
+        first: 'first',
+        type: 'Parent',
+        second: 'second',
+      }) as any;
+      expect(Object.keys(parentValue)).toEqual(['type', 'second', 'first']);  
+
+      const childValue = await schemaWithOrder.getValid({
+        type: 'Child',
+        first: 'first',
+        third: 'third',
+        second: 'second',
+      }) as any;
+      expect(Object.keys(childValue)).toEqual(['third', 'second', 'first', 'type']);
     });
   });
 

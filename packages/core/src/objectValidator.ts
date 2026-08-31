@@ -230,8 +230,11 @@ export class PropertiesValidator<LocalType = unknown, In = unknown> extends Vali
       return success(convertedObject as LocalType);
     }
 
+    let done = false;
+
     const reportResult = () => {
       if (--expectedResponses === 0) {
+        done = true;
         if (violations.length > 0) {
           failure(violations);
         } else {
@@ -308,14 +311,18 @@ export class PropertiesValidator<LocalType = unknown, In = unknown> extends Vali
       const valuePath = path.property(key);
       const propertyValue = anyValue[key];
       try {
-        if (this.properties[key]) {
+        if (Object.hasOwn(this.properties, key)) {
           validateProperty(key, propertyValue, valuePath);
-        } else if (this.localProperties[key]) {
+        } else if (Object.hasOwn(this.localProperties, key)) {
           validateLocalProperty(key, propertyValue, valuePath);
         } else {
           validateAdditionalProperty(key, propertyValue, valuePath, 0, 0);
         }
       } catch (error) {
+        if (done) {
+          // Already reported: the throw came from downstream, not from this property.
+          throw error;
+        }
         reportFailure(key, error);
       }
     }

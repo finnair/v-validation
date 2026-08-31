@@ -138,6 +138,15 @@ export abstract class Validator<Out = unknown, In = unknown> {
     );
   }
 
+  /**
+   * Indicates whether this validator allows undefined values to be skipped. If true, the validator 
+   * will not be called for undefined values and the value will be considered valid. If false, the 
+   * validator will be called for undefined values and may return a violation.
+   * 
+   * NOTE: Return `true` only if `undefined` input is allowed AND results in undefined output.
+   * 
+   * @returns true if undefined values are allowed and will be skipped, false otherwise.
+   */
   skipUndefined(): boolean {
     return false;
   }
@@ -422,9 +431,11 @@ export class ArrayValidator<Out = unknown> extends Validator<Out[]> {
     }
     let expectedResponses = value.length;
     let violations: Violation[] = [];
+    let done = false;
 
     const reportResult = () => {
       if (--expectedResponses === 0) {
+        done = true;
         if (violations.length > 0) {
           failure(violations);
         } else {
@@ -447,6 +458,10 @@ export class ArrayValidator<Out = unknown> extends Validator<Out[]> {
             reportResult();
           });
       } catch (error) {
+        if (done) {
+          // Already reported: the throw came from downstream, not from this item.
+          throw error;
+        }
         violations = violations.concat(violationsOf(error, itemPath));
         reportResult();
       }
@@ -563,8 +578,6 @@ export class AnyOfValidator<Out = unknown, In = unknown> extends Validator<Out, 
     if (this.validators.length === 0) {
       throw new Error('At least one validator required');
     }
-    // NOTE: This doesn't extend CompositeValidator because even if some of the validators would allow undefined,
-    // others may convert the value, e.g. V.anyOf(V.nullTo('default'), V.optionalStrict(V.string()))
     Object.freeze(this.validators);
     Object.freeze(this);
   }
@@ -575,6 +588,7 @@ export class AnyOfValidator<Out = unknown, In = unknown> extends Validator<Out, 
     let foundMatch = false;
     let convertedValue: any;
     let expectedResponses = this.validators.length;
+    let done = false;
 
     const reportResult = (result: undefined | Out, error: any) => {
       if (error) {
@@ -586,6 +600,7 @@ export class AnyOfValidator<Out = unknown, In = unknown> extends Validator<Out, 
         conversionViolation = new Violation(path, 'ConflictingConversions', result);
       }
       if (--expectedResponses === 0) {
+        done = true;
         if (conversionViolation) {
           failure([conversionViolation]);
         } else if (foundMatch) {
@@ -605,6 +620,10 @@ export class AnyOfValidator<Out = unknown, In = unknown> extends Validator<Out, 
           (error) => reportResult(undefined, error)
         );
       } catch (error) {
+        if (done) {
+          // Already reported: the throw came from downstream, not from this validator.
+          throw error;
+        }
         reportResult(undefined, error);
       }
     }
@@ -752,8 +771,10 @@ export class MapValidator<K = unknown, V = unknown, E extends boolean = true> ex
     let violations: Violation[] = [];
     const entries: [K, V][] = [];
     let expectedResponses = map.size * 2;
+    let done = false;
 
     const reportResult = () => {
+      done = true;
       if (violations.length > 0) {
         failure(violations);
       } else {
@@ -787,6 +808,8 @@ export class MapValidator<K = unknown, V = unknown, E extends boolean = true> ex
           (error) => reportEntry(entryIndex, 0, undefined, error)
         );
       } catch (error) {
+        // No `done` check needed: within an entry the key is always reported before the
+        // value, so the last response is always a value and `done` cannot be set here.
         reportEntry(entryIndex, 0, undefined, error);
       }
       try {
@@ -795,6 +818,10 @@ export class MapValidator<K = unknown, V = unknown, E extends boolean = true> ex
           (error) => reportEntry(entryIndex, 1, undefined, error)
         );
       } catch (error) {
+        if (done) {
+          // Already reported: the throw came from downstream, not from this value.
+          throw error;
+        }
         reportEntry(entryIndex, 1, undefined, error);
       }
     }
@@ -1332,10 +1359,14 @@ export class AssertTrueValidator<In> extends Validator<In, In> {
   }
 
   validatePathV2(value: any, path: Path, ctx: ValidationContext, success: SuccessCallback<In>, failure: FailureCallback): void {
-    if (!this.fn(value, path, ctx)) {
-      return failure(new Violation(this.path ? this.path.connectTo(path) : path, this.type));
+    try {
+      if (!this.fn(value, path, ctx)) {
+        return failure(new Violation(this.path ? this.path.connectTo(path) : path, this.type));
+      }
+      return success(value);
+    } catch (error) {
+      return failure(violationsOf(error, this.path ? this.path.connectTo(path) : path));
     }
-    return success(value);
   }
 }
 
@@ -1394,6 +1425,7 @@ export class AllOfValidator<Out, In> extends CompositeValidator<Out, In> {
     let firstResult = true;
     let convertedValue: any;
     let expectedResponses = this.validators.length;
+    let done = false;
 
     const reportResult = (result: undefined | Out, error: any) => {
       if (error) {
@@ -1405,6 +1437,7 @@ export class AllOfValidator<Out, In> extends CompositeValidator<Out, In> {
         violations.push(new Violation(path, 'ConflictingConversions', value));
       }
       if (--expectedResponses === 0) {
+        done = true;
         if (violations.length > 0) {
           failure(violations);
         } else {
@@ -1424,6 +1457,10 @@ export class AllOfValidator<Out, In> extends CompositeValidator<Out, In> {
           (error) => reportResult(undefined, error)
         );
       } catch (error) {
+        if (done) {
+          // Already reported: the throw came from downstream, not from this validator.
+          throw error;
+        }
         reportResult(undefined, error);
       }
     }

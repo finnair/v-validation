@@ -128,11 +128,19 @@ describe('getValid', () => {
   });
 })
 
-test('assertTrue', () =>
-  expectValid(
-    true,
-    V.assertTrue(value => value === true),
-  ));
+describe('assertTrue', () => {
+  test('valid case', () =>
+    expectValid(
+      true,
+      V.assertTrue(value => value === true),
+    ));
+
+  test('throwing function', () => 
+    expectViolations('any', V.assertTrue(() => { throw new Error('boom'); }), new ErrorViolation(ROOT, new Error('boom'))));
+
+  test('throwing from sub path', () => 
+    expectViolations('any', V.assertTrue(() => { throw new Error('boom'); }, 'BadNested', Path.of('nested')), new ErrorViolation(Path.of('nested'), new Error('boom'))));
+});
 
 describe('strings', () => {
   test('valid value', () => expectValid('str', V.string()));
@@ -901,6 +909,15 @@ describe('objects', () => {
         new ErrorViolation(property('additional'), ThrowingValidator.error),
       ]);
     });
+
+    test('object validation must settle when a downstream validator throws', async () => {
+      const validator = V.object({ properties: { a: V.any() } }).next(new ThrowingValidator());
+
+      const result = await validator.validate({ a: 1 });
+
+      expect(result.isSuccess()).toBe(false);
+      expect(result.getViolations().map(v => v.type)).toEqual(['Error']);
+    }, 1000);
   });
 });
 
@@ -1453,6 +1470,15 @@ describe('allOf', () => {
   });
 
   test('at least one validator require internally', () => expect(() => new AllOfValidator([] as any)).toThrow());
+
+  test('allOf validation must settle when a downstream validator throws', async () => {
+    const validator = V.allOf(V.any(), V.any()).next(new ThrowingValidator());
+
+    const result = await validator.validate('value');
+
+    expect(result.isSuccess()).toBe(false);
+    expect(result.getViolations().map(v => v.type)).toEqual(['Error']);
+  }, 1000);
 });
 
 describe('anyOf', () => {
@@ -1508,6 +1534,15 @@ describe('anyOf', () => {
         expect(result.getViolations().length).toBe(3);
       }));
   });
+
+  test('anyOf validation must settle when a downstream validator throws', async () => {
+    const validator = V.anyOf(V.any(), V.any()).next(new ThrowingValidator());
+
+    const result = await validator.validate('value');
+
+    expect(result.isSuccess()).toBe(false);
+    expect(result.getViolations().map(v => v.type)).toEqual(['Error']);
+  }, 1000);
 });
 
 describe('arrays', () => {
@@ -1571,6 +1606,15 @@ describe('arrays', () => {
     expect(violations).toHaveLength(1);
     expect(violations[0]).toBeInstanceOf(ErrorViolation);
   });
+
+  test('array validation must settle when a downstream validator throws', async () => {
+    const validator = V.array(V.any()).next(new ThrowingValidator());
+
+    const result = await validator.validate([1]);
+
+    expect(result.isSuccess()).toBe(false);
+    expect(result.getViolations().map(v => v.type)).toEqual(['Error']);
+  }, 1000);
 });
 
 describe('number', () => {
@@ -2196,6 +2240,15 @@ describe('Map', () => {
     expect(violations[0]).toBeInstanceOf(ErrorViolation);
     expect(violations[1]).toBeInstanceOf(ErrorViolation);
   });
+
+  test('Map validation must settle when a downstream validator throws', async () => {
+    const validator = V.mapType(V.any(), V.any(), false).next(new ThrowingValidator());
+
+    const result = await validator.validate(new Map([['key', 'value']]));
+
+    expect(result.isSuccess()).toBe(false);
+    expect(result.getViolations().map(v => v.type)).toEqual(['Error']);
+  }, 1000);
 });
 
 describe('Set', () => {
