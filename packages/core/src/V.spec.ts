@@ -24,6 +24,8 @@ import {
   JsonBigInt,
   SuccessCallback,
   FailureCallback,
+  AnyOfValidator,
+  AllOfValidator,
 } from './validators.js';
 import { ObjectValidator, VInheritableType } from './objectValidator.js';
 import { V } from './V.js';
@@ -1120,40 +1122,39 @@ describe('inheritance', () => {
   });
 });
 
-describe('allowsUndefined', () => {
+describe('skipUndefined', () => {
   const optional = V.optionalStrict(V.string());
   const mandatory = V.string();
 
-  test('optionalStrict', () => expect(V.optionalStrict(V.string()).allowsUndefined()).toBe(true));
+  test('optionalStrict', () => expect(V.optionalStrict(V.string()).skipUndefined()).toBe(true));
   
-  test('optional', () => expect(V.optional(V.string()).allowsUndefined()).toBe(true));
+  test('optional', () => expect(V.optional(V.string()).skipUndefined()).toBe(true));
   
   test('next', () => {
-    expect(optional.next(optional).allowsUndefined()).toBe(true);
-    expect(optional.next(mandatory).allowsUndefined()).toBe(false);
-    expect(mandatory.next(optional).allowsUndefined()).toBe(false);
+    expect(optional.next(optional).skipUndefined()).toBe(true);
+    expect(optional.next(mandatory).skipUndefined()).toBe(false);
+    expect(mandatory.next(optional).skipUndefined()).toBe(false);
   });
   
   test('composition', () => {
-    expect(V.compositionOf(optional, optional, optional).allowsUndefined()).toBe(true);
-    expect(V.compositionOf(optional, optional, mandatory).allowsUndefined()).toBe(false);
+    expect(V.compositionOf(optional, optional, optional).skipUndefined()).toBe(true);
+    expect(V.compositionOf(optional, optional, mandatory).skipUndefined()).toBe(false);
   });
   
   test('allOf', () => {
-    expect(V.allOf(optional, optional, optional).allowsUndefined()).toBe(true);
-    expect(V.allOf(optional, optional, mandatory).allowsUndefined()).toBe(false);
+    expect(V.allOf(optional, optional, optional).skipUndefined()).toBe(true);
+    expect(V.allOf(optional, optional, mandatory).skipUndefined()).toBe(false);
   });
 
   test('oneOf', () => {
-    // Only one can allow undefined for the whole validator to allow undefined!
-    expect(V.oneOf(optional, mandatory, optional).allowsUndefined()).toBe(false);
-    expect(V.oneOf(mandatory, mandatory, mandatory).allowsUndefined()).toBe(false);
-    expect(V.oneOf(mandatory, optional, mandatory).allowsUndefined()).toBe(true);
+    expect(V.oneOf(optional, mandatory, optional).skipUndefined()).toBe(false);
+    expect(V.oneOf(mandatory, mandatory, mandatory).skipUndefined()).toBe(false);
+    expect(V.oneOf(V.nullTo('value'), optional, mandatory).skipUndefined()).toBe(false);
   });
 
   test('anyOf', () => {
-    expect(V.anyOf(mandatory, mandatory, optional).allowsUndefined()).toBe(true);
-    expect(V.anyOf(mandatory, mandatory, mandatory).allowsUndefined()).toBe(false);
+    expect(V.anyOf(mandatory, mandatory, optional).skipUndefined()).toBe(false);
+    expect(V.anyOf(mandatory, mandatory, mandatory).skipUndefined()).toBe(false);
   });
 
   describe('missing properties validation', () => {
@@ -1163,7 +1164,7 @@ describe('allowsUndefined', () => {
         this.isCalled = true;
         success(value);
       }
-      allowsUndefined(): boolean {
+      skipUndefined(): boolean {
         return true;
       }
     };

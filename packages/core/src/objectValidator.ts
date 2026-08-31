@@ -81,6 +81,11 @@ export interface ObjectModel<LocalType = unknown, InheritableType = unknown> {
    * 
    * For optimal performance it is recommended to define at least an empty array for `propertyOrder`. 
    * That way missing optional properties are skipped entirely. 
+   * 
+   * NOTE: `propertyOrder` is **not** inherited via `ObjectModel.extends`. This is to allow full control
+   * of the property ordering in the child model. Please use `V.objectType()` which by default inherits
+   * the `propertyOrder` from the parent model, but also allows overriding it in the child model. `V.objectType()`
+   * also allows finer control over the order in which inherited vs own properties are ordered. 
    */
   readonly propertyOrder?: string[];
 }
@@ -188,7 +193,7 @@ export class PropertiesValidator<LocalType = unknown, In = unknown> extends Vali
         }
       });
       const registerMandatoryProperty = ([key, validator]: [string, Validator<unknown, unknown>]) => {
-        if (!validator.allowsUndefined()) {
+        if (!validator.skipUndefined()) {
           validationOrder.add(key);
         }
       };

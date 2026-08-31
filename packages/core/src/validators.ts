@@ -138,7 +138,7 @@ export abstract class Validator<Out = unknown, In = unknown> {
     );
   }
 
-  allowsUndefined(): boolean {
+  skipUndefined(): boolean {
     return false;
   }
 
@@ -481,19 +481,19 @@ export class CheckValidator<In> extends Validator<In, In> {
 }
 
 export abstract class CompositeValidator<Out = unknown, In = unknown> extends Validator<Out, In> {
-  constructor(private readonly _allowsUndefined: boolean) {
+  constructor(private readonly _skipUndefined: boolean) {
     super();
   }
 
-  allowsUndefined(): boolean {
-    return this._allowsUndefined;
+  skipUndefined(): boolean {
+    return this._skipUndefined;
   }
 }
 
 export class CompositionValidator<Out = unknown, In = any> extends CompositeValidator<Out, In> {
   public readonly validators: Validator[];
   constructor(validators: Validator[]) {
-    super(validators.every((v) => v.allowsUndefined()));
+    super(validators.every((v) => v.skipUndefined()));
     this.validators = ([] as Validator[]).concat(validators);
     Object.freeze(this.validators);
     Object.freeze(this);
@@ -514,9 +514,10 @@ export class CompositionValidator<Out = unknown, In = any> extends CompositeVali
   }
 }
 
-export class OneOfValidator<Out = unknown> extends CompositeValidator<Out> {
+export class OneOfValidator<Out = unknown> extends Validator<Out> {
   constructor(public readonly validators: [Validator<Out>, ...Validator<Out>[]]) {
-    super(validators.filter((v) => v.allowsUndefined()).length === 1);
+    super();
+    // NOTE: This doesn't skipUndefined because a child validator may allow undefined even if it's not configured to skipUndefined
     Object.freeze(this.validators);
     Object.freeze(this);
   }
@@ -1338,9 +1339,18 @@ export class HasValueValidator<InOut> extends Validator<InOut> {
   }
 }
 
+/**
+ * Runs input through all validators requiring all succeed. Returns the first 
+ * successful result. If multiple validators succeed, they must return deepEqual value.
+ * Consider wrapping child validators with `V.check()` to ensure that the there are no
+ * conflicting conversions.
+ */
 export class AllOfValidator<Out, In> extends CompositeValidator<Out, In> {
   constructor(public readonly validators: [Validator<Out, In>, ...Validator<Out, In>[]]) {
-    super(validators.every(v => v.allowsUndefined()));
+    super(validators.every(v => v.skipUndefined()));
+    if (validators.length === 0) {
+      throw new Error('At least one validator required');
+    }
     Object.freeze(this.validators);
     Object.freeze(this);
   }
@@ -1371,13 +1381,17 @@ export class AllOfValidator<Out, In> extends CompositeValidator<Out, In> {
 
     for (let i = 0; i < this.validators.length; i++) {
       const validator = this.validators[i];
-      validator.validatePathV2(
-        value,
-        path,
-        ctx,
-        (result) => reportResult(result, undefined),
-        (error) => reportResult(undefined, error)
-      );
+      try {
+        validator.validatePathV2(
+          value,
+          path,
+          ctx,
+          (result) => reportResult(result, undefined),
+          (error) => reportResult(undefined, error)
+        );
+      } catch (error) {
+        reportResult(undefined, error);
+      }
     }
   }
 }
@@ -1460,7 +1474,7 @@ export class OptionalValidator<Out, In> extends Validator<null | undefined | Out
     Object.freeze(this);
   }
 
-  allowsUndefined(): boolean {
+  skipUndefined(): boolean {
     return true;
   }
 
@@ -1479,7 +1493,7 @@ export class OptionalUndefinedValidator<Out, In> extends Validator<undefined | O
     Object.freeze(this);
   }
 
-  allowsUndefined(): boolean {
+  skipUndefined(): boolean {
     return true;
   }
 
@@ -1570,7 +1584,7 @@ export function isPromise(value: any): value is PromiseLike<any> {
 }
 
 export class IgnoreValidator extends Validator<undefined> {
-  allowsUndefined(): boolean {
+  skipUndefined(): boolean {
     return true;
   }
   validatePathV2(value: any, path: Path, ctx: ValidationContext, success: SuccessCallback<undefined>, failure: FailureCallback): void {

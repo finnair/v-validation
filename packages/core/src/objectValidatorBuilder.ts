@@ -102,6 +102,6 @@ export class ObjectValidatorBuilder<Props, Next, LocalProps, LocalNext> {
   }
 };
 
-function inheritablePropertyOrder(parent: ObjectValidator<any, any>) {
+export function inheritablePropertyOrder(parent: ObjectValidator<any, any>) {
   return parent.propertyOrder!.filter((key) => Object.hasOwn(parent.properties, key));
 }
