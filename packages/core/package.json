@@ -48,5 +48,8 @@
   },
   "devDependencies": {
     "@finnair/path": "^10.2.1"
+  },
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
   }
 }
