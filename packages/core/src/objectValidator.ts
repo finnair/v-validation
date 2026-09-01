@@ -29,10 +29,6 @@ export interface MapEntryModel<K = unknown, V = unknown> {
   readonly values: Validator<V>;
 }
 
-export interface PropertyFilter {
-  (key: string): boolean;
-}
-
 export type VInheritableType<V extends ObjectValidator<any, any>> = V extends ObjectValidator<any, infer Out> ? Out : unknown;
 
 export interface ObjectModel<LocalType = unknown, InheritableType = unknown> {
