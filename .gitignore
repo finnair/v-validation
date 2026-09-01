@@ -102,3 +102,7 @@ dist
 
 # TernJS port file
 .tern-port
+
+# local benchmark datasets - never commit real data. Cases and datasets kept alongside them are
+# covered more thoroughly by benchmark/cases/.gitignore.
+*.jsonl.gz

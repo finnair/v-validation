@@ -1,0 +1,6 @@
+# Cases and their datasets are private by default: this directory holds real models and real data.
+# Nothing here is committed unless it is explicitly allowed below, so dropping a dataset next to its
+# case can never leak it, whatever the file extension.
+*
+!.gitignore
+!example.js

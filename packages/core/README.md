@@ -32,7 +32,7 @@ Version 11 introduces better performing internal validator architecture.
 
 This version refactors the internal architecture to be fully callback based which allows both synchronous and asynchronous validators to run without additional Promise/async-await overhead. From public API perspective (`Validator.validate/getValid`) nothing changes. Old and new validators can also be combined. However, **custom validators that extend internal validators (e.g. `ObjectValidator`) may need to be refactored**. 
 
-Performance was tested using ~126K MCT rules and resulted in around 3x faster validation (from 3 to 1 sec).
+See [Performance](#performance) for measurements.
 
 #### AnyOf Semantics Clarified and Fixed
 `V.anyOf` validator no longer short-circuits on first success. Also just like `V.allOf` it now expects all succeeding 
@@ -49,6 +49,43 @@ ObjectValidator's property filter (which was available for subclasses to utilize
 ### New feature: Configurable `propertyOrder` and Optimized Optional Properties Validation
 
 ObjectValidator allows defining custom `propertyOrder`, and when it's defined, validation of missing optional properties that are not included in `propertyOrder` are fully skipped. Using `propertyOrder` results in significantly better performance for object types with many optional properties.
+
+### Performance
+
+Measured on ~126K real MCT rules - 26 properties, most of them optional and absent on any given
+record - validated as one array (`V.array(ruleValidator)`) against the previous release 10.2.1, on
+Node 20:
+
+|                      | time    | throughput   | peak heap | retained heap |
+| -------------------- | ------- | ------------ | --------- | ------------- |
+| 10.2.1               | 2925 ms | 43K rules/s  | 537 MB    | 108 MB        |
+| 11                   | 744 ms  | 170K rules/s | 32 MB     | 18 MB         |
+| 11 + `propertyOrder` | 288 ms  | 439K rules/s | 29 MB     | 17 MB         |
+
+Two separate wins: the callback architecture accounts for 3.9x, and opting in to `propertyOrder`
+multiplies that by a further 2.6x.
+
+**How you call the library matters as much as the version.** Validating a collection as one
+`V.array(...)` call is a single Promise for the whole dataset; validating row by row costs a
+`validate()` Promise and an `await` turn per row, and that overhead is the same in every version. On
+the same data and validator, row-by-row measures 1.6x / 4.0x where the array measures 3.9x / 10.2x.
+
+**The peak memory difference is the bigger operational change.** Validating that array on 10.2.1
+peaked at 2.3 GB of heap with `Vluxon.localDate()` in the model, because a Promise per property was
+held alive for every row at once; the same work on v11 peaks at 157 MB. Under
+`--max-old-space-size=1024` the 10.2.1 run dies with *"Ineffective mark-compacts near heap limit"*
+while v11 completes, so collections that previously needed chunking to fit in a container may no
+longer need it.
+
+**Expect different numbers.** The gain depends heavily on the shape of your data and rules, and
+`propertyOrder` pays off in proportion to how many optional properties are actually absent. Adding
+three `Vluxon.localDate()` conversions - a cost unchanged between versions - moves the array
+measurement from 3.9x / 10.2x to 3.4x / 5.7x, because less of the total time is core validation.
+Measure your own schema against your own data with the [benchmark scaffold](../../benchmark).
+
+Converted output is unchanged, but v11 returns objects with V8 *fast properties* where 10.2.1
+returned dictionary-mode objects. That accounts for most of the retained-heap difference, even
+though the validated values are identical.
 
 ## Major Changes in Version 8
 
