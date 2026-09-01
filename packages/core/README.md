@@ -36,9 +36,12 @@ Performance was tested using ~126K MCT rules and resulted in around 3x faster va
 
 #### AnyOf Semantics Clarified and Fixed
 `V.anyOf` validator no longer short-circuits on first success. Also just like `V.allOf` it now expects all succeeding 
-child validators to return `deepEquals` result. This is to make the result of this validator predicatable regardless 
+child validators to return `deepEquals` result. This is to make the result of this validator predictable regardless 
 of whether underlying validators are sync or async. Unfortunate side-effect is worse performance than before. Please
 consider using other constructs instead, e.g. `V.if(condition1, validator1).elseIf(condition2, validator2).else(elseValidator)`.
+
+Since every branch now runs, `V.anyOf` also reports ignored violations to `warnLogger` once per branch instead of once
+in total. See [Deduplicating `warnLogger` with `dedupWarnLogger`](#deduplicating-warnlogger-with-dedupwarnlogger).
 
 #### Drop support for ObjectValidator Property Filters
 ObjectValidator's property filter (which was available for subclasses to utilize) has been dropped. That feature broke typing, and the use case to conditionally validate only selected properties, is better implemented with `V.if` and `ObjectValidator.pick/omit`.
@@ -632,6 +635,41 @@ Options are passed to to `validate` function as optional second argument.
 (await V.object({ additionalProperties: false }).validate({ additionalProperty: 'Not OK' }, { ignoreUnknownProperties: true })).isSuccess();
 // false
 ```
+
+### Deduplicating `warnLogger` with `dedupWarnLogger`
+
+`warnLogger` reports ignored `Violation`s, i.e. backwards compatible changes in source data: a
+source system started sending a new property, or a new enum value. That is a small and fixed set of
+findings, but `warnLogger` is called for every *occurrence* of one, so an undeduplicated logger
+reports the same finding over and over:
+
+- once per array element - and elements of an array share the same schema, so a new property in a
+  1000 element array is one finding reported 1000 times,
+- once per child validator of `V.anyOf`, `V.oneOf`, `V.allOf` and validator chains
+  (`Validator.next`/`V.compositionOf`), since each of them validates the same value,
+- and, most importantly, again on every single request until the validator is updated.
+
+Wrap your logger in `dedupWarnLogger` to report each distinct finding only once. Create it **once**
+and reuse it, so that deduplication spans validations - that is where the volume comes from:
+
+```typescript
+import { dedupWarnLogger } from '@finnair/v-validation';
+
+const warnLogger = dedupWarnLogger(violation => console.warn('Source data changed:', violation));
+
+// per request
+await validator.validate(input, { ignoreUnknownProperties: true, warnLogger });
+```
+
+Findings are identified by `warnLoggerKey`: violation type, path and `invalidValue`, with array
+indices replaced by `*` (`$.items[3].added` becomes `$.items[*].added` - see `anyIndexPath`). So a
+new property is reported once no matter which element or which request it arrives in, while genuinely
+different findings are all still reported: a different property, a different location in the schema,
+or a different unknown enum value. Pass a second argument to use a different identity.
+
+The set of reported findings is retained for the lifetime of the returned logger. It is bounded by
+the schema - violation type times normalized path times enum value - not by the amount of data
+validated.
 
 ## Custom Validators
 

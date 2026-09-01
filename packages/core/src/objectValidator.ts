@@ -16,7 +16,7 @@ import {
   ValidatorFnWrapperV2,
   Violation,
   violationsOf,
-} from "./validators";
+} from "./validators.js";
 
 export type PropertyModel = { [s: string]: string | number | Validator };
 
