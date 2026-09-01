@@ -89,6 +89,16 @@ class ThrowingValidator extends Validator<string> {
   }
 };
 
+/**
+ * Reports success from a microtask, i.e. after the caller's synchronous scope has already exited.
+ * Unlike `defer`, this overrides `validatePathV2` directly, so no promise bridge is involved.
+ */
+class AsyncValidator extends Validator<any> {
+  validatePathV2(value: any, path: Path, ctx: ValidationContext, success: (value: any) => void, failure: (violations: Violation[]) => void): void {
+    Promise.resolve().then(() => success(value));
+  }
+};
+
 describe('ValidationResult', () => {
   test('getValue() returns valid value', async () => {
     const result = await V.string().validate('123');
@@ -918,6 +928,24 @@ describe('objects', () => {
       expect(result.isSuccess()).toBe(false);
       expect(result.getViolations().map(v => v.type)).toEqual(['Error']);
     }, 1000);
+
+    test('object validation must settle when a downstream validator throws after an async property', async () => {
+      const validator = V.object({ properties: { a: defer(V.any()) } }).next(new ThrowingValidator());
+
+      const result = await validator.validate({ a: 1 });
+
+      expect(result.isSuccess()).toBe(false);
+      expect(result.getViolations().map(v => v.type)).toEqual(['Error']);
+    }, 1000);
+
+    test('object validation must settle when a downstream validator throws after a microtask success', async () => {
+      const validator = V.object({ properties: { a: new AsyncValidator() } }).next(new ThrowingValidator());
+
+      const result = await validator.validate({ a: 1 });
+
+      expect(result.isSuccess()).toBe(false);
+      expect(result.getViolations().map(v => v.type)).toEqual(['Error']);
+    }, 1000);
   });
 });
 
@@ -1479,6 +1507,15 @@ describe('allOf', () => {
     expect(result.isSuccess()).toBe(false);
     expect(result.getViolations().map(v => v.type)).toEqual(['Error']);
   }, 1000);
+
+  test('allOf validation must settle when a downstream validator throws after an async branch', async () => {
+    const validator = V.allOf(defer(V.any()), V.any()).next(new ThrowingValidator());
+
+    const result = await validator.validate('value');
+
+    expect(result.isSuccess()).toBe(false);
+    expect(result.getViolations().map(v => v.type)).toEqual(['Error']);
+  }, 1000);
 });
 
 describe('anyOf', () => {
@@ -1537,6 +1574,15 @@ describe('anyOf', () => {
 
   test('anyOf validation must settle when a downstream validator throws', async () => {
     const validator = V.anyOf(V.any(), V.any()).next(new ThrowingValidator());
+
+    const result = await validator.validate('value');
+
+    expect(result.isSuccess()).toBe(false);
+    expect(result.getViolations().map(v => v.type)).toEqual(['Error']);
+  }, 1000);
+
+  test('anyOf validation must settle when a downstream validator throws after an async branch', async () => {
+    const validator = V.anyOf(defer(V.any()), V.any()).next(new ThrowingValidator());
 
     const result = await validator.validate('value');
 
@@ -1611,6 +1657,15 @@ describe('arrays', () => {
     const validator = V.array(V.any()).next(new ThrowingValidator());
 
     const result = await validator.validate([1]);
+
+    expect(result.isSuccess()).toBe(false);
+    expect(result.getViolations().map(v => v.type)).toEqual(['Error']);
+  }, 1000);
+
+  test('array validation must settle when a downstream validator throws after an async item', async () => {
+    const validator = V.array(defer(V.any())).next(new ThrowingValidator());
+
+    const result = await validator.validate([1, 2, 3]);
 
     expect(result.isSuccess()).toBe(false);
     expect(result.getViolations().map(v => v.type)).toEqual(['Error']);
@@ -2133,6 +2188,15 @@ describe('map function', () => {
     expect(result.getViolations().map(v => v.type)).toEqual(['Error']);
   }, 1000);
 
+  test('map validation must settle when a downstream validator throws after an async mapping function', async () => {
+    const validator = V.object({ properties: { a: V.map(async (value: any) => value) } }).next(new ThrowingValidator());
+
+    const result = await validator.validate({ a: 1 });
+
+    expect(result.isSuccess()).toBe(false);
+    expect(result.getViolations().map(v => v.type)).toEqual(['Error']);
+  }, 1000);
+
   test('promise throwing a ValidationError', async () => {
     await expectViolations(
       'abc',
@@ -2258,6 +2322,15 @@ describe('Map', () => {
     expect(result.isSuccess()).toBe(false);
     expect(result.getViolations().map(v => v.type)).toEqual(['Error']);
   }, 1000);
+
+  test('Map validation must settle when a downstream validator throws after an async entry', async () => {
+    const validator = V.mapType(defer(V.any()), defer(V.any()), false).next(new ThrowingValidator());
+
+    const result = await validator.validate(new Map([['key', 'value']]));
+
+    expect(result.isSuccess()).toBe(false);
+    expect(result.getViolations().map(v => v.type)).toEqual(['Error']);
+  }, 1000);
 });
 
 describe('Set', () => {
@@ -2304,6 +2377,15 @@ describe('Set', () => {
     const validator = V.setType(V.any(), false).next(new ThrowingValidator());
 
     const result = await validator.validate(new Set([1]));
+
+    expect(result.isSuccess()).toBe(false);
+    expect(result.getViolations().map(v => v.type)).toEqual(['Error']);
+  }, 1000);
+
+  test('Set validation must settle when a downstream validator throws after an async item', async () => {
+    const validator = V.setType(defer(V.any()), false).next(new ThrowingValidator());
+
+    const result = await validator.validate(new Set([1, 2]));
 
     expect(result.isSuccess()).toBe(false);
     expect(result.getViolations().map(v => v.type)).toEqual(['Error']);
@@ -2427,6 +2509,15 @@ describe('fn', () => {
     expect(result.isSuccess()).toBe(false);
     expect(result.getViolations().map(v => v.type)).toEqual(['Error']);
   }, 1000);
+
+  test('fn validation must settle when a downstream validator throws after an async function', async () => {
+    const validator = V.object({ properties: { a: V.fn(async (value: any) => value) } }).next(new ThrowingValidator());
+
+    const result = await validator.validate({ a: 1 });
+
+    expect(result.isSuccess()).toBe(false);
+    expect(result.getViolations().map(v => v.type)).toEqual(['Error']);
+  }, 1000);
 });
 
 describe('fn2', () => {
@@ -2455,6 +2546,17 @@ describe('fn2', () => {
   test('fn2 validation must settle when a downstream validator throws', async () => {
     const validator = V.object({ properties: { a: V.fn2((value: any, _path, _ctx, success) => success(value)) } })
       .next(new ThrowingValidator());
+
+    const result = await validator.validate({ a: 1 });
+
+    expect(result.isSuccess()).toBe(false);
+    expect(result.getViolations().map(v => v.type)).toEqual(['Error']);
+  }, 1000);
+
+  test('fn2 validation must settle when a downstream validator throws after an async success', async () => {
+    const validator = V.object({
+      properties: { a: V.fn2((value: any, _path, _ctx, success) => { Promise.resolve().then(() => success(value)); }) },
+    }).next(new ThrowingValidator());
 
     const result = await validator.validate({ a: 1 });
 

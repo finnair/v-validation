@@ -379,10 +379,8 @@ export class ValidatorFnWrapper<Out = unknown, In = unknown> extends Validator<O
   }
 
   validatePathV2(value: In, path: Path, ctx: ValidationContext, success: SuccessCallback<Out>, failure: FailureCallback): void {
-    let done = false;
     try {
       const maybePromise = this.fn(value, path, ctx);
-      done = true;
       if (isPromise(maybePromise)) {
         maybePromise.then(
           success,
@@ -392,10 +390,6 @@ export class ValidatorFnWrapper<Out = unknown, In = unknown> extends Validator<O
         success(maybePromise);
       }
     } catch (error) {
-      if (done) {
-        // Already handed off: the throw came from downstream, not from the validator function.
-        throw error;
-      }
       ctx.failureV2(violationsOf(error, path), value, success, failure);
     }
   }
@@ -408,22 +402,15 @@ export class ValidatorFnWrapperV2<Out = unknown, In = unknown> extends Validator
   }
 
   validatePathV2(value: In, path: Path, ctx: ValidationContext, success: SuccessCallback<Out>, failure: FailureCallback): void {
-    let done = false;
     try {
       this.fn(value, path, ctx,
         (result) => {
-          done = true;
           success(result);
         },
         error => {
-          done = true;
           ctx.failureV2(error, value, success, failure);
         });
     } catch (error) {
-      if (done) {
-        // Already reported: the throw came from downstream, not from the validator function.
-        throw error;
-      }
       ctx.failureV2(violationsOf(error, path), value, success, failure);
     }
   }
@@ -448,11 +435,9 @@ export class ArrayValidator<Out = unknown> extends Validator<Out[]> {
     }
     let expectedResponses = value.length;
     let violations: Violation[] = [];
-    let done = false;
 
     const reportResult = () => {
       if (--expectedResponses === 0) {
-        done = true;
         if (violations.length > 0) {
           failure(violations);
         } else {
@@ -475,10 +460,6 @@ export class ArrayValidator<Out = unknown> extends Validator<Out[]> {
             reportResult();
           });
       } catch (error) {
-        if (done) {
-          // Already reported: the throw came from downstream, not from this item.
-          throw error;
-        }
         violations = violations.concat(violationsOf(error, itemPath));
         reportResult();
       }
@@ -534,11 +515,18 @@ export class CompositionValidator<Out = unknown, In = any> extends CompositeVali
   validatePathV2(value: In, path: Path, ctx: ValidationContext, success: SuccessCallback<Out>, failure: FailureCallback): void {
     const validateNext = (index: number, currentValue: any) => {
       if (index < this.validators.length) {
-        this.validators[index].validatePathV2(currentValue, path, ctx,
-          (result) => validateNext(index + 1, result),
-          (error) => failure(violationsOf(error, path))
-        );
+        try {
+          this.validators[index].validatePathV2(currentValue, path, ctx,
+            (result) => validateNext(index + 1, result),
+            (error) => failure(violationsOf(error, path))
+          );
+        } catch (error) {
+          // A validator in the chain threw. Report it here rather than letting it unwind
+          // into an upstream validator that has already reported its own result.
+          failure(violationsOf(error, path));
+        }
       } else {
+        // NOTE: outside the try - a throw from here belongs to the caller's continuation.
         success(currentValue);
       }
     }
@@ -605,7 +593,6 @@ export class AnyOfValidator<Out = unknown, In = unknown> extends Validator<Out, 
     let foundMatch = false;
     let convertedValue: any;
     let expectedResponses = this.validators.length;
-    let done = false;
 
     const reportResult = (result: undefined | Out, error: any) => {
       if (error) {
@@ -617,7 +604,6 @@ export class AnyOfValidator<Out = unknown, In = unknown> extends Validator<Out, 
         conversionViolation = new Violation(path, 'ConflictingConversions', result);
       }
       if (--expectedResponses === 0) {
-        done = true;
         if (conversionViolation) {
           failure([conversionViolation]);
         } else if (foundMatch) {
@@ -637,10 +623,6 @@ export class AnyOfValidator<Out = unknown, In = unknown> extends Validator<Out, 
           (error) => reportResult(undefined, error)
         );
       } catch (error) {
-        if (done) {
-          // Already reported: the throw came from downstream, not from this validator.
-          throw error;
-        }
         reportResult(undefined, error);
       }
     }
@@ -788,10 +770,8 @@ export class MapValidator<K = unknown, V = unknown, E extends boolean = true> ex
     let violations: Violation[] = [];
     const entries: [K, V][] = [];
     let expectedResponses = map.size * 2;
-    let done = false;
 
     const reportResult = () => {
-      done = true;
       if (violations.length > 0) {
         failure(violations);
       } else {
@@ -825,8 +805,6 @@ export class MapValidator<K = unknown, V = unknown, E extends boolean = true> ex
           (error) => reportEntry(entryIndex, 0, undefined, error)
         );
       } catch (error) {
-        // No `done` check needed: within an entry the key is always reported before the
-        // value, so the last response is always a value and `done` cannot be set here.
         reportEntry(entryIndex, 0, undefined, error);
       }
       try {
@@ -835,10 +813,6 @@ export class MapValidator<K = unknown, V = unknown, E extends boolean = true> ex
           (error) => reportEntry(entryIndex, 1, undefined, error)
         );
       } catch (error) {
-        if (done) {
-          // Already reported: the throw came from downstream, not from this value.
-          throw error;
-        }
         reportEntry(entryIndex, 1, undefined, error);
       }
     }
@@ -902,10 +876,8 @@ export class SetValidator<T = unknown, E extends boolean = true> extends Validat
     const items: T[] = [];
     let violations: Violation[] = [];
     let expectedResponses = (value instanceof Set ? value.size : value.length);
-    let done = false;
 
     const reportResult = () => {
-      done = true;
       if (violations.length > 0) {
         failure(violations);
       } else {
@@ -937,10 +909,6 @@ export class SetValidator<T = unknown, E extends boolean = true> extends Validat
           (error) => reportItem(index, undefined, error)
         );
       } catch (error) {
-        if (done) {
-          // Already reported: the throw came from downstream, not from this item.
-          throw error;
-        }
         reportItem(index, undefined, error);
       }
     }
@@ -1452,7 +1420,6 @@ export class AllOfValidator<Out, In> extends CompositeValidator<Out, In> {
     let firstResult = true;
     let convertedValue: any;
     let expectedResponses = this.validators.length;
-    let done = false;
 
     const reportResult = (result: undefined | Out, error: any) => {
       if (error) {
@@ -1464,7 +1431,6 @@ export class AllOfValidator<Out, In> extends CompositeValidator<Out, In> {
         violations.push(new Violation(path, 'ConflictingConversions', value));
       }
       if (--expectedResponses === 0) {
-        done = true;
         if (violations.length > 0) {
           failure(violations);
         } else {
@@ -1484,10 +1450,6 @@ export class AllOfValidator<Out, In> extends CompositeValidator<Out, In> {
           (error) => reportResult(undefined, error)
         );
       } catch (error) {
-        if (done) {
-          // Already reported: the throw came from downstream, not from this validator.
-          throw error;
-        }
         reportResult(undefined, error);
       }
     }
@@ -1643,10 +1605,7 @@ export class ValueMapper<Out = unknown, In = unknown> extends Validator<Out, In>
   }
 
   validatePathV2(value: In, path: Path, ctx: ValidationContext, success: SuccessCallback<Out>, failure: FailureCallback): void {
-    let done = false;
-
     const handleResult = (result: any) => {
-      done = true;
       if (result instanceof Violation) {
         ctx.failureV2(result, value, success, failure);
       } else {
@@ -1665,10 +1624,6 @@ export class ValueMapper<Out = unknown, In = unknown> extends Validator<Out, In>
         handleResult(maybePromise);
       }
     } catch (error) {
-      if (done) {
-        // Already reported: the throw came from downstream, not from the mapping function.
-        throw error;
-      }
       failure(violationsOf(error, path));
     }
   }
