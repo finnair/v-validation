@@ -268,8 +268,8 @@ export class PropertiesValidator<LocalType = unknown, In = unknown> extends Vali
     const validateProperty = (key: string, propertyValue: unknown, propertyPath: Path) => {
       this.properties[key].validatePathV2(propertyValue, propertyPath, ctx,
         (result) => {
-          if (this.localProperties[key]) {
-            validateLocalProperty(key, propertyValue, propertyPath);
+          if (Object.hasOwn(this.localProperties, key)) {
+            validateLocalProperty(key, result, propertyPath);
           } else {
             reportSuccess(key, result);
           }
@@ -342,7 +342,7 @@ function pick(properties: Properties, fn: (key: keyof any) => boolean): Properti
 export function mergeProperties(from: Properties, to: Properties): Properties {
   if (from) {
     for (const key in from) {
-      if (to[key]) {
+      if (Object.hasOwn(to, key)) {
         to[key] = to[key].next(from[key]);
       } else {
         to[key] = from[key];

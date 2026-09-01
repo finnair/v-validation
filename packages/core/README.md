@@ -34,13 +34,14 @@ This version refactors the internal architecture to be fully callback based whic
 
 Performance was tested using ~126K MCT rules and resulted in around 3x faster validation (from 3 to 1 sec).
 
-#### AnyOf Semantics Clarified
+#### AnyOf Semantics Clarified and Fixed
 `V.anyOf` validator no longer short-circuits on first success. Also just like `V.allOf` it now expects all succeeding 
 child validators to return `deepEquals` result. This is to make the result of this validator predicatable regardless 
-of whether underlying validators are sync or async.
+of whether underlying validators are sync or async. Unfortunate side-effect is worse performance than before. Please
+consider using other constructs instead, e.g. `V.if(condition1, validator1).elseIf(condition2, validator2).else(elseValidator)`.
 
-### Drop support for ObjectValidator Property Filters
-ObjectValidator's property filter (which was available for subclasses to utilize) has been dropped. That feature broke typing, and the use case to conditionally validate only selected properties, is nowdays better implemented with `V.if` and `ObjectValidator.pick/omit`.
+#### Drop support for ObjectValidator Property Filters
+ObjectValidator's property filter (which was available for subclasses to utilize) has been dropped. That feature broke typing, and the use case to conditionally validate only selected properties, is better implemented with `V.if` and `ObjectValidator.pick/omit`.
 
 ### New feature: Configurable `propertyOrder` and Optimized Optional Properties Validation
 
@@ -730,7 +731,7 @@ Unless otherwise stated, all validators require non-null and non-undefined value
 | array                   | ...items: Validator[]                                            | [Array validator](#array)                                                                                                                 |
 | toArray                 | items: Validator                                                 | Converts undefined to an empty array and non-arrays to single-valued arrays.                                                              |
 | size                    | min: number, max: number                                         | Asserts that input's numeric `length` property is between min and max (both inclusive).                                                   |
-| allOf                   | ...validators: Validator[]                                       | Requires that all given validators match. All chidl validators must result in the same output.                                |
+| allOf                   | ...validators: Validator[]                                       | Requires that all given validators match. All child validators must result in the same output.                                |
 | anyOf                   | ...validators: Validator[]                                       | Requires minimum one of given validators matches. All matching validators must result in the same output.  |
 | oneOf                   | ...validators: Validator[]                                       | Requires that exactly one of the given validators match.                                                                                  |
 | emptyToUndefined        |                                                                  | Converts null or empty string to undefined. Does not touch any other values.                                                              |

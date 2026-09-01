@@ -22,7 +22,7 @@ export class ObjectValidatorBuilder<Props, Next, LocalProps, LocalNext> {
    */
   extends<X>(parent: ObjectValidator<any, X>) {
     this._extends.push(parent);
-      if (parent.propertyOrder) {
+    if (parent.propertyOrder) {
       if (this._propertyOrder === undefined) {
         this._propertyOrder = inheritablePropertyOrder(parent);
       } else {
