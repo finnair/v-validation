@@ -379,8 +379,10 @@ export class ValidatorFnWrapper<Out = unknown, In = unknown> extends Validator<O
   }
 
   validatePathV2(value: In, path: Path, ctx: ValidationContext, success: SuccessCallback<Out>, failure: FailureCallback): void {
+    let done = false;
     try {
       const maybePromise = this.fn(value, path, ctx);
+      done = true;
       if (isPromise(maybePromise)) {
         maybePromise.then(
           success,
@@ -390,6 +392,10 @@ export class ValidatorFnWrapper<Out = unknown, In = unknown> extends Validator<O
         success(maybePromise);
       }
     } catch (error) {
+      if (done) {
+        // Already handed off: the throw came from downstream, not from the validator function.
+        throw error;
+      }
       ctx.failureV2(violationsOf(error, path), value, success, failure);
     }
   }
@@ -402,11 +408,22 @@ export class ValidatorFnWrapperV2<Out = unknown, In = unknown> extends Validator
   }
 
   validatePathV2(value: In, path: Path, ctx: ValidationContext, success: SuccessCallback<Out>, failure: FailureCallback): void {
+    let done = false;
     try {
       this.fn(value, path, ctx,
-        success,
-        error => ctx.failureV2(error, value, success, failure));
+        (result) => {
+          done = true;
+          success(result);
+        },
+        error => {
+          done = true;
+          ctx.failureV2(error, value, success, failure);
+        });
     } catch (error) {
+      if (done) {
+        // Already reported: the throw came from downstream, not from the validator function.
+        throw error;
+      }
       ctx.failureV2(violationsOf(error, path), value, success, failure);
     }
   }
@@ -1626,7 +1643,10 @@ export class ValueMapper<Out = unknown, In = unknown> extends Validator<Out, In>
   }
 
   validatePathV2(value: In, path: Path, ctx: ValidationContext, success: SuccessCallback<Out>, failure: FailureCallback): void {
+    let done = false;
+
     const handleResult = (result: any) => {
+      done = true;
       if (result instanceof Violation) {
         ctx.failureV2(result, value, success, failure);
       } else {
@@ -1645,6 +1665,10 @@ export class ValueMapper<Out = unknown, In = unknown> extends Validator<Out, In>
         handleResult(maybePromise);
       }
     } catch (error) {
+      if (done) {
+        // Already reported: the throw came from downstream, not from the mapping function.
+        throw error;
+      }
       failure(violationsOf(error, path));
     }
   }

@@ -2124,6 +2124,15 @@ describe('map function', () => {
     );
   });
 
+  test('map validation must settle when a downstream validator throws', async () => {
+    const validator = V.object({ properties: { a: V.map((value: any) => value) } }).next(new ThrowingValidator());
+
+    const result = await validator.validate({ a: 1 });
+
+    expect(result.isSuccess()).toBe(false);
+    expect(result.getViolations().map(v => v.type)).toEqual(['Error']);
+  }, 1000);
+
   test('promise throwing a ValidationError', async () => {
     await expectViolations(
       'abc',
@@ -2409,6 +2418,15 @@ describe('fn', () => {
     const result = await V.fn(() => { throw violation; }).getValid('test', { ignoreUnknownProperties: true });
     expect(result).toEqual('test');
   });
+
+  test('fn validation must settle when a downstream validator throws', async () => {
+    const validator = V.object({ properties: { a: V.fn((value: any) => value) } }).next(new ThrowingValidator());
+
+    const result = await validator.validate({ a: 1 });
+
+    expect(result.isSuccess()).toBe(false);
+    expect(result.getViolations().map(v => v.type)).toEqual(['Error']);
+  }, 1000);
 });
 
 describe('fn2', () => {
@@ -2434,6 +2452,16 @@ describe('fn2', () => {
       expect((violation as ErrorViolation).error).toBe(error);
     }
   });
+  test('fn2 validation must settle when a downstream validator throws', async () => {
+    const validator = V.object({ properties: { a: V.fn2((value: any, _path, _ctx, success) => success(value)) } })
+      .next(new ThrowingValidator());
+
+    const result = await validator.validate({ a: 1 });
+
+    expect(result.isSuccess()).toBe(false);
+    expect(result.getViolations().map(v => v.type)).toEqual(['Error']);
+  }, 1000);
+
   test('Throws ignored violation', async () => {
     const violation = defaultViolations.unknownProperty(Path.of('foo'));
     const result = await V.fn2(() => { throw violation; }).getValid('test', { ignoreUnknownProperties: true });
