@@ -601,7 +601,7 @@ export class AnyOfValidator<Out = unknown, In = unknown> extends Validator<Out, 
         convertedValue = result;
         foundMatch = true;
       } else if (!deepEqual(result, convertedValue)) {
-        conversionViolation = new Violation(path, 'ConflictingConversions', result);
+        conversionViolation = new Violation(path, 'ConflictingConversions', value);
       }
       if (--expectedResponses === 0) {
         if (conversionViolation) {

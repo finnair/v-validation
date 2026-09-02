@@ -1553,7 +1553,7 @@ describe('anyOf', () => {
 
     test('valid value', () => expectValid('ABC', validator));
 
-    test('conflicting conversions', () => expectViolations('abc', validator, new Violation(ROOT, 'ConflictingConversions', 'ABC')));
+    test('conflicting conversions', () => expectViolations('abc', validator, new Violation(ROOT, 'ConflictingConversions', 'abc')));
   });
   
   describe('array context', () => {
