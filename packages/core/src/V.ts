@@ -56,17 +56,26 @@ import {
   NullableValidator,
   JsonBigIntValidator,
   UnknownValidator,
-  ValidatorFnV2,
-  ValidatorFnWrapperV2,
 } from './validators.js';
-import {ObjectModel, ObjectValidator, ObjectNormalizer, PropertiesValidator, MapEntryValidator } from './objectValidator.js';
+import { ObjectModel, ObjectValidator, ObjectNormalizer, PropertiesValidator, MapEntryValidator } from './objectValidator.js';
 import { ObjectValidatorBuilder } from './objectValidatorBuilder.js';
 
 interface AllOfParameters {
   <In, Out1, Out2>(v1: Validator<Out1, In>, v2: Validator<Out2, In>): Validator<Out1 & Out2, In>;
   <In, Out1, Out2, Out3>(v1: Validator<Out1, In>, v2: Validator<Out2, In>, v3: Validator<Out3, In>): Validator<Out1 & Out2 & Out3, In>;
-  <In, Out1, Out2, Out3, Out4>(v1: Validator<Out1, In>, v2: Validator<Out2, In>, v3: Validator<Out3, In>, v4: Validator<Out4, In>): Validator<Out1 & Out2 & Out3 & Out4, In>;
-  <In, Out1, Out2, Out3, Out4, Out5>(v1: Validator<Out1, In>, v2: Validator<Out2, In>, v3: Validator<Out3, In>, v4: Validator<Out4, In>, v5: Validator<Out5, In>): Validator<Out1 & Out2 & Out3 & Out4 & Out5, In>;
+  <In, Out1, Out2, Out3, Out4>(
+    v1: Validator<Out1, In>,
+    v2: Validator<Out2, In>,
+    v3: Validator<Out3, In>,
+    v4: Validator<Out4, In>,
+  ): Validator<Out1 & Out2 & Out3 & Out4, In>;
+  <In, Out1, Out2, Out3, Out4, Out5>(
+    v1: Validator<Out1, In>,
+    v2: Validator<Out2, In>,
+    v3: Validator<Out3, In>,
+    v4: Validator<Out4, In>,
+    v5: Validator<Out5, In>,
+  ): Validator<Out1 & Out2 & Out3 & Out4 & Out5, In>;
 }
 
 const AllOfConstructor: AllOfParameters = (...validators: [Validator<any, any>, ...Validator<any, any>[]]) => new AllOfValidator<any, any>(validators);
@@ -90,8 +99,6 @@ const ignoreValidator = new IgnoreValidator(),
 export const V = {
   fn: <Out, In>(fn: ValidatorFn<Out, In>, type?: string) => new ValidatorFnWrapper<Out, In>(fn, type),
 
-  fn2: <Out, In>(fn: ValidatorFnV2<Out, In>, type?: string) => new ValidatorFnWrapperV2<Out, In>(fn, type),
-
   map: <Out, In>(fn: MappingFn<Out, In>, error?: any) => new ValueMapper<Out, In>(fn, error),
 
   ignore: () => ignoreValidator,
@@ -100,34 +107,34 @@ export const V = {
 
   unknown: <InOut = unknown>() => new UnknownValidator<InOut>(),
 
-  check: <Out, In, T1, T2, T3, T4, T5>(...validators: CompositionParameters<Out, In, T1, T2, T3, T4, T5>) => 
+  check: <Out, In, T1, T2, T3, T4, T5>(...validators: CompositionParameters<Out, In, T1, T2, T3, T4, T5>) =>
     new CheckValidator<In>(maybeCompositionOf(...validators)),
 
   /**
-   * Allows only undefined, null or valid value. 
+   * Allows only undefined, null or valid value.
    */
-  optional: <Out, In, T1, T2, T3, T4, T5>(...validators: CompositionParameters<Out, In, T1, T2, T3, T4, T5>) => 
+  optional: <Out, In, T1, T2, T3, T4, T5>(...validators: CompositionParameters<Out, In, T1, T2, T3, T4, T5>) =>
     new OptionalValidator<Out, In>(maybeCompositionOf(...validators)),
-    
+
   /**
-   * Allows only undefined or valid value. 
+   * Allows only undefined or valid value.
    */
-  optionalStrict: <Out, In, T1, T2, T3, T4, T5>(...validators: CompositionParameters<Out, In, T1, T2, T3, T4, T5>) => 
+  optionalStrict: <Out, In, T1, T2, T3, T4, T5>(...validators: CompositionParameters<Out, In, T1, T2, T3, T4, T5>) =>
     new OptionalUndefinedValidator<Out, In>(maybeCompositionOf(...validators)),
 
   /**
-   * Allows only null or valid value. 
+   * Allows only null or valid value.
    */
-  nullable: <Out, In, T1, T2, T3, T4, T5>(...validators: CompositionParameters<Out, In, T1, T2, T3, T4, T5>) => 
+  nullable: <Out, In, T1, T2, T3, T4, T5>(...validators: CompositionParameters<Out, In, T1, T2, T3, T4, T5>) =>
     new NullableValidator<Out, In>(maybeCompositionOf(...validators)),
 
-  required: <Out, In, T1, T2, T3, T4, T5>(...validators: CompositionParameters<Out, In, T1, T2, T3, T4, T5>) => 
+  required: <Out, In, T1, T2, T3, T4, T5>(...validators: CompositionParameters<Out, In, T1, T2, T3, T4, T5>) =>
     new RequiredValidator<Out, In>(maybeCompositionOf(...validators)),
 
-  if: <Out, In, T1, T2, T3, T4, T5>(fn: AssertTrue, ...validators: CompositionParameters<Out, In, T1, T2, T3, T4, T5>) => 
+  if: <Out, In, T1, T2, T3, T4, T5>(fn: AssertTrue, ...validators: CompositionParameters<Out, In, T1, T2, T3, T4, T5>) =>
     new IfValidator<Out, In>([new Conditional<Out>(fn, maybeCompositionOf(...validators))]),
 
-  whenGroup: <Out, In, T1, T2, T3, T4, T5>(group: GroupOrName, ...validators: CompositionParameters<Out, In, T1, T2, T3, T4, T5>) => 
+  whenGroup: <Out, In, T1, T2, T3, T4, T5>(group: GroupOrName, ...validators: CompositionParameters<Out, In, T1, T2, T3, T4, T5>) =>
     new WhenGroupValidator([new WhenGroup(group, maybeCompositionOf(...validators))]),
 
   string: () => stringValidator,
@@ -138,7 +145,7 @@ export const V = {
 
   nullOrUndefined: () => nullOrUndefinedValidator,
 
-  notEmpty: <Out extends { length:  number }>() => new NotEmptyValidator<Out>(),
+  notEmpty: <Out extends { length: number }>() => new NotEmptyValidator<Out>(),
 
   notBlank: () => notBlankValidator,
 
@@ -148,8 +155,10 @@ export const V = {
 
   undefinedToNull: () => undefinedToNullValidator,
 
-  emptyTo: <In extends { length: number }, Default = In>(defaultValue: Default) => 
-    new ValueMapper<In | Default, In | null | undefined>((value: In | null | undefined) => (isNullOrUndefined(value) || value.length === 0 ? defaultValue : value)),
+  emptyTo: <In extends { length: number }, Default = In>(defaultValue: Default) =>
+    new ValueMapper<In | Default, In | null | undefined>((value: In | null | undefined) =>
+      isNullOrUndefined(value) || value.length === 0 ? defaultValue : value,
+    ),
 
   uuid: (version?: number) => new UuidValidator(version),
 
@@ -191,25 +200,24 @@ export const V = {
 
   setType: <T, E extends boolean>(values: Validator<T>, jsonSafeSet: E) => new SetValidator<T, E>(values, jsonSafeSet),
 
-  nullTo: <Out extends string | number | bigint | boolean | symbol, In = unknown>(defaultValue: Out) => 
+  nullTo: <Out extends string | number | bigint | boolean | symbol, In = unknown>(defaultValue: Out) =>
     new ValueMapper<Out | In, In>((value: In) => (isNullOrUndefined(value) ? defaultValue : value)),
 
   nullToObject: <In>() => new ValueMapper<{} | In, In>(value => (isNullOrUndefined(value) ? {} : value)),
 
   nullToArray: <In>() => new ValueMapper<[] | In, In>(value => (isNullOrUndefined(value) ? [] : value)),
 
-  array: <Out, In, T1, T2, T3, T4, T5>(...items: CompositionParameters<Out, In, T1, T2, T3, T4, T5>) => 
-    new ArrayValidator<Out>(maybeCompositionOf(...items)),
+  array: <Out, In, T1, T2, T3, T4, T5>(...items: CompositionParameters<Out, In, T1, T2, T3, T4, T5>) => new ArrayValidator<Out>(maybeCompositionOf(...items)),
 
-  toArray: <Out, In, T1, T2, T3, T4, T5>(...items: CompositionParameters<Out, In, T1, T2, T3, T4, T5>) => 
+  toArray: <Out, In, T1, T2, T3, T4, T5>(...items: CompositionParameters<Out, In, T1, T2, T3, T4, T5>) =>
     new ArrayNormalizer<Out>(maybeCompositionOf(...items)),
 
   size: <T extends { length: number }>(min: number, max: number) => new SizeValidator<T>(min, max),
 
-  properties: <Key extends keyof any, Value>(keys: Validator<Key>, values: Validator<Value>) => 
+  properties: <Key extends keyof any, Value>(keys: Validator<Key>, values: Validator<Value>) =>
     new PropertiesValidator<Record<Key, Value>>({}, {}, [new MapEntryValidator({ keys, values })]),
 
-  optionalProperties: <Key extends keyof any, Value>(keys: Validator<Key>, values: Validator<Value>) => 
+  optionalProperties: <Key extends keyof any, Value>(keys: Validator<Key>, values: Validator<Value>) =>
     new PropertiesValidator<Partial<Record<Key, Value>>>({}, {}, [new MapEntryValidator({ keys, values })]),
 
   allOf: AllOfConstructor,
@@ -218,8 +226,7 @@ export const V = {
 
   oneOf: <V extends [Validator<any>, ...Validator<any>[]]>(...validators: V) => new OneOfValidator<VType<V[any]>>(validators),
 
-  compositionOf: <Out, In, T1, T2, T3, T4, T5>(...validators: CompositionParameters<Out, In, T1, T2, T3, T4, T5>) => 
-    maybeCompositionOf(...validators),
+  compositionOf: <Out, In, T1, T2, T3, T4, T5>(...validators: CompositionParameters<Out, In, T1, T2, T3, T4, T5>) => maybeCompositionOf(...validators),
 
   date: () => dateValidator,
 
@@ -229,7 +236,7 @@ export const V = {
 
   hasValue: <InOut>(expectedValue: InOut) => new HasValueValidator<InOut>(expectedValue),
 
-  json: <Out, T1, T2, T3, T4, T5>(...validators: CompositionParameters<Out, string, T1, T2, T3, T4, T5>) => 
+  json: <Out, T1, T2, T3, T4, T5>(...validators: CompositionParameters<Out, string, T1, T2, T3, T4, T5>) =>
     new JsonValidator(maybeCompositionOf(...validators)),
 };
 Object.freeze(V);

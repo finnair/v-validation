@@ -30,22 +30,39 @@ npm install @finnair/v-validation
 #### Internal Architecture
 Version 11 introduces better performing internal validator architecture. 
 
-This version refactors the internal architecture to be fully callback based which allows both synchronous and asynchronous validators to run without additional Promise/async-await overhead. From public API perspective (`Validator.validate/getValid`) nothing changes. Old and new validators can also be combined. However, **custom validators that extend internal validators (e.g. `ObjectValidator`) may need to be refactored**. 
+This version refactors the internal architecture so that a chain of synchronous validators runs without
+any Promise or async/await overhead, while still being awaitable. `Validator#validatePath` remains the
+single method to implement and still returns a `PromiseLike`, so custom validators keep working, but
+internal implementations return a `SyncPromise` - a minimal `PromiseLike` that invokes its handlers
+synchronously the moment it settles instead of scheduling a microtask. Asynchronous validators are
+unaffected: settling later simply invokes the handlers later. From the public API perspective
+(`Validator.validate/getValid`) nothing changes; both still return real `Promise`s.
 
-**Why callbacks and not simply Promise-returning validators?** Because it was measured. Taking the
-same logic back to `validatePath(...): PromiseLike<Out>` - identical bodies, only wrapped in
-`new Promise((success, failure) => ...)` and invoked as `.then(success, failure)` - costs 2-3x in
-time and 7-27x in peak heap when a collection is validated as one `V.array(...)` call, because a
-Promise per property for every row is then alive simultaneously. Validated row by row the same
-change costs only ~1.2x and no extra memory, since one record's Promises are collected before the
-next starts. Most of v11's improvement is this one thing: the remaining refactoring accounts for
-about 1.2x on its own.
+**Why not just use real Promises?** Because it was measured. Running the identical logic on real
+Promises costs 2-3x in time and 7-27x in peak heap when a collection is validated as one
+`V.array(...)` call, because a Promise per property for every row is then alive simultaneously. On
+~126K MCT rules that is 2.3 GB of peak heap versus 152 MB. Validated row by row the same change costs
+only ~1.2x and no extra memory, since one record's Promises are collected before the next starts.
 
-Asynchronous resolution has a second, less obvious cost. A missing optional property is assigned
-and then deleted from the converted object, and when the property validator resolves asynchronously
-that `delete` lands in the middle of the object, which pushes it into V8 *dictionary mode*. That is
-why the retained heap below improves even though the validated values are identical - and why
-`propertyOrder`, which never assigns those properties in the first place, avoids it too.
+**Why not plain callbacks then?** Also measured. A callback-based `validatePath(value, path, ctx,
+success, failure)` is 7-13% faster still, but it forces every custom validator to be rewritten, gives
+up `await`, and needs its own error-propagation rules. `SyncPromise` keeps the `PromiseLike` contract
+for that price, which is why it won.
+
+A custom `SyncPromise` existed before version 8 and was dropped in favour of `Promise.resolve/reject`
+(see [Major Changes in Version 8](#major-changes-in-version-8)); it returns here with measurements
+behind it, and scoped strictly to `validatePath`.
+
+`SyncPromise` is an internal implementation detail: it is deliberately limited to a **single
+subscriber**, so `then` may be called once and a second call throws rather than silently dropping a
+handler. Call `Promise.resolve(...)` on it, or simply `await` it, to get a real chainable Promise.
+Public `validate` and `getValid` never expose it.
+
+**Removed:** `V.fn2`, `ValidatorFnV2`, `ValidatorFnWrapperV2` and `ValidationContext#failureV2`. The
+promise-returning `V.fn` and `ValidationContext#failure` cover the same ground now that
+`validatePath` is the only method - `failure` returns a `PromiseLike` that resolves with the value if
+the violation is ignorable and rejects otherwise. Custom validators implementing `validatePathV2`
+must be renamed back to `validatePath` and return a `PromiseLike`.
 
 See [Performance](#performance) for measurements.
 
@@ -77,8 +94,8 @@ Node 20:
 | 11                   | 744 ms  | 170K rules/s | 32 MB     | 18 MB         |
 | 11 + `propertyOrder` | 288 ms  | 439K rules/s | 29 MB     | 17 MB         |
 
-Two separate wins: the callback architecture accounts for 3.9x, and opting in to `propertyOrder`
-multiplies that by a further 2.6x.
+Two separate wins: the `SyncPromise` architecture accounts for 3.9x, and opting in to
+`propertyOrder` multiplies that by a further 2.6x.
 
 **How you call the library matters as much as the version.** Validating a collection as one
 `V.array(...)` call is a single Promise for the whole dataset; validating row by row costs a
@@ -738,13 +755,8 @@ V.map(...)
 
 // 3) If a validator doesn't have any parameters, but needs access to path and context,
 // it can be defined as a simple anonymous function
-// Depredated - use V.fn2 instead!
-V.fn((value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult> => {
-  // return either successful or rejected Promise or throw an error
-})
-
-V.fn2((value: In, path: Path, ctx: ValidationContext, success: SuccessCallback<Out>, failure: FailureCallback) => {
-   // call either success or failure callback with the results (valid/converted value or Violations).
+V.fn((value: any, path: Path, ctx: ValidationContext): Out | PromiseLike<Out> => {
+  // return the valid/converted value, or a rejected PromiseLike, or throw an error
 })
 
 
@@ -754,14 +766,18 @@ class MyValidator extends Validator {
   constructor(public readonly myParameter: any) {
     super();
   }
-  // NOTE: validatePath() works is deprecated!
-  async validatePathV2(value: In, path: Path, ctx: ValidationContext, success: SuccessCallback<Out>, failure: FailureCallback): void {
+  // Return a SyncPromise so that a synchronous chain stays synchronous. Any PromiseLike works.
+  // When the result is known up front, use the factories rather than an executor:
+  validatePath(value: In, path: Path, ctx: ValidationContext): PromiseLike<Out> {
     if (isOK(value)) {
-      return success(value);
-    } else {
-      return failure(new MyViolation(path, myParameter, value));
+      return SyncPromise.resolve(value);
     }
+    return SyncPromise.reject(new MyViolation(path, myParameter, value));
   }
+
+  // Only a validator that has to wait for something - a child validator, a Promise - needs the
+  // executor form:
+  //   return new SyncPromise((success, failure) => { ...settle later... });
 }
 // Custom Violations may be used to convey additional parameters required for reporting the error
 class MyViolation extends Violation {

@@ -1,22 +1,21 @@
-import { Path } from "@finnair/path";
+import { Path } from '@finnair/path';
 import {
   AnyValidator,
   CompositionParameters,
   defaultViolations,
-  FailureCallback,
   HasValueValidator,
   isNullOrUndefined,
   isNumber,
   isString,
   maybeAllOfValidator,
   maybeCompositionOf,
-  SuccessCallback,
   ValidationContext,
+  SyncPromise,
   Validator,
-  ValidatorFnWrapperV2,
+  ValidatorFnWrapper,
   Violation,
   violationsOf,
-} from "./validators.js";
+} from './validators.js';
 
 export type PropertyModel = { [s: string]: string | number | Validator };
 
@@ -33,55 +32,55 @@ export type VInheritableType<V extends ObjectValidator<any, any>> = V extends Ob
 
 export interface ObjectModel<LocalType = unknown, InheritableType = unknown> {
   /**
-   * Inherit all non-local rules from parent validators. 
+   * Inherit all non-local rules from parent validators.
    */
   readonly extends?: ParentModel;
   /**
-   * Inheritable property rules. 
+   * Inheritable property rules.
    */
   readonly properties?: PropertyModel;
   /**
-   * Local, non-inheritable property rules, e.g. discriminator property in a class hierarchy. 
+   * Local, non-inheritable property rules, e.g. discriminator property in a class hierarchy.
    */
   readonly localProperties?: PropertyModel;
   /**
-   * Validation rules for additional properties. True allows any additional property. 
+   * Validation rules for additional properties. True allows any additional property.
    * With MapEntryModel valueValidator must match if keyValidator matches and at least one keyValidator must match.
    */
   readonly additionalProperties?: boolean | MapEntryModel | MapEntryModel[];
   /**
-   * Next validator to be executed after all properties are validated successfully. 
-   * Use this to define additional rules or conversions for the ObjectValidator. 
-   * Using the `next` function returns a `NextValidator` that cannot be further extended. 
+   * Next validator to be executed after all properties are validated successfully.
+   * Use this to define additional rules or conversions for the ObjectValidator.
+   * Using the `next` function returns a `NextValidator` that cannot be further extended.
    */
   readonly next?: Validator | Validator[];
   /**
-   * Local, non-inheritable rules. 
+   * Local, non-inheritable rules.
    */
   readonly localNext?: Validator | Validator[];
   /**
    * Output property ordering:
-   * 
-   * Default is `undefined` (for backwards compatibility), which means that properties will be ordered in 
+   *
+   * Default is `undefined` (for backwards compatibility), which means that properties will be ordered in
    * 1) inherited properties first in inheritance order,
    * 2) properties
    * 3) localProperties
    * 4) additionalProperties in input order.
-   * 
+   *
    * If `propertyOrder` is defined, output properties will be ordered in
    * 1) propertyOrder
    * 2) inherited mandatory properties in inheritance order
    * 3) mandatory properties
    * 4) mandatory localProperties
    * 5) optional and additionalProperties in input order.
-   * 
-   * For optimal performance it is recommended to define at least an empty array for `propertyOrder`. 
-   * That way missing optional properties are skipped entirely. 
-   * 
+   *
+   * For optimal performance it is recommended to define at least an empty array for `propertyOrder`.
+   * That way missing optional properties are skipped entirely.
+   *
    * NOTE: `propertyOrder` is **not** inherited via `ObjectModel.extends`. This is to allow full control
    * of the property ordering in the child model. Please use `V.objectType()` which by default inherits
    * the `propertyOrder` from the parent model, but also allows overriding it in the child model. `V.objectType()`
-   * also allows finer control over the order in which inherited vs own properties are ordered. 
+   * also allows finer control over the order in which inherited vs own properties are ordered.
    */
   readonly propertyOrder?: string[];
 }
@@ -151,8 +150,10 @@ export class ObjectValidator<LocalType = unknown, InheritableType = LocalType, I
     Object.freeze(this);
   }
 
-  validatePathV2(value: In, path: Path, ctx: ValidationContext, success: SuccessCallback<LocalType>, failure: FailureCallback): void {
-    this.validator.validatePathV2(value, path, ctx, success, failure);
+  validatePath(value: In, path: Path, ctx: ValidationContext): PromiseLike<LocalType> {
+    return new SyncPromise((success: (value: LocalType) => void, failure: (error: any) => void) => {
+      this.validator.validatePath(value, path, ctx).then(success, failure);
+    });
   }
 
   omit<T, K extends keyof (any & (InheritableType | LocalType))>(...keys: K[]) {
@@ -174,7 +175,12 @@ export class ObjectValidator<LocalType = unknown, InheritableType = LocalType, I
 
 export class PropertiesValidator<LocalType = unknown, In = unknown> extends Validator<LocalType, In> {
   private readonly validationOrder: string[];
-  constructor(readonly properties: Properties, readonly localProperties: Properties, readonly additionalProperties: MapEntryValidator[], propertyOrder?: string[]) {
+  constructor(
+    readonly properties: Properties,
+    readonly localProperties: Properties,
+    readonly additionalProperties: MapEntryValidator[],
+    propertyOrder?: string[],
+  ) {
     super();
     const validationOrder: Set<string> = new Set();
     if (propertyOrder === undefined) {
@@ -204,120 +210,128 @@ export class PropertiesValidator<LocalType = unknown, In = unknown> extends Vali
     Object.freeze(this.validationOrder);
     Object.freeze(this);
   }
-  validatePathV2(value: In, path: Path, ctx: ValidationContext, success: SuccessCallback<LocalType>, failure: FailureCallback): void {
-    if (value === null || value === undefined) {
-      return failure([defaultViolations.notNull(path)]);
-    }
-    if (typeof value !== 'object' || Array.isArray(value)) {
-      return failure([defaultViolations.object(path)]);
-    }
-    const anyValue = value as any;
-    const convertedObject: any = {} as LocalType;
-    let violations: Violation[] = [];
-    
-    const keys = new Set<string>(this.validationOrder);
-    // Add all, including inherited keys
-    for (const key in anyValue) {
-      keys.add(key);
-    }
-    let expectedResponses = keys.size;
-
-    if (expectedResponses === 0) {
-      return success(convertedObject as LocalType);
-    }
-
-    const reportResult = () => {
-      if (--expectedResponses === 0) {
-        if (violations.length > 0) {
-          failure(violations);
-        } else {
-          success(convertedObject as LocalType);
-        }
+  validatePath(value: In, path: Path, ctx: ValidationContext): PromiseLike<LocalType> {
+    return new SyncPromise((success: (value: LocalType) => void, failure: (error: any) => void) => {
+      if (value === null || value === undefined) {
+        return failure([defaultViolations.notNull(path)]);
       }
-    };
-
-    const reportSuccess = (key: string, propertyValue: unknown) => {
-      if (propertyValue !== undefined) {
-        convertedObject[key] = propertyValue;
-      } else {
-        delete convertedObject[key];
+      if (typeof value !== 'object' || Array.isArray(value)) {
+        return failure([defaultViolations.object(path)]);
       }
-      reportResult();
-    };
+      const anyValue = value as any;
+      const convertedObject: any = {} as LocalType;
+      let violations: Violation[] = [];
 
-    const reportFailure = (key: string, error: any) => {
-      delete convertedObject[key];
-      violations = violations.concat(violationsOf(error, path.property(key)));
-      reportResult();
-    };
+      const keys = new Set<string>(this.validationOrder);
+      // Add all, including inherited keys
+      for (const key in anyValue) {
+        keys.add(key);
+      }
+      let expectedResponses = keys.size;
 
-    const validateLocalProperty = (key: string, propertyValue: unknown, propertyPath: Path) => {
-      this.localProperties[key].validatePathV2(propertyValue, propertyPath, ctx,
-        (result) => reportSuccess(key, result),
-        (error) => reportFailure(key, error)
-      )
-    };
+      if (expectedResponses === 0) {
+        return success(convertedObject as LocalType);
+      }
 
-    const validateProperty = (key: string, propertyValue: unknown, propertyPath: Path) => {
-      this.properties[key].validatePathV2(propertyValue, propertyPath, ctx,
-        (result) => {
-          if (Object.hasOwn(this.localProperties, key)) {
-            validateLocalProperty(key, result, propertyPath);
+      const reportResult = () => {
+        if (--expectedResponses === 0) {
+          if (violations.length > 0) {
+            failure(violations);
           } else {
-            reportSuccess(key, result);
+            success(convertedObject as LocalType);
           }
-        },
-        (error) => reportFailure(key, error)
-      )
-    };
-
-    const validateAdditionalProperty = (key: string, propertyValue: unknown, propertyPath: Path, index: number, keySuccessCount: number, keyError?: Violation[]) => {
-      if (index < this.additionalProperties.length) {
-        const { keyValidator, valueValidator } = this.additionalProperties[index];
-        keyValidator.validatePathV2(key, propertyPath, ctx,
-          () => {
-            valueValidator.validatePathV2(propertyValue, propertyPath, ctx,
-              (result) => validateAdditionalProperty(key, result, propertyPath, index + 1, keySuccessCount + 1),
-              (error) => reportFailure(key, error)
-            );
-          },
-          (keyError) => validateAdditionalProperty(key, propertyValue, propertyPath, index + 1, keySuccessCount, keyError)
-        );
-      } else if (keySuccessCount === 0) {
-        ctx.failureV2(defaultViolations.unknownProperty(propertyPath), propertyValue,
-          (result) => reportSuccess(key, result),
-          (error) => {
-            if (index === 1 && keyError) {
-              reportFailure(key, keyError);
-            } else {
-              reportFailure(key, error);
-            }
-          }
-        );
-      } else {
-        reportSuccess(key, propertyValue);
-      }
-    };
-
-    for (const key of keys) {
-      convertedObject[key] = undefined;
-      const valuePath = path.property(key);
-      const propertyValue = anyValue[key];
-      try {
-        if (Object.hasOwn(this.properties, key)) {
-          validateProperty(key, propertyValue, valuePath);
-        } else if (Object.hasOwn(this.localProperties, key)) {
-          validateLocalProperty(key, propertyValue, valuePath);
-        } else {
-          validateAdditionalProperty(key, propertyValue, valuePath, 0, 0);
         }
-      } catch (error) {
-        reportFailure(key, error);
+      };
+
+      const reportSuccess = (key: string, propertyValue: unknown) => {
+        if (propertyValue !== undefined) {
+          convertedObject[key] = propertyValue;
+        } else {
+          delete convertedObject[key];
+        }
+        reportResult();
+      };
+
+      const reportFailure = (key: string, error: any) => {
+        delete convertedObject[key];
+        violations = violations.concat(violationsOf(error, path.property(key)));
+        reportResult();
+      };
+
+      const validateLocalProperty = (key: string, propertyValue: unknown, propertyPath: Path) => {
+        this.localProperties[key].validatePath(propertyValue, propertyPath, ctx).then(
+          result => reportSuccess(key, result),
+          error => reportFailure(key, error),
+        );
+      };
+
+      const validateProperty = (key: string, propertyValue: unknown, propertyPath: Path) => {
+        this.properties[key].validatePath(propertyValue, propertyPath, ctx).then(
+          result => {
+            if (Object.hasOwn(this.localProperties, key)) {
+              validateLocalProperty(key, result, propertyPath);
+            } else {
+              reportSuccess(key, result);
+            }
+          },
+          error => reportFailure(key, error),
+        );
+      };
+
+      const validateAdditionalProperty = (
+        key: string,
+        propertyValue: unknown,
+        propertyPath: Path,
+        index: number,
+        keySuccessCount: number,
+        keyError?: Violation[],
+      ) => {
+        if (index < this.additionalProperties.length) {
+          const { keyValidator, valueValidator } = this.additionalProperties[index];
+          keyValidator.validatePath(key, propertyPath, ctx).then(
+            () => {
+              valueValidator.validatePath(propertyValue, propertyPath, ctx).then(
+                result => validateAdditionalProperty(key, result, propertyPath, index + 1, keySuccessCount + 1),
+                error => reportFailure(key, error),
+              );
+            },
+            keyError => validateAdditionalProperty(key, propertyValue, propertyPath, index + 1, keySuccessCount, keyError),
+          );
+        } else if (keySuccessCount === 0) {
+          ctx.failure(defaultViolations.unknownProperty(propertyPath), propertyValue).then(
+            result => reportSuccess(key, result),
+            error => {
+              if (index === 1 && keyError) {
+                reportFailure(key, keyError);
+              } else {
+                reportFailure(key, error);
+              }
+            },
+          );
+        } else {
+          reportSuccess(key, propertyValue);
+        }
+      };
+
+      for (const key of keys) {
+        convertedObject[key] = undefined;
+        const valuePath = path.property(key);
+        const propertyValue = anyValue[key];
+        try {
+          if (Object.hasOwn(this.properties, key)) {
+            validateProperty(key, propertyValue, valuePath);
+          } else if (Object.hasOwn(this.localProperties, key)) {
+            validateLocalProperty(key, propertyValue, valuePath);
+          } else {
+            validateAdditionalProperty(key, propertyValue, valuePath, 0, 0);
+          }
+        } catch (error) {
+          reportFailure(key, error);
+        }
       }
-    }
+    });
   }
 }
-
 
 function pick(properties: Properties, fn: (key: keyof any) => boolean): Properties {
   return Object.entries(properties).reduce((current: Properties, [key, validator]) => {
@@ -351,16 +365,18 @@ export class ObjectNormalizer<InOut> extends Validator<undefined | InOut | {}> {
     super();
     Object.freeze(this);
   }
-  validatePathV2(value: InOut, path: Path, ctx: ValidationContext, success: SuccessCallback<undefined | InOut | {}>, failure: FailureCallback): void {
-    if (value === undefined) {
-      return success(undefined);
-    }
-    if (typeof value !== 'object' || value === null) {
-      const object: any = {};
-      object[this.property] = value;
-      return success(object);
-    }
-    return success(value);
+  validatePath(value: InOut, path: Path, ctx: ValidationContext): PromiseLike<undefined | InOut | {}> {
+    return new SyncPromise((success: (value: undefined | InOut | {}) => void, failure: (error: any) => void) => {
+      if (value === undefined) {
+        return success(undefined);
+      }
+      if (typeof value !== 'object' || value === null) {
+        const object: any = {};
+        object[this.property] = value;
+        return success(object);
+      }
+      return success(value);
+    });
   }
 }
 
@@ -407,11 +423,13 @@ function getMapEntryValidators(additionalProperties?: boolean | MapEntryModel | 
   return validators;
 }
 
-export const lenientUnknownPropertyValidator = new ValidatorFnWrapperV2((value: any, path: Path, ctx: ValidationContext, success: SuccessCallback<any>, failure: FailureCallback) =>
-  ctx.failureV2(defaultViolations.unknownProperty(path), value, success, failure));
+export const lenientUnknownPropertyValidator = new ValidatorFnWrapper<any, any>((value: any, path: Path, ctx: ValidationContext) =>
+  ctx.failure(defaultViolations.unknownProperty(path), value),
+);
 
-export const strictUnknownPropertyValidator = new ValidatorFnWrapperV2((value: any, path: Path, ctx: ValidationContext, _success: SuccessCallback<any>, failure: FailureCallback) =>
-  failure([defaultViolations.unknownPropertyDenied(path)]));
+export const strictUnknownPropertyValidator = new ValidatorFnWrapper<any, any>((_value: any, path: Path) => {
+  throw defaultViolations.unknownPropertyDenied(path);
+});
 
 const allowAllMapEntries: MapEntryValidator = new MapEntryValidator({
   keys: new AnyValidator(),

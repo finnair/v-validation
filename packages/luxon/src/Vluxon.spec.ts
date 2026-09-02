@@ -1,5 +1,15 @@
-import { describe, beforeAll, afterAll, test, expect } from 'vitest'
-import { Validator, ValidatorOptions, ValidationResult, V, Violation, defaultViolations, TypeMismatch, ValidationContext, violationsOf } from '@finnair/v-validation';
+import { describe, beforeAll, afterAll, test, expect } from 'vitest';
+import {
+  Validator,
+  ValidatorOptions,
+  ValidationResult,
+  V,
+  Violation,
+  defaultViolations,
+  TypeMismatch,
+  ValidationContext,
+  violationsOf,
+} from '@finnair/v-validation';
 import { LuxonValidator, Vluxon } from './Vluxon.js';
 import {
   LocalDateLuxon,
@@ -16,14 +26,20 @@ import { Path } from '@finnair/path';
 import { fail } from 'assert';
 
 async function expectViolations<In>(value: In, validator: Validator<any, In>, ...violations: Violation[]) {
-  await validator.validatePath(value, Path.ROOT, new ValidationContext({})).then(
-    (success) => {
-      fail(`expected violations, got ${success}`)
-    },
-    (fail) => {
-      expect(violationsOf(fail, Path.ROOT)).toEqual(violations);
-    }
-  )
+  // SyncPromise allows a single subscriber, so bridge to a real Promise rather than chaining.
+  await new Promise<void>((resolve, reject) => {
+    validator.validatePath(value, Path.ROOT, new ValidationContext({})).then(
+      success => reject(new Error(`expected violations, got ${success}`)),
+      error => {
+        try {
+          expect(violationsOf(error, Path.ROOT)).toEqual(violations);
+          resolve();
+        } catch (assertion) {
+          reject(assertion);
+        }
+      },
+    );
+  });
 }
 
 async function expectValid<Out, In>(value: In, validator: Validator<Out, In>, convertedValue?: Out, ctx?: ValidatorOptions) {
@@ -209,7 +225,7 @@ describe('Vluxon', () => {
 
     test('instances are accepted across context boundaries', () => {
       const now = DateTime.now();
-      expectValid({ dateTime: now}, Vluxon.localDate(), new LocalDateLuxon(now));
+      expectValid({ dateTime: now }, Vluxon.localDate(), new LocalDateLuxon(now));
     });
 
     test('wrap', () => {
@@ -560,7 +576,7 @@ describe('Vluxon', () => {
 
     test('instances are accepted across context boundaries', () => {
       const now = DateTime.now();
-      expectValid({ dateTime: now}, Vluxon.dateTimeMillis(), new DateTimeMillisLuxon(now));
+      expectValid({ dateTime: now }, Vluxon.dateTimeMillis(), new DateTimeMillisLuxon(now));
     });
 
     test('wrap', () => {

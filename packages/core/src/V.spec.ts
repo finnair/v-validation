@@ -1,4 +1,4 @@
-import { describe, test, expect } from 'vitest'
+import { describe, test, expect } from 'vitest';
 import {
   Validator,
   Violation,
@@ -22,12 +22,12 @@ import {
   VType,
   JsonMap,
   JsonBigInt,
-  SuccessCallback,
-  FailureCallback,
   AnyOfValidator,
   AllOfValidator,
+  ValidatorType,
+  SyncPromise,
 } from './validators.js';
-import { ObjectValidator, VInheritableType } from './objectValidator.js';
+import { ObjectValidator, VInheritableType, lenientUnknownPropertyValidator, strictUnknownPropertyValidator } from './objectValidator.js';
 import { V } from './V.js';
 import { jsonClone, Path } from '@finnair/path';
 import { expectUndefined, expectValid, expectViolations, verifyValid } from './testUtil.spec.js';
@@ -59,7 +59,10 @@ function defer<T>(validator: Validator<T>, ms: number = 1) {
 }
 
 class DeferredValidator<T> extends Validator<T> {
-  constructor(public validator: Validator<T>, public ms: number = 1) {
+  constructor(
+    public validator: Validator<T>,
+    public ms: number = 1,
+  ) {
     super();
   }
 
@@ -82,22 +85,25 @@ class DeprecatedValidator extends Validator<string> {
   }
 }
 
+/** Throws synchronously, before returning a PromiseLike at all. */
 class ThrowingValidator extends Validator<string> {
   public static readonly error = new Error('ThrowingValidator');
-  validatePathV2(value: any, path: Path, ctx: ValidationContext, success: (value: string) => void, failure: (violations: Violation[]) => void): void {
+  validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<string> {
     throw ThrowingValidator.error;
   }
-};
+}
 
 /**
  * Reports success from a microtask, i.e. after the caller's synchronous scope has already exited.
- * Unlike `defer`, this overrides `validatePathV2` directly, so no promise bridge is involved.
+ * Unlike `defer`, this settles from a microtask directly, so no promise bridge is involved.
  */
 class AsyncValidator extends Validator<any> {
-  validatePathV2(value: any, path: Path, ctx: ValidationContext, success: (value: any) => void, failure: (violations: Violation[]) => void): void {
-    Promise.resolve().then(() => success(value));
+  validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<any> {
+    return new SyncPromise((success: (value: any) => void) => {
+      Promise.resolve().then(() => success(value));
+    });
   }
-};
+}
 
 describe('ValidationResult', () => {
   test('getValue() returns valid value', async () => {
@@ -118,9 +124,8 @@ describe('ValidationResult', () => {
   });
 
   test('value xor violations', () => {
-    expect(() => new ValidationResult([defaultViolations.notNull()], 'value'))
-      .toThrow('both violations and success value defined');
-  })
+    expect(() => new ValidationResult([defaultViolations.notNull()], 'value')).toThrow('both violations and success value defined');
+  });
 });
 
 describe('getValid', () => {
@@ -131,12 +136,12 @@ describe('getValid', () => {
   test('invalid string', async () => {
     try {
       await V.string().getValid(123 as any);
-      fail('Expected getValue to throw an error')
+      fail('Expected getValue to throw an error');
     } catch (error) {
       // as expected
     }
   });
-})
+});
 
 describe('assertTrue', () => {
   test('valid case', () =>
@@ -145,11 +150,27 @@ describe('assertTrue', () => {
       V.assertTrue(value => value === true),
     ));
 
-  test('throwing function', () => 
-    expectViolations('any', V.assertTrue(() => { throw new Error('boom'); }), new ErrorViolation(ROOT, new Error('boom'))));
+  test('throwing function', () =>
+    expectViolations(
+      'any',
+      V.assertTrue(() => {
+        throw new Error('boom');
+      }),
+      new ErrorViolation(ROOT, new Error('boom')),
+    ));
 
-  test('throwing from sub path', () => 
-    expectViolations('any', V.assertTrue(() => { throw new Error('boom'); }, 'BadNested', Path.of('nested')), new ErrorViolation(Path.of('nested'), new Error('boom'))));
+  test('throwing from sub path', () =>
+    expectViolations(
+      'any',
+      V.assertTrue(
+        () => {
+          throw new Error('boom');
+        },
+        'BadNested',
+        Path.of('nested'),
+      ),
+      new ErrorViolation(Path.of('nested'), new Error('boom')),
+    ));
 });
 
 describe('strings', () => {
@@ -157,7 +178,7 @@ describe('strings', () => {
 
   test('String objects do not pass as string primitives', () => {
     const str = new String('String');
-    expectViolations(str, V.string(), defaultViolations.string(str))
+    expectViolations(str, V.string(), defaultViolations.string(str));
   });
 
   test('number is not accepted', () => expectViolations(123 as any, V.string(), defaultViolations.string(123)));
@@ -191,12 +212,20 @@ describe('strings', () => {
   });
 
   describe('string validator chaining', () => {
-    test('notBlank > notEmpty > pattern > size', () => expectValid('A', V.string().notBlank().notEmpty().pattern(/^[A-Z]$/).size(1, 2)));
+    test('notBlank > notEmpty > pattern > size', () =>
+      expectValid(
+        'A',
+        V.string()
+          .notBlank()
+          .notEmpty()
+          .pattern(/^[A-Z]$/)
+          .size(1, 2),
+      ));
 
     test('first validator failure', () => {
       expectViolations(123 as any, V.string().notBlank(), new TypeMismatch(ROOT, 'string', 123));
-    })
-  })
+    });
+  });
 
   describe('NotBlank', () => {
     test('valid string', () => expectValid(' A ', V.notBlank()));
@@ -328,9 +357,11 @@ describe('uuid', () => {
 
   test('valid uuid v1 required', () => expectValid('761ae724-46fa-11e9-b210-d663bd873d93', V.uuid(1)));
 
-  test('v1 uuid is not valid v4', () => expectViolations('761ae724-46fa-11e9-b210-d663bd873d93', V.uuid(4), new Violation(ROOT, 'UUIDv4', '761ae724-46fa-11e9-b210-d663bd873d93')));
+  test('v1 uuid is not valid v4', () =>
+    expectViolations('761ae724-46fa-11e9-b210-d663bd873d93', V.uuid(4), new Violation(ROOT, 'UUIDv4', '761ae724-46fa-11e9-b210-d663bd873d93')));
 
-  test('missing one character', () => expectViolations('761ae724-46fa-11e9-b210-d663bd873d9', V.uuid(), new Violation(ROOT, 'UUID', '761ae724-46fa-11e9-b210-d663bd873d9')));
+  test('missing one character', () =>
+    expectViolations('761ae724-46fa-11e9-b210-d663bd873d9', V.uuid(), new Violation(ROOT, 'UUID', '761ae724-46fa-11e9-b210-d663bd873d9')));
 
   test('supports UUIDv7', () => expectValid('0192a07b-69d7-73bd-adb7-d1e060c081b9', V.uuid(7)));
 });
@@ -344,8 +375,8 @@ describe('objects', () => {
 
   describe('typing', () => {
     test('OptionalKeys match both optional and undefined keys', () => {
-      type T = { optional?: string, undef: string | undefined, required: string };
-      assertType<EqualTypes<OptionalKeys<T>, 'optional' | 'undef'>>(true)
+      type T = { optional?: string; undef: string | undefined; required: string };
+      assertType<EqualTypes<OptionalKeys<T>, 'optional' | 'undef'>>(true);
     });
     describe('simple type', () => {
       const validator = V.objectType()
@@ -419,12 +450,14 @@ describe('objects', () => {
               optional: V.optionalStrict(V.string()),
             })
             .build(),
-          optional: V.optionalStrict(V.objectType()
-            .properties({
-              required: V.string(),
-              optional: V.optionalStrict(V.string()),
-            })
-            .build()),
+          optional: V.optionalStrict(
+            V.objectType()
+              .properties({
+                required: V.string(),
+                optional: V.optionalStrict(V.string()),
+              })
+              .build(),
+          ),
         })
         .build();
 
@@ -432,16 +465,16 @@ describe('objects', () => {
         // @ts-ignore
         type v = EqualTypes<
           ComparableType<VType<typeof validator>>,
-          // @ts-expect-error 
+          // @ts-expect-error
           ComparableType<{
             required: {
               //required: string;
               optional?: string;
-            }
+            };
             optional?: {
               required: string;
               optional?: string;
-            }
+            };
           }>
         >;
       });
@@ -449,16 +482,16 @@ describe('objects', () => {
         // @ts-ignore
         type v = EqualTypes<
           ComparableType<VType<typeof validator>>,
-          // @ts-expect-error 
+          // @ts-expect-error
           ComparableType<{
             required: {
               required: string;
               optional?: string;
-            }
+            };
             optional?: {
               //required: string;
               optional?: string;
-            }
+            };
           }>
         >;
       });
@@ -466,67 +499,67 @@ describe('objects', () => {
         // @ts-ignore
         type v = EqualTypes<
           ComparableType<VType<typeof validator>>,
-          // @ts-expect-error 
+          // @ts-expect-error
           ComparableType<{
             required: {
               required: string;
               //optional?: string;
-            }
+            };
             optional?: {
               required: string;
               optional?: string;
-            }
+            };
           }>
         >;
       });
       test('required.optional has wrong type', () => {
         // @ts-ignore
         type v = EqualTypes<
-          // @ts-expect-error 
+          // @ts-expect-error
           ComparableType<VType<typeof validator>>,
           ComparableType<{
             required: {
               required: string;
               optional?: number;
-            }
+            };
             optional?: {
               required: string;
               optional?: string;
-            }
+            };
           }>
         >;
       });
       test('required.optional is not optional', () => {
         // @ts-ignore
         type v = EqualTypes<
-          // @ts-expect-error 
+          // @ts-expect-error
           ComparableType<VType<typeof validator>>,
           ComparableType<{
             required: {
               required: string;
               optional: string;
-            }
+            };
             optional?: {
               required: string;
               optional?: string;
-            }
+            };
           }>
         >;
       });
       test('optional.required is not required', () => {
         // @ts-ignore
         type v = EqualTypes<
-          // @ts-expect-error 
+          // @ts-expect-error
           ComparableType<VType<typeof validator>>,
           ComparableType<{
             required: {
               required: string;
               optional?: string;
-            }
+            };
             optional?: {
               required?: string;
               optional?: string;
-            }
+            };
           }>
         >;
       });
@@ -544,7 +577,7 @@ describe('objects', () => {
   test('unknown', async () => {
     const validator = V.objectType().properties({ unknown: V.unknown() }).build();
     type T = { unknown: unknown };
-    const value: T = { unknown: { foo: 'bar' } }
+    const value: T = { unknown: { foo: 'bar' } };
 
     assertType<EqualTypes<ComparableType<VType<typeof validator>>, ComparableType<T>>>(true);
     const valid = await validator.getValid(value);
@@ -661,9 +694,7 @@ describe('objects', () => {
       expectViolations({ property: 'value' }, V.object({ additionalProperties: false }), defaultViolations.unknownPropertyDenied(ROOT.property('property'))));
 
     describe('additionalProperty rules', () => {
-      const allowXString = V.objectType()
-        .additionalProperties(V.pattern(/^x-.+/), V.string())
-        .build();
+      const allowXString = V.objectType().additionalProperties(V.pattern(/^x-.+/), V.string()).build();
       assertType<EqualTypes<ComparableType<VType<typeof allowXString>>, ComparableType<Partial<Record<string, string>>>>>(true);
 
       const allowYStringRestrictX = V.object({
@@ -713,16 +744,20 @@ describe('objects', () => {
     test('valid properties', async () => {
       const validator = V.properties(V.string(), V.string());
 
-      assertType<EqualTypes<ComparableType<VType<typeof validator>>, ComparableType<{ [key: string]: string }>>>(true)
+      assertType<EqualTypes<ComparableType<VType<typeof validator>>, ComparableType<{ [key: string]: string }>>>(true);
       await expectValid({ foo: 'bar' }, validator);
     });
 
     test('enum keys', async () => {
-      enum Keys { A = 'A', B = 'B', C = 'C' };
+      enum Keys {
+        A = 'A',
+        B = 'B',
+        C = 'C',
+      }
       type type = { [key in Keys]?: number };
       const validator = V.optionalProperties(V.enum(Keys, 'Keys'), V.number());
 
-      assertType<EqualTypes<ComparableType<VType<typeof validator>>, ComparableType<type>>>(true)
+      assertType<EqualTypes<ComparableType<VType<typeof validator>>, ComparableType<type>>>(true);
       await expectValid({ A: 5 }, validator);
       await expectValid({ A: 1, B: 2, C: 3 }, validator);
       await expectViolations({ D: 4 }, validator, defaultViolations.enum('Keys', 'D', Path.of('D')));
@@ -730,10 +765,10 @@ describe('objects', () => {
     test('optionalProperties with deprecated validator', async () => {
       const validator = V.optionalProperties(new DeprecatedValidator(), new DeprecatedValidator());
       await expectValid({}, validator);
-      await expectValid({ 'true': 'true' }, validator);
-      await expectViolations({ 'true': 'false' }, validator, new Violation(Path.of('true'), 'DeprecatedValidator', 'false'));
-      await expectViolations({ 'false': 'true' }, validator, new Violation(Path.of('false'), 'DeprecatedValidator', 'false'));
-      await expectViolations({ 'false': 'false' }, validator, new Violation(Path.of('false'), 'DeprecatedValidator', 'false'));
+      await expectValid({ true: 'true' }, validator);
+      await expectViolations({ true: 'false' }, validator, new Violation(Path.of('true'), 'DeprecatedValidator', 'false'));
+      await expectViolations({ false: 'true' }, validator, new Violation(Path.of('false'), 'DeprecatedValidator', 'false'));
+      await expectViolations({ false: 'false' }, validator, new Violation(Path.of('false'), 'DeprecatedValidator', 'false'));
     });
   });
 
@@ -756,7 +791,7 @@ describe('objects', () => {
         password2: V.string().notBlank(),
       })
       .next(V.map(value => new PasswordRequest(value)))
-      .build()
+      .build();
 
     const validator = modelValidator.next(
       V.assertTrue((request: PasswordRequest) => request.password1 === request.password2, 'ConfirmPassword', property('password1')),
@@ -770,7 +805,6 @@ describe('objects', () => {
   });
 
   describe('recursive models', async () => {
-
     interface RecursiveModel {
       first: string;
       next?: RecursiveModel;
@@ -786,7 +820,8 @@ describe('objects', () => {
     recursion = validator;
     assertType<EqualTypes<ComparableType<VType<typeof validator>>, ComparableType<RecursiveModel>>>(true);
 
-    test('recursive type', () => expectValid(({ first: 'first', next: { first: 'second', next: { first: 'third' } } }) satisfies VType<typeof validator>, validator));
+    test('recursive type', () =>
+      expectValid({ first: 'first', next: { first: 'second', next: { first: 'third' } } } satisfies VType<typeof validator>, validator));
 
     test('cyclic data is invalid ', async () => {
       const first: any = { first: 'first' };
@@ -808,10 +843,10 @@ describe('objects', () => {
       nestedObject?: {
         req: string;
         foo: boolean;
-      }
+      };
     }
 
-    interface IChild extends IParent { }
+    interface IChild extends IParent {}
 
     const parent = V.objectType()
       .properties({
@@ -827,7 +862,7 @@ describe('objects', () => {
               req: V.string(),
               foo: V.boolean(),
             })
-            .build()
+            .build(),
         ),
       })
       .localProperties({
@@ -878,14 +913,14 @@ describe('objects', () => {
 
     test('omit', async () => {
       const omit = base.omit('prop1', 'local');
-      const value = ({ prop2: 123 }) satisfies VType<typeof omit>;
+      const value = { prop2: 123 } satisfies VType<typeof omit>;
       expectValid(value, omit);
-    })
+    });
     test('pick', async () => {
       const pick = base.pick('prop1', 'local');
-      const value = ({ prop1: 'foo', local: true }) satisfies VType<typeof pick>;
+      const value = { prop1: 'foo', local: true } satisfies VType<typeof pick>;
       expectValid(value, pick);
-    })
+    });
   });
 
   describe('thrown errors', () => {
@@ -909,15 +944,10 @@ describe('objects', () => {
       ]);
     });
     test('additional property key throwing', async () => {
-      const result = await V.objectType()
-        .additionalProperties(new ThrowingValidator(), V.string())
-        .build()
-        .validate({
-          additional: 'additional',
-        });
-      expect(result.getViolations()).toEqual([
-        new ErrorViolation(property('additional'), ThrowingValidator.error),
-      ]);
+      const result = await V.objectType().additionalProperties(new ThrowingValidator(), V.string()).build().validate({
+        additional: 'additional',
+      });
+      expect(result.getViolations()).toEqual([new ErrorViolation(property('additional'), ThrowingValidator.error)]);
     });
 
     test('object validation must settle when a downstream validator throws', async () => {
@@ -957,15 +987,14 @@ describe('inheritance', () => {
     .build();
 
   const childValidator = V.objectType()
-    .extends(parentValidator).properties({
+    .extends(parentValidator)
+    .properties({
       id: V.string(), // Additional requirements for the id property
       name: V.string().notEmpty(),
     })
     .build();
 
-  const addionalPropertiesAllowed = V.objectType()
-    .allowAdditionalProperties(true)
-    .build();
+  const addionalPropertiesAllowed = V.objectType().allowAdditionalProperties(true).build();
 
   const multiParentChild = V.objectType()
     .extends(childValidator)
@@ -996,18 +1025,14 @@ describe('inheritance', () => {
       multiParentChild,
     ));
 
-  test('invalid multi-parent object', () =>
-    multiParentChild.validatePath({ additionalProperty: 123, name: '' }, Path.ROOT, new ValidationContext({})).then(
-      (success) => {
-        fail(`expected violations, got ${success}`)
-      },
-      (violations) => {
-        expect(violations).toHaveLength(3);
-        expect(violations).toContainEqual(defaultViolations.notEmpty(property('name')));
-        expect(violations).toContainEqual(defaultViolations.notNull(property('anything')));
-        expect(violations).toContainEqual(defaultViolations.notNull(property('id')));
-      }
-    ));
+  test('invalid multi-parent object', async () => {
+    const result = await multiParentChild.validate({ additionalProperty: 123, name: '' });
+    const violations = result.getViolations();
+    expect(violations).toHaveLength(3);
+    expect(violations).toContainEqual(defaultViolations.notEmpty(property('name')));
+    expect(violations).toContainEqual(defaultViolations.notNull(property('anything')));
+    expect(violations).toContainEqual(defaultViolations.notNull(property('id')));
+  });
 
   test("child's extended property validators are only run after successful parent property validation", async () => {
     const parent = V.object({
@@ -1042,28 +1067,34 @@ describe('inheritance', () => {
 
     test('custom propertyOrder', async () => {
       const properties = {
-          optionalStrict: V.optionalStrict(V.string()),
-          optional: V.optional(V.string()),
-          required: V.string(),
-          ignore: V.ignore(),
-        };
+        optionalStrict: V.optionalStrict(V.string()),
+        optional: V.optional(V.string()),
+        required: V.string(),
+        ignore: V.ignore(),
+      };
       const localProperties = {
-          requiredLocal: V.string(),
-          optionalLocal: V.optionalStrict(V.string()),
-        };
-      expect(Object.keys(await V.objectType().properties(properties).localProperties(localProperties)
-        .propertyOrder(['optionalStrict', 'optional'])
-        .allowAdditionalProperties(true)
-        .build()
-        .getValid({
-          ignore: 'ignore',
-          additional: 'additional',
-          requiredLocal: 'requiredLocal',
-          optional: 'optional',
-          required: 'required',
-          optionalStrict: 'optionalStrict',
-          optionalLocal: 'optionalLocal',
-        }))).toEqual(['optionalStrict', 'optional', 'required', 'requiredLocal', 'additional', 'optionalLocal'])
+        requiredLocal: V.string(),
+        optionalLocal: V.optionalStrict(V.string()),
+      };
+      expect(
+        Object.keys(
+          await V.objectType()
+            .properties(properties)
+            .localProperties(localProperties)
+            .propertyOrder(['optionalStrict', 'optional'])
+            .allowAdditionalProperties(true)
+            .build()
+            .getValid({
+              ignore: 'ignore',
+              additional: 'additional',
+              requiredLocal: 'requiredLocal',
+              optional: 'optional',
+              required: 'required',
+              optionalStrict: 'optionalStrict',
+              optionalLocal: 'optionalLocal',
+            }),
+        ),
+      ).toEqual(['optionalStrict', 'optional', 'required', 'requiredLocal', 'additional', 'optionalLocal']);
     });
 
     test('unknown property in propertyOrder throws', () => {
@@ -1071,31 +1102,44 @@ describe('inheritance', () => {
     });
 
     test('inherited propertyOrder', async () => {
-      expect(Object.keys(await V.objectType()
-        .extends(V.objectType().properties({ first: V.string() }).additionalPropertyOrder(['first']).build())
-        .extends(V.objectType().properties({ second: V.string() }).propertyOrder(['second']).build())
-        .properties({ third: V.optionalStrict(V.string()) })
-        .additionalPropertyOrder(['third'])
-        .build()
-        .getValid({
-          third: 'third',
-          first: 'first',
-          second: 'second',
-        }))).toEqual(['first', 'second', 'third']);
+      expect(
+        Object.keys(
+          await V.objectType()
+            .extends(V.objectType().properties({ first: V.string() }).additionalPropertyOrder(['first']).build())
+            .extends(V.objectType().properties({ second: V.string() }).propertyOrder(['second']).build())
+            .properties({ third: V.optionalStrict(V.string()) })
+            .additionalPropertyOrder(['third'])
+            .build()
+            .getValid({
+              third: 'third',
+              first: 'first',
+              second: 'second',
+            }),
+        ),
+      ).toEqual(['first', 'second', 'third']);
     });
 
     test('override inherited propertyOrder', async () => {
-      expect(Object.keys(await V.objectType()
-        .extends(V.objectType().properties({ first: V.optionalStrict(V.string()) }).additionalPropertyOrder(['first']).build())
-        .properties({ second: V.optionalStrict(V.string()) })
-        .allowAdditionalProperties(true)
-        .propertyOrder([])
-        .build()
-        .getValid({
-          second: 'second',
-          first: 'first',
-          additional: 'additional',
-        }))).toEqual(['second', 'first', 'additional']);
+      expect(
+        Object.keys(
+          await V.objectType()
+            .extends(
+              V.objectType()
+                .properties({ first: V.optionalStrict(V.string()) })
+                .additionalPropertyOrder(['first'])
+                .build(),
+            )
+            .properties({ second: V.optionalStrict(V.string()) })
+            .allowAdditionalProperties(true)
+            .propertyOrder([])
+            .build()
+            .getValid({
+              second: 'second',
+              first: 'first',
+              additional: 'additional',
+            }),
+        ),
+      ).toEqual(['second', 'first', 'additional']);
     });
 
     test('propertyOrder of localProperties is not inherited', async () => {
@@ -1110,23 +1154,11 @@ describe('inheritance', () => {
       expect(child.propertyOrder).toEqual([]);
     });
 
-    test('pick', () => expect(V.objectType()
-        .properties({ a: V.string(), b: V.string() })
-        .propertyOrder(['a', 'b'])
-        .build()
-        .pick('b')
-        .propertyOrder
-      ).toEqual(['b'])
-    );
+    test('pick', () =>
+      expect(V.objectType().properties({ a: V.string(), b: V.string() }).propertyOrder(['a', 'b']).build().pick('b').propertyOrder).toEqual(['b']));
 
-    test('omit', () => expect(V.objectType()
-        .properties({ a: V.string(), b: V.string() })
-        .propertyOrder(['a', 'b'])
-        .build()
-        .omit('a')
-        .propertyOrder
-      ).toEqual(['b'])
-    );
+    test('omit', () =>
+      expect(V.objectType().properties({ a: V.string(), b: V.string() }).propertyOrder(['a', 'b']).build().omit('a').propertyOrder).toEqual(['b']));
 
     test('inherited functions are not allowed', () => {
       expect(() => V.objectType().propertyOrder(['toString']).build()).toThrow();
@@ -1134,26 +1166,28 @@ describe('inheritance', () => {
   });
 
   describe('allOf parent next validators', async () => {
-    const parent1 = V.objectType().properties({
-      pwd1: V.string(),
-      pwd2: V.string(),
-    }).next(V.assertTrue(obj => obj.pwd1 === obj.pwd2, 'PasswordsMatch'))
+    const parent1 = V.objectType()
+      .properties({
+        pwd1: V.string(),
+        pwd2: V.string(),
+      })
+      .next(V.assertTrue(obj => obj.pwd1 === obj.pwd2, 'PasswordsMatch'))
       .build();
 
-    const parent2 = V.objectType().properties({
-      min: V.number(),
-      max: V.number(),
-    }).next(V.assertTrue(obj => obj.min <= obj.max, 'MinLoeMax'))
+    const parent2 = V.objectType()
+      .properties({
+        min: V.number(),
+        max: V.number(),
+      })
+      .next(V.assertTrue(obj => obj.min <= obj.max, 'MinLoeMax'))
       .build();
 
-    const child = V.objectType()
-      .extends(parent1)
-      .extends(parent2)
-      .build();
+    const child = V.objectType().extends(parent1).extends(parent2).build();
 
-    test('valid child', () => expectValid({ pwd1: 'pwd', pwd2: 'pwd', min: 1, max: 2 } satisfies VType<typeof child>, child))
+    test('valid child', () => expectValid({ pwd1: 'pwd', pwd2: 'pwd', min: 1, max: 2 } satisfies VType<typeof child>, child));
 
-    test('invalid child', () => expectViolations({ pwd1: 'pwd1', pwd2: 'pwd2', min: 2, max: 1 }, child, new Violation(ROOT, 'PasswordsMatch'), new Violation(ROOT, 'MinLoeMax')));
+    test('invalid child', () =>
+      expectViolations({ pwd1: 'pwd1', pwd2: 'pwd2', min: 2, max: 1 }, child, new Violation(ROOT, 'PasswordsMatch'), new Violation(ROOT, 'MinLoeMax')));
   });
 
   test('prototype inheritance', async () => {
@@ -1161,8 +1195,8 @@ describe('inheritance', () => {
     const child = Object.create(parent);
     await expectViolations(
       child,
-      V.objectType().allowAdditionalProperties(false).build(), 
-      defaultViolations.unknownPropertyDenied(ROOT.property('parentProp'))
+      V.objectType().allowAdditionalProperties(false).build(),
+      defaultViolations.unknownPropertyDenied(ROOT.property('parentProp')),
     );
   });
 });
@@ -1172,20 +1206,20 @@ describe('skipUndefined', () => {
   const mandatory = V.string();
 
   test('optionalStrict', () => expect(V.optionalStrict(V.string()).skipUndefined()).toBe(true));
-  
+
   test('optional', () => expect(V.optional(V.string()).skipUndefined()).toBe(true));
-  
+
   test('next', () => {
     expect(optional.next(optional).skipUndefined()).toBe(true);
     expect(optional.next(mandatory).skipUndefined()).toBe(false);
     expect(mandatory.next(optional).skipUndefined()).toBe(false);
   });
-  
+
   test('composition', () => {
     expect(V.compositionOf(optional, optional, optional).skipUndefined()).toBe(true);
     expect(V.compositionOf(optional, optional, mandatory).skipUndefined()).toBe(false);
   });
-  
+
   test('allOf', () => {
     expect(V.allOf(optional, optional, optional).skipUndefined()).toBe(true);
     expect(V.allOf(optional, optional, mandatory).skipUndefined()).toBe(false);
@@ -1205,39 +1239,33 @@ describe('skipUndefined', () => {
   describe('missing properties validation', () => {
     class CallTraking extends Validator<any, any> {
       public isCalled = false;
-      validatePathV2(value: any, path: Path, ctx: ValidationContext, success: SuccessCallback<any>, failure: FailureCallback): void {
-        this.isCalled = true;
-        success(value);
+      validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<any> {
+        return new Promise((success: (value: any) => void, failure: (error: any) => void) => {
+          this.isCalled = true;
+          success(value);
+        });
       }
       skipUndefined(): boolean {
         return true;
       }
-    };
+    }
     test('missing optional property is not validated when propertyOrder is defined', async () => {
       const callTracking = new CallTraking();
-      const validator = V.objectType()
-        .properties({ optional: callTracking })
-        .propertyOrder([])
-        .build();
+      const validator = V.objectType().properties({ optional: callTracking }).propertyOrder([]).build();
       await validator.validate({});
       expect(callTracking.isCalled).toBe(false);
     });
 
     test('missing optional property is validated when propertyOrder is not defined', async () => {
       const callTracking = new CallTraking();
-      const validator = V.objectType()
-        .properties({ optional: callTracking })
-        .build();
+      const validator = V.objectType().properties({ optional: callTracking }).build();
       await validator.validate({});
       expect(callTracking.isCalled).toBe(true);
     });
 
     test('missing optional property is validated when included in propertyOrder', async () => {
       const callTracking = new CallTraking();
-      const validator = V.objectType()
-        .properties({ optional: callTracking })
-        .propertyOrder(['optional'])
-        .build();
+      const validator = V.objectType().properties({ optional: callTracking }).propertyOrder(['optional']).build();
       await validator.validate({});
       expect(callTracking.isCalled).toBe(true);
     });
@@ -1287,12 +1315,15 @@ describe('object localNext', () => {
     .properties({
       name: V.string(),
       upper: V.optional(V.boolean()),
-    }).next(V.map(obj => {
-      if (obj.upper) {
-        obj.name = (obj.name as string).toUpperCase();
-      }
-      return obj;
-    }))
+    })
+    .next(
+      V.map(obj => {
+        if (obj.upper) {
+          obj.name = (obj.name as string).toUpperCase();
+        }
+        return obj;
+      }),
+    )
     .localNext(V.map(obj => `parent:${obj.name}`))
     .build();
   const child = V.objectType()
@@ -1392,8 +1423,7 @@ describe('enum', () => {
   describe('String', () => {
     const validator = V.enum(StrEnum, 'StrEnum');
     type validatorType = VType<typeof validator>;
-    test('valid reference', async () =>
-      (await expectValid(StrEnum.B satisfies validatorType, validator)) satisfies validatorType);
+    test('valid reference', async () => (await expectValid(StrEnum.B satisfies validatorType, validator)) satisfies validatorType);
     test('valid strign', () => expectValid('A', validator));
     test('invalid', () => expectViolations('C', validator, defaultViolations.enum('StrEnum', 'C')));
   });
@@ -1401,8 +1431,7 @@ describe('enum', () => {
   describe('int', () => {
     const validator = V.enum(IntEnum, 'IntEnum');
     type validatorType = VType<typeof validator>;
-    test('valid reference', async () =>
-      (await expectValid(IntEnum.A satisfies validatorType, validator)) satisfies validatorType);
+    test('valid reference', async () => (await expectValid(IntEnum.A satisfies validatorType, validator)) satisfies validatorType);
     test('valid int', () => expectValid(0, validator));
     test('invalid', () => expectViolations(2, validator, defaultViolations.enum('IntEnum', 2)));
   });
@@ -1435,55 +1464,63 @@ describe('oneOf', () => {
 
     test('valid date', () => expectValid(validDateString, validator, validDate));
 
-    test('invalid value matching two', () => expectViolations(dateValue, validator,
-      defaultViolations.oneOf(2, [
-        { success: true },
-        { success: true },
-        { violations: [defaultViolations.enum('EnumType', dateValue, ROOT)] },
-      ])));
+    test('invalid value matching two', () =>
+      expectViolations(
+        dateValue,
+        validator,
+        defaultViolations.oneOf(2, [{ success: true }, { success: true }, { violations: [defaultViolations.enum('EnumType', dateValue, ROOT)] }]),
+      ));
 
-    test('no matches', () => expectViolations('ABD', validator,
-      defaultViolations.oneOf(0, [
-        { violations: [new HasValueViolation(ROOT, dateValue, 'ABD')] },
-        { violations: [defaultViolations.date('ABD', ROOT)] },
-        { violations: [defaultViolations.enum('EnumType', 'ABD', ROOT)] },
-      ])));
+    test('no matches', () =>
+      expectViolations(
+        'ABD',
+        validator,
+        defaultViolations.oneOf(0, [
+          { violations: [new HasValueViolation(ROOT, dateValue, 'ABD')] },
+          { violations: [defaultViolations.date('ABD', ROOT)] },
+          { violations: [defaultViolations.enum('EnumType', 'ABD', ROOT)] },
+        ]),
+      ));
   });
 
   test('test validation oneOf functionality validator order effect', async () => {
     const data = {
       item: [
         {
-          key1: "string",
-          key2: 3
-        }
-      ]
+          key1: 'string',
+          key2: 3,
+        },
+      ],
     };
-    const objectValidatorA = V.objectType().properties({
-      key1: V.string(),
-      key2: V.number()
-    }).build();
-    const objectValidatorB = V.objectType().properties({
-      key1: V.number(),
-      key2: V.string()
-    }).build();
+    const objectValidatorA = V.objectType()
+      .properties({
+        key1: V.string(),
+        key2: V.number(),
+      })
+      .build();
+    const objectValidatorB = V.objectType()
+      .properties({
+        key1: V.number(),
+        key2: V.string(),
+      })
+      .build();
 
-    const validator1 = V.objectType().properties({
-      item: V.array(
-        V.oneOf(objectValidatorA, objectValidatorB)
-      )
-    }).build();
+    const validator1 = V.objectType()
+      .properties({
+        item: V.array(V.oneOf(objectValidatorA, objectValidatorB)),
+      })
+      .build();
     const validationResult1 = await validator1.validate(data);
     expect(validationResult1.isSuccess()).toBe(true);
 
-    const validator2 = V.objectType().properties({
-      item: V.array(
-        V.oneOf(objectValidatorB, objectValidatorA)
-      )
-    }).build();
+    const validator2 = V.objectType()
+      .properties({
+        item: V.array(V.oneOf(objectValidatorB, objectValidatorA)),
+      })
+      .build();
     const validationResult2 = await validator2.validate(data);
     expect(validationResult2.isSuccess()).toBe(true);
-  })
+  });
 });
 
 describe('allOf', () => {
@@ -1549,13 +1586,16 @@ describe('anyOf', () => {
   });
 
   describe('conflicting validators', async () => {
-    const validator = V.anyOf(V.string(), V.string().nextMap(v => v.toUpperCase()));
+    const validator = V.anyOf(
+      V.string(),
+      V.string().nextMap(v => v.toUpperCase()),
+    );
 
     test('valid value', () => expectValid('ABC', validator));
 
     test('conflicting conversions', () => expectViolations('abc', validator, new Violation(ROOT, 'ConflictingConversions', 'ABC')));
   });
-  
+
   describe('array context', () => {
     const matchingArray = [validDate, 'ABC'];
     const arrayValidator = V.array(threeOptions);
@@ -1786,10 +1826,10 @@ describe('number', () => {
     }
     test('should maintain original order even if execution order is reversed', async () => {
       const waitValidator = new WaitValidator();
-      await expectValid([50, 40, 30, 20, 10, 1], V.array(waitValidator))
-      expect(waitValidator.executionOrder).toEqual([1, 10, 20, 30, 40, 50])
-    })
-  })
+      await expectValid([50, 40, 30, 20, 10, 1], V.array(waitValidator));
+      expect(waitValidator.executionOrder).toEqual([1, 10, 20, 30, 40, 50]);
+    });
+  });
 });
 
 describe('null or undefined', () => {
@@ -1804,13 +1844,7 @@ describe('async validation', () => {
   describe('allOf', () => {
     test('violations ordered by timeout', async () => {
       const validator = V.allOf(defer(V.notEmpty(), 10), defer(V.toNumber(), 5), V.date());
-      await expectViolations(
-        '',
-        validator,
-        defaultViolations.date(''),
-        defaultViolations.number(''),
-        defaultViolations.notEmpty(),
-      );
+      await expectViolations('', validator, defaultViolations.date(''), defaultViolations.number(''), defaultViolations.notEmpty());
     });
 
     test('results must match', async () => {
@@ -1838,11 +1872,11 @@ describe('async validation', () => {
     });
 
     test('invalid', async () => {
-      await expectViolations(true, V.oneOf(defer(V.number()), defer(V.string())),
-        defaultViolations.oneOf(0, [
-          { violations: [new TypeMismatch(ROOT, 'number', true)] },
-          { violations: [new TypeMismatch(ROOT, 'string', true)] },
-        ]));
+      await expectViolations(
+        true,
+        V.oneOf(defer(V.number()), defer(V.string())),
+        defaultViolations.oneOf(0, [{ violations: [new TypeMismatch(ROOT, 'number', true)] }, { violations: [new TypeMismatch(ROOT, 'string', true)] }]),
+      );
     });
   });
 
@@ -1912,13 +1946,15 @@ describe('groups', () => {
 
   test('grandhild includes parent', () => expectGroupViolations(null, grandchild, V.whenGroup('parent', failAlways), failAlwaysViolation()));
 
-  test('child does not include grandchild', () => expectGroupViolations(null, child, V.whenGroup(grandchild, failAlways), new Violation(ROOT, 'NoMatchingGroup', null)));
+  test('child does not include grandchild', () =>
+    expectGroupViolations(null, child, V.whenGroup(grandchild, failAlways), new Violation(ROOT, 'NoMatchingGroup', null)));
 
   test('grandchild indluces default', () => expectGroupViolations(null, grandchild, V.whenGroup(DEFAULT, failAlways), failAlwaysViolation()));
 
   test('non-grouped validations run always', () => expectGroupViolations(null, DEFAULT, V.notNull(), defaultViolations.notNull()));
 
-  test('both parent and child validators are executed', () => expectGroupValid('123', child, V.whenGroup(parent, V.string()).whenGroup(child, V.toNumber()), 123));
+  test('both parent and child validators are executed', () =>
+    expectGroupValid('123', child, V.whenGroup(parent, V.string()).whenGroup(child, V.toNumber()), 123));
 
   test('referencing unknown groups not allowed', () => {
     const groups = new Groups();
@@ -1949,21 +1985,18 @@ describe('groups', () => {
 
   describe('otherwiseSuccess', () => {
     const normalize = new Groups().define('normalize');
-    const normalizer = V.map<number[], string>((value) => value.split(',').map((str) => Number(str)));
-    const optionalNormalization = V.whenGroup(normalize, normalizer)
-      .otherwiseSuccess()
-      .next(V.array(V.number()));
+    const normalizer = V.map<number[], string>(value => value.split(',').map(str => Number(str)));
+    const optionalNormalization = V.whenGroup(normalize, normalizer).otherwiseSuccess().next(V.array(V.number()));
 
     test('with normalization', () => expectGroupValid('1,2,3', normalize, optionalNormalization, [1, 2, 3]));
     test('without normalization', () => expectValid([1, 2, 3], optionalNormalization));
-    test('invalid with normalization', () => expectGroupViolations([1, 2, 3], normalize, optionalNormalization, new ErrorViolation(ROOT, new TypeError('value.split is not a function'))));
+    test('invalid with normalization', () =>
+      expectGroupViolations([1, 2, 3], normalize, optionalNormalization, new ErrorViolation(ROOT, new TypeError('value.split is not a function'))));
     test('invalid without normalization', () => expectViolations('1,2,3', optionalNormalization, new TypeMismatch(ROOT, 'array', '1,2,3')));
   });
 
   describe('chaining', () => {
-    const whenChainValidator = V.whenGroup(DEFAULT, V.notNull())
-      .whenGroup(parent, V.notEmpty())
-      .otherwise(V.string());
+    const whenChainValidator = V.whenGroup(DEFAULT, V.notNull()).whenGroup(parent, V.notEmpty()).otherwise(V.string());
 
     test('chain first match', () => expectGroupViolations(null, withDefault, whenChainValidator, defaultViolations.notNull()));
 
@@ -1989,8 +2022,7 @@ describe('required', () => {
   test('type conversion with compositionOf', () =>
     expectValid(validDateString, V.required(V.hasValue(validDateString), V.date(), V.assertTrue(dateInPast)), validDate));
 
-  test('type validation with compositionOf', () =>
-    expectValid(validDateString, V.check(V.hasValue(validDateString), V.date(), V.assertTrue(dateInPast))));
+  test('type validation with compositionOf', () => expectValid(validDateString, V.check(V.hasValue(validDateString), V.date(), V.assertTrue(dateInPast))));
 });
 
 describe('optional', () => {
@@ -2006,9 +2038,11 @@ describe('optional', () => {
 
   test('valid string', () => expectValid('123', validator));
 
-  test('type conversion with compositionOf', () => expectValid(validDateString, V.optional(V.hasValue(validDateString), V.date(), V.assertTrue(dateInPast)), validDate));
+  test('type conversion with compositionOf', () =>
+    expectValid(validDateString, V.optional(V.hasValue(validDateString), V.date(), V.assertTrue(dateInPast)), validDate));
 
-  test('type validation with compositionOf', () => expectValid(validDateString, V.check(V.optional(V.hasValue(validDateString), V.date(), V.assertTrue(dateInPast)))));
+  test('type validation with compositionOf', () =>
+    expectValid(validDateString, V.check(V.optional(V.hasValue(validDateString), V.date(), V.assertTrue(dateInPast)))));
 
   test('chained validation rules', () => expectViolations('0', V.optional(V.toInteger(), V.min(1)), defaultViolations.min(1, true, 0)));
 });
@@ -2069,7 +2103,12 @@ describe('if', () => {
     expect(() => new IfValidator([])).toThrow('At least one conditional required');
   });
 
-  test('no matching conditional', () => expectViolations("foo", V.if(() => false, V.boolean()), new Violation(ROOT, 'NoMatchingCondition', "foo")));
+  test('no matching conditional', () =>
+    expectViolations(
+      'foo',
+      V.if(() => false, V.boolean()),
+      new Violation(ROOT, 'NoMatchingCondition', 'foo'),
+    ));
 });
 
 describe('ignore', () => {
@@ -2173,9 +2212,9 @@ describe('map function', () => {
     await expectViolations(
       'anything',
       V.map((value: any) => {
-        throw "error";
+        throw 'error';
       }),
-      new ErrorViolation(ROOT, "error"),
+      new ErrorViolation(ROOT, 'error'),
     );
   });
 
@@ -2228,7 +2267,8 @@ describe('Map', () => {
         .properties({
           key1: V.required(V.string()),
           key2: V.required(V.string()),
-        }).build(),
+        })
+        .build(),
       V.string(),
       true,
     );
@@ -2239,9 +2279,9 @@ describe('Map', () => {
       // Real map is valid
       const map = new Map<MapKeyType, String>(mapArray);
       expect(map.get(key)).toEqual('value');
-      let result = (await validator.validate(map));
+      let result = await validator.validate(map);
       expect(result.isFailure()).toBe(false);
-      result.getValue() satisfies JsonMap<{ key1: string, key2: string }, string>
+      result.getValue() satisfies JsonMap<{ key1: string; key2: string }, string>;
 
       // Serializes to JSON as array
       const jsonString = JSON.stringify(result.getValue());
@@ -2305,8 +2345,7 @@ describe('Map', () => {
   test('empty map is valid', async () => expectValid(new Map(), V.mapType(V.string(), V.string(), false)));
 
   test('thrown errors', async () => {
-    const result = await V.mapType(new ThrowingValidator(), new ThrowingValidator(), false)
-      .validate(new Map([['key', 'value']]));
+    const result = await V.mapType(new ThrowingValidator(), new ThrowingValidator(), false).validate(new Map([['key', 'value']]));
     expect(result.isSuccess()).toBe(false);
     const violations = result.getViolations();
     expect(violations).toHaveLength(2);
@@ -2367,10 +2406,7 @@ describe('Set', () => {
 
   test('item level thrown errors are reported per item and accumulated', async () => {
     const result = await V.setType(new ThrowingValidator(), false).validate(new Set([1, 2]));
-    expect(result.getViolations()).toEqual([
-      new ErrorViolation(Path.of(0), ThrowingValidator.error),
-      new ErrorViolation(Path.of(1), ThrowingValidator.error),
-    ]);
+    expect(result.getViolations()).toEqual([new ErrorViolation(Path.of(0), ThrowingValidator.error), new ErrorViolation(Path.of(1), ThrowingValidator.error)]);
   });
 
   test('Set validation must settle when a downstream validator throws', async () => {
@@ -2401,7 +2437,7 @@ describe('Set', () => {
       assertType<EqualTypes<VType<typeof validator>, Set<string>>>(true);
     });
   });
-})
+});
 
 describe('JsonBigInt', () => {
   const largeBigInt = 9007199254740993n;
@@ -2413,8 +2449,9 @@ describe('JsonBigInt', () => {
   test('number', async () => expectValid(12345, V.jsonBigInt(), new JsonBigInt(12345n)));
 
   test('illegal number', async () => expectViolations(12.34, V.jsonBigInt(), new TypeMismatch(ROOT, 'integer', 12.34)));
-  test('illegal string', async () => expectViolations("12.34", V.jsonBigInt(), new TypeMismatch(ROOT, '/^-?[0-9]+$/', "12.34")));
-  test('BigInt object is not supported', async () => expectViolations(new Object(1234n), V.jsonBigInt(), new TypeMismatch(ROOT, 'JsonBigInt, bigint or integer as number or string', new Object(1234n))));
+  test('illegal string', async () => expectViolations('12.34', V.jsonBigInt(), new TypeMismatch(ROOT, '/^-?[0-9]+$/', '12.34')));
+  test('BigInt object is not supported', async () =>
+    expectViolations(new Object(1234n), V.jsonBigInt(), new TypeMismatch(ROOT, 'JsonBigInt, bigint or integer as number or string', new Object(1234n))));
 
   test('toJSON', () => {
     expect(JSON.stringify({ bigint: new JsonBigInt(largeBigInt) })).toEqual('{"bigint":"9007199254740993"}');
@@ -2424,7 +2461,7 @@ describe('JsonBigInt', () => {
   });
   describe('constructor', () => {
     test('string', () => {
-      expect(new JsonBigInt("5")).toEqual(new JsonBigInt(5n));
+      expect(new JsonBigInt('5')).toEqual(new JsonBigInt(5n));
     });
     test('number', () => {
       expect(new JsonBigInt(5)).toEqual(new JsonBigInt(5n));
@@ -2433,12 +2470,11 @@ describe('JsonBigInt', () => {
       try {
         const input: any = true;
         new JsonBigInt(input);
-        fail('Expected an error')
+        fail('Expected an error');
       } catch (e: any) {
         expect(e.message).toEqual('Expected bigint, got boolean');
       }
     });
-
   });
 });
 
@@ -2486,7 +2522,9 @@ describe('fn', () => {
   test('Throws Error', async () => {
     const error = new Error('Error message');
     try {
-      await V.fn(() => { throw error; }).getValid('test');
+      await V.fn(() => {
+        throw error;
+      }).getValid('test');
       fail('Expected an error');
     } catch (e) {
       expect(e).toBeInstanceOf(ValidationError);
@@ -2497,7 +2535,9 @@ describe('fn', () => {
   });
   test('Throws ignored violation', async () => {
     const violation = defaultViolations.unknownProperty(Path.of('foo'));
-    const result = await V.fn(() => { throw violation; }).getValid('test', { ignoreUnknownProperties: true });
+    const result = await V.fn(() => {
+      throw violation;
+    }).getValid('test', { ignoreUnknownProperties: true });
     expect(result).toEqual('test');
   });
 
@@ -2520,58 +2560,20 @@ describe('fn', () => {
   }, 1000);
 });
 
-describe('fn2', () => {
-  test('successful', async () => {
-    const result = await V.fn2((value: string, _path, _ctx, success) => success(value.toUpperCase())).getValid('test');
-    expect(result).toEqual('TEST');
+describe('unknown property validators', () => {
+  test('lenient reports an ignorable UnknownProperty violation', async () => {
+    const result = await lenientUnknownPropertyValidator.validate('value');
+    expect(result.getViolations().map(violation => violation.type)).toEqual([ValidatorType.UnknownProperty]);
   });
-  test('failure', async () => {
-    const violation = defaultViolations.string(123);
-    const result = await V.fn2((_value, _path, _ctx, _success, failure) => failure(violation)).validate(123);
-    expect(result.isFailure()).toBe(true);
-    expect(result.getViolations()).toEqual([violation]);
+
+  test('lenient passes when unknown properties are ignored', async () => {
+    const result = await lenientUnknownPropertyValidator.validate('value', { ignoreUnknownProperties: true });
+    expect(result.isSuccess()).toBe(true);
+    expect(result.getValue()).toEqual('value');
   });
-  test('Throws Error', async () => {
-    const error = new Error('Error message');
-    try {
-      await V.fn2(() => { throw error; }).getValid('test');
-      fail('Expected an error');
-    } catch (e) {
-      expect(e).toBeInstanceOf(ValidationError);
-      const violation = (e as ValidationError).violations[0];
-      expect(violation).toBeInstanceOf(ErrorViolation);
-      expect((violation as ErrorViolation).error).toBe(error);
-    }
-  });
-  test('fn2 validation must settle when a downstream validator throws', async () => {
-    const validator = V.object({ properties: { a: V.fn2((value: any, _path, _ctx, success) => success(value)) } })
-      .next(new ThrowingValidator());
 
-    const result = await validator.validate({ a: 1 });
-
-    expect(result.isSuccess()).toBe(false);
-    expect(result.getViolations().map(v => v.type)).toEqual(['Error']);
-  }, 1000);
-
-  test('fn2 validation must settle when a downstream validator throws after an async success', async () => {
-    const validator = V.object({
-      properties: { a: V.fn2((value: any, _path, _ctx, success) => { Promise.resolve().then(() => success(value)); }) },
-    }).next(new ThrowingValidator());
-
-    const result = await validator.validate({ a: 1 });
-
-    expect(result.isSuccess()).toBe(false);
-    expect(result.getViolations().map(v => v.type)).toEqual(['Error']);
-  }, 1000);
-
-  test('Throws ignored violation', async () => {
-    const violation = defaultViolations.unknownProperty(Path.of('foo'));
-    const result = await V.fn2(() => { throw violation; }).getValid('test', { ignoreUnknownProperties: true });
-    expect(result).toEqual('test');
-  });
-  test('Reports ignored violation', async () => {
-    const violation = defaultViolations.unknownProperty(Path.of('foo'));
-    const result = await V.fn2((_value, _path, _ctx, _success, failure) => { failure(violation) }).getValid('test', { ignoreUnknownProperties: true });
-    expect(result).toEqual('test');
+  test('strict denies even when unknown properties are ignored', async () => {
+    const result = await strictUnknownPropertyValidator.validate('value', { ignoreUnknownProperties: true });
+    expect(result.getViolations().map(violation => violation.type)).toEqual([ValidatorType.UnknownPropertyDenied]);
   });
 });

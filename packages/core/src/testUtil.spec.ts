@@ -1,17 +1,23 @@
-import { test, expect } from 'vitest'
+import { test, expect } from 'vitest';
 import { Validator, Violation, ValidationResult, ValidatorOptions, ValidationContext, violationsOf } from './validators.js';
 import { Path } from '@finnair/path';
 import { fail } from 'assert';
 
 export async function expectViolations<In>(value: In, validator: Validator<any, In>, ...violations: Violation[]) {
-  await validator.validatePath(value, Path.ROOT, new ValidationContext({})).then(
-    (success) => {
-      fail(`expected violations, got ${success}`)
-    },
-    (fail) => {
-      expect(violationsOf(fail, Path.ROOT)).toEqual(violations);
-    }
-  )
+  // SyncPromise allows a single subscriber, so bridge to a real Promise rather than chaining.
+  await new Promise<void>((resolve, reject) => {
+    validator.validatePath(value, Path.ROOT, new ValidationContext({})).then(
+      success => reject(new Error(`expected violations, got ${success}`)),
+      error => {
+        try {
+          expect(violationsOf(error, Path.ROOT)).toEqual(violations);
+          resolve();
+        } catch (assertion) {
+          reject(assertion);
+        }
+      },
+    );
+  });
 }
 
 export async function expectValid<Out, In>(value: In, validator: Validator<Out, In>, convertedValue?: Out, ctx?: ValidatorOptions) {
@@ -35,4 +41,4 @@ export function verifyValid<Out>(result: ValidationResult<Out>, value: any, conv
   return result.getValue();
 }
 
-test.skip('do not fail build because of no tests found', () => { });
+test.skip('do not fail build because of no tests found', () => {});
