@@ -32,6 +32,21 @@ Version 11 introduces better performing internal validator architecture.
 
 This version refactors the internal architecture to be fully callback based which allows both synchronous and asynchronous validators to run without additional Promise/async-await overhead. From public API perspective (`Validator.validate/getValid`) nothing changes. Old and new validators can also be combined. However, **custom validators that extend internal validators (e.g. `ObjectValidator`) may need to be refactored**. 
 
+**Why callbacks and not simply Promise-returning validators?** Because it was measured. Taking the
+same logic back to `validatePath(...): PromiseLike<Out>` - identical bodies, only wrapped in
+`new Promise((success, failure) => ...)` and invoked as `.then(success, failure)` - costs 2-3x in
+time and 7-27x in peak heap when a collection is validated as one `V.array(...)` call, because a
+Promise per property for every row is then alive simultaneously. Validated row by row the same
+change costs only ~1.2x and no extra memory, since one record's Promises are collected before the
+next starts. Most of v11's improvement is this one thing: the remaining refactoring accounts for
+about 1.2x on its own.
+
+Asynchronous resolution has a second, less obvious cost. A missing optional property is assigned
+and then deleted from the converted object, and when the property validator resolves asynchronously
+that `delete` lands in the middle of the object, which pushes it into V8 *dictionary mode*. That is
+why the retained heap below improves even though the validated values are identical - and why
+`propertyOrder`, which never assigns those properties in the first place, avoids it too.
+
 See [Performance](#performance) for measurements.
 
 #### AnyOf Semantics Clarified and Fixed
