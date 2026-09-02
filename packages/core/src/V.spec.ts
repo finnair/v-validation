@@ -1553,7 +1553,7 @@ describe('anyOf', () => {
 
     test('valid value', () => expectValid('ABC', validator));
 
-    test('conflicting conversions', () => expectViolations('abc', validator, new Violation(ROOT, 'ConflictingConversions', 'abc')));
+    test('conflicting conversions', () => expectViolations('abc', validator, new Violation(ROOT, 'ConflictingConversions', ['abc', 'ABC'])));
   });
   
   describe('array context', () => {
@@ -1815,7 +1815,7 @@ describe('async validation', () => {
 
     test('results must match', async () => {
       const validator = V.allOf(V.string(), V.toInteger());
-      await expectViolations('123', validator, new Violation(ROOT, 'ConflictingConversions', '123'));
+      await expectViolations('123', validator, new Violation(ROOT, 'ConflictingConversions', ['123', 123]));
     });
 
     test('return original', async () => {

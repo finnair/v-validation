@@ -589,7 +589,7 @@ export class AnyOfValidator<Out = unknown, In = unknown> extends Validator<Out, 
 
   validatePathV2(value: In, path: Path, ctx: ValidationContext, success: SuccessCallback<Out>, failure: FailureCallback): void {
     let violations: Violation[] = [];
-    let conversionViolation: Violation | undefined;
+    const conflictingConversions: Set<any> = new Set();
     let foundMatch = false;
     let convertedValue: any;
     let expectedResponses = this.validators.length;
@@ -601,11 +601,12 @@ export class AnyOfValidator<Out = unknown, In = unknown> extends Validator<Out, 
         convertedValue = result;
         foundMatch = true;
       } else if (!deepEqual(result, convertedValue)) {
-        conversionViolation = new Violation(path, 'ConflictingConversions', value);
+        conflictingConversions.add(convertedValue);
+        conflictingConversions.add(result);
       }
       if (--expectedResponses === 0) {
-        if (conversionViolation) {
-          failure([conversionViolation]);
+        if (conflictingConversions.size > 0) {
+          failure([new Violation(path, 'ConflictingConversions', Array.from(conflictingConversions))]);
         } else if (foundMatch) {
           success(convertedValue);
         } else {
@@ -1419,6 +1420,7 @@ export class AllOfValidator<Out, In> extends CompositeValidator<Out, In> {
     let violations: Violation[] = [];
     let firstResult = true;
     let convertedValue: any;
+    const conflictingConversion = new Set<any>();
     let expectedResponses = this.validators.length;
 
     const reportResult = (result: undefined | Out, error: any) => {
@@ -1428,9 +1430,13 @@ export class AllOfValidator<Out, In> extends CompositeValidator<Out, In> {
         convertedValue = result;
         firstResult = false;
       } else if (!deepEqual(result, convertedValue)) {
-        violations.push(new Violation(path, 'ConflictingConversions', value));
+        conflictingConversion.add(convertedValue);
+        conflictingConversion.add(result);
       }
       if (--expectedResponses === 0) {
+        if (conflictingConversion.size > 0) {
+          violations.push(new Violation(path, 'ConflictingConversions', Array.from(conflictingConversion)));
+        }
         if (violations.length > 0) {
           failure(violations);
         } else {
