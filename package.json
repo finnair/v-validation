@@ -5,6 +5,7 @@
   "scripts": {
     "build": "lerna run build",
     "test": "vitest --run",
+    "bench": "node benchmark/run.js",
     "clean": "yarn clean:dist && yarn clean:modules && yarn clean:tscache",
     "clean:dist": "find . -type f -path '*/dist/*' -delete && find . -type d -name dist -empty -delete",
     "clean:modules": "find . -type f -path '*/node_modules/*' -delete && find . -type d -name node_modules -empty -delete",
@@ -35,6 +36,6 @@
     "arrowParens": "avoid"
   },
   "engines": {
-    "node": ">= 20"
+    "node": "^20.19.0 || >=22.12.0"
   }
 }

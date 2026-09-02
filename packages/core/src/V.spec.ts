@@ -22,6 +22,10 @@ import {
   VType,
   JsonMap,
   JsonBigInt,
+  SuccessCallback,
+  FailureCallback,
+  AnyOfValidator,
+  AllOfValidator,
 } from './validators.js';
 import { ObjectValidator, VInheritableType } from './objectValidator.js';
 import { V } from './V.js';
@@ -85,6 +89,16 @@ class ThrowingValidator extends Validator<string> {
   }
 };
 
+/**
+ * Reports success from a microtask, i.e. after the caller's synchronous scope has already exited.
+ * Unlike `defer`, this overrides `validatePathV2` directly, so no promise bridge is involved.
+ */
+class AsyncValidator extends Validator<any> {
+  validatePathV2(value: any, path: Path, ctx: ValidationContext, success: (value: any) => void, failure: (violations: Violation[]) => void): void {
+    Promise.resolve().then(() => success(value));
+  }
+};
+
 describe('ValidationResult', () => {
   test('getValue() returns valid value', async () => {
     const result = await V.string().validate('123');
@@ -124,11 +138,19 @@ describe('getValid', () => {
   });
 })
 
-test('assertTrue', () =>
-  expectValid(
-    true,
-    V.assertTrue(value => value === true),
-  ));
+describe('assertTrue', () => {
+  test('valid case', () =>
+    expectValid(
+      true,
+      V.assertTrue(value => value === true),
+    ));
+
+  test('throwing function', () => 
+    expectViolations('any', V.assertTrue(() => { throw new Error('boom'); }), new ErrorViolation(ROOT, new Error('boom'))));
+
+  test('throwing from sub path', () => 
+    expectViolations('any', V.assertTrue(() => { throw new Error('boom'); }, 'BadNested', Path.of('nested')), new ErrorViolation(Path.of('nested'), new Error('boom'))));
+});
 
 describe('strings', () => {
   test('valid value', () => expectValid('str', V.string()));
@@ -897,6 +919,33 @@ describe('objects', () => {
         new ErrorViolation(property('additional'), ThrowingValidator.error),
       ]);
     });
+
+    test('object validation must settle when a downstream validator throws', async () => {
+      const validator = V.object({ properties: { a: V.any() } }).next(new ThrowingValidator());
+
+      const result = await validator.validate({ a: 1 });
+
+      expect(result.isSuccess()).toBe(false);
+      expect(result.getViolations().map(v => v.type)).toEqual(['Error']);
+    }, 1000);
+
+    test('object validation must settle when a downstream validator throws after an async property', async () => {
+      const validator = V.object({ properties: { a: defer(V.any()) } }).next(new ThrowingValidator());
+
+      const result = await validator.validate({ a: 1 });
+
+      expect(result.isSuccess()).toBe(false);
+      expect(result.getViolations().map(v => v.type)).toEqual(['Error']);
+    }, 1000);
+
+    test('object validation must settle when a downstream validator throws after a microtask success', async () => {
+      const validator = V.object({ properties: { a: new AsyncValidator() } }).next(new ThrowingValidator());
+
+      const result = await validator.validate({ a: 1 });
+
+      expect(result.isSuccess()).toBe(false);
+      expect(result.getViolations().map(v => v.type)).toEqual(['Error']);
+    }, 1000);
   });
 });
 
@@ -976,18 +1025,112 @@ describe('inheritance', () => {
     await expectViolations({}, type, defaultViolations.notNull(property('required')));
   });
 
-  test('property order', async () => {
-    const value = (
-      await multiParentChild.validate({
-        firstAdditional: 'firstAdditional',
-        name: 'multi-parent',
-        additionalProperty: 2,
-        thirdAdditional: 'thirdAdditional',
-        anything: true,
-        id: '123',
-      })
-    ).getValue();
-    expect(Object.keys(value)).toEqual(['id', 'name', 'anything', 'firstAdditional', 'additionalProperty', 'thirdAdditional']);
+  describe('propertyOrder', () => {
+    test('default propertyOrder', async () => {
+      const value = (
+        await multiParentChild.validate({
+          firstAdditional: 'firstAdditional', // 4. input order
+          name: 'multi-parent', // 2. extends(childValidator).properties
+          additionalProperty: 2, // 5. input order
+          thirdAdditional: 'thirdAdditional', // 6. input order
+          anything: true, // 3. (own) properties
+          id: '123', // 1. parentValidator.properties
+        })
+      ).getValue();
+      expect(Object.keys(value)).toEqual(['id', 'name', 'anything', 'firstAdditional', 'additionalProperty', 'thirdAdditional']);
+    });
+
+    test('custom propertyOrder', async () => {
+      const properties = {
+          optionalStrict: V.optionalStrict(V.string()),
+          optional: V.optional(V.string()),
+          required: V.string(),
+          ignore: V.ignore(),
+        };
+      const localProperties = {
+          requiredLocal: V.string(),
+          optionalLocal: V.optionalStrict(V.string()),
+        };
+      expect(Object.keys(await V.objectType().properties(properties).localProperties(localProperties)
+        .propertyOrder(['optionalStrict', 'optional'])
+        .allowAdditionalProperties(true)
+        .build()
+        .getValid({
+          ignore: 'ignore',
+          additional: 'additional',
+          requiredLocal: 'requiredLocal',
+          optional: 'optional',
+          required: 'required',
+          optionalStrict: 'optionalStrict',
+          optionalLocal: 'optionalLocal',
+        }))).toEqual(['optionalStrict', 'optional', 'required', 'requiredLocal', 'additional', 'optionalLocal'])
+    });
+
+    test('unknown property in propertyOrder throws', () => {
+      expect(() => V.object({ propertyOrder: ['unknown'] })).toThrow();
+    });
+
+    test('inherited propertyOrder', async () => {
+      expect(Object.keys(await V.objectType()
+        .extends(V.objectType().properties({ first: V.string() }).additionalPropertyOrder(['first']).build())
+        .extends(V.objectType().properties({ second: V.string() }).propertyOrder(['second']).build())
+        .properties({ third: V.optionalStrict(V.string()) })
+        .additionalPropertyOrder(['third'])
+        .build()
+        .getValid({
+          third: 'third',
+          first: 'first',
+          second: 'second',
+        }))).toEqual(['first', 'second', 'third']);
+    });
+
+    test('override inherited propertyOrder', async () => {
+      expect(Object.keys(await V.objectType()
+        .extends(V.objectType().properties({ first: V.optionalStrict(V.string()) }).additionalPropertyOrder(['first']).build())
+        .properties({ second: V.optionalStrict(V.string()) })
+        .allowAdditionalProperties(true)
+        .propertyOrder([])
+        .build()
+        .getValid({
+          second: 'second',
+          first: 'first',
+          additional: 'additional',
+        }))).toEqual(['second', 'first', 'additional']);
+    });
+
+    test('propertyOrder of localProperties is not inherited', async () => {
+      const parent = V.objectType()
+        .localProperties({ first: V.optionalStrict(V.string()) })
+        .propertyOrder(['first'])
+        .build();
+      const child = V.objectType()
+        .extends(parent)
+        .localProperties({ second: V.optionalStrict(V.string()) })
+        .build();
+      expect(child.propertyOrder).toEqual([]);
+    });
+
+    test('pick', () => expect(V.objectType()
+        .properties({ a: V.string(), b: V.string() })
+        .propertyOrder(['a', 'b'])
+        .build()
+        .pick('b')
+        .propertyOrder
+      ).toEqual(['b'])
+    );
+
+    test('omit', () => expect(V.objectType()
+        .properties({ a: V.string(), b: V.string() })
+        .propertyOrder(['a', 'b'])
+        .build()
+        .omit('a')
+        .propertyOrder
+      ).toEqual(['b'])
+    );
+
+    test('inherited functions are not allowed', () => {
+      expect(() => V.objectType().propertyOrder(['toString']).build()).toThrow();
+    });
   });
 
   describe('allOf parent next validators', async () => {
@@ -1021,6 +1164,83 @@ describe('inheritance', () => {
       V.objectType().allowAdditionalProperties(false).build(), 
       defaultViolations.unknownPropertyDenied(ROOT.property('parentProp'))
     );
+  });
+});
+
+describe('skipUndefined', () => {
+  const optional = V.optionalStrict(V.string());
+  const mandatory = V.string();
+
+  test('optionalStrict', () => expect(V.optionalStrict(V.string()).skipUndefined()).toBe(true));
+  
+  test('optional', () => expect(V.optional(V.string()).skipUndefined()).toBe(true));
+  
+  test('next', () => {
+    expect(optional.next(optional).skipUndefined()).toBe(true);
+    expect(optional.next(mandatory).skipUndefined()).toBe(false);
+    expect(mandatory.next(optional).skipUndefined()).toBe(false);
+  });
+  
+  test('composition', () => {
+    expect(V.compositionOf(optional, optional, optional).skipUndefined()).toBe(true);
+    expect(V.compositionOf(optional, optional, mandatory).skipUndefined()).toBe(false);
+  });
+  
+  test('allOf', () => {
+    expect(V.allOf(optional, optional, optional).skipUndefined()).toBe(true);
+    expect(V.allOf(optional, optional, mandatory).skipUndefined()).toBe(false);
+  });
+
+  test('oneOf', () => {
+    expect(V.oneOf(optional, mandatory, optional).skipUndefined()).toBe(false);
+    expect(V.oneOf(mandatory, mandatory, mandatory).skipUndefined()).toBe(false);
+    expect(V.oneOf(V.nullTo('value'), optional, mandatory).skipUndefined()).toBe(false);
+  });
+
+  test('anyOf', () => {
+    expect(V.anyOf(mandatory, mandatory, optional).skipUndefined()).toBe(false);
+    expect(V.anyOf(mandatory, mandatory, mandatory).skipUndefined()).toBe(false);
+  });
+
+  describe('missing properties validation', () => {
+    class CallTraking extends Validator<any, any> {
+      public isCalled = false;
+      validatePathV2(value: any, path: Path, ctx: ValidationContext, success: SuccessCallback<any>, failure: FailureCallback): void {
+        this.isCalled = true;
+        success(value);
+      }
+      skipUndefined(): boolean {
+        return true;
+      }
+    };
+    test('missing optional property is not validated when propertyOrder is defined', async () => {
+      const callTracking = new CallTraking();
+      const validator = V.objectType()
+        .properties({ optional: callTracking })
+        .propertyOrder([])
+        .build();
+      await validator.validate({});
+      expect(callTracking.isCalled).toBe(false);
+    });
+
+    test('missing optional property is validated when propertyOrder is not defined', async () => {
+      const callTracking = new CallTraking();
+      const validator = V.objectType()
+        .properties({ optional: callTracking })
+        .build();
+      await validator.validate({});
+      expect(callTracking.isCalled).toBe(true);
+    });
+
+    test('missing optional property is validated when included in propertyOrder', async () => {
+      const callTracking = new CallTraking();
+      const validator = V.objectType()
+        .properties({ optional: callTracking })
+        .propertyOrder(['optional'])
+        .build();
+      await validator.validate({});
+      expect(callTracking.isCalled).toBe(true);
+    });
   });
 });
 
@@ -1266,39 +1486,109 @@ describe('oneOf', () => {
   })
 });
 
+describe('allOf', () => {
+  // Other cases handled else where
+  test('throws', async () => {
+    const validator = new AllOfValidator([V.string(), new ThrowingValidator()]);
+    const result = await validator.validate('value');
+    expect(result.isSuccess()).toBe(false);
+    const violations = result.getViolations();
+    expect(violations).toHaveLength(1);
+    expect(violations[0]).toBeInstanceOf(ErrorViolation);
+  });
+
+  test('at least one validator require internally', () => expect(() => new AllOfValidator([] as any)).toThrow());
+
+  test('allOf validation must settle when a downstream validator throws', async () => {
+    const validator = V.allOf(V.any(), V.any()).next(new ThrowingValidator());
+
+    const result = await validator.validate('value');
+
+    expect(result.isSuccess()).toBe(false);
+    expect(result.getViolations().map(v => v.type)).toEqual(['Error']);
+  }, 1000);
+
+  test('allOf validation must settle when a downstream validator throws after an async branch', async () => {
+    const validator = V.allOf(defer(V.any()), V.any()).next(new ThrowingValidator());
+
+    const result = await validator.validate('value');
+
+    expect(result.isSuccess()).toBe(false);
+    expect(result.getViolations().map(v => v.type)).toEqual(['Error']);
+  }, 1000);
+});
+
 describe('anyOf', () => {
   enum EnumType {
     A = 'ABC',
   }
 
-  const violationHasValue = new HasValueViolation(ROOT, '2019-01-24T09:10:00Z', 'ABD');
+  const violationHasValue = new HasValueViolation(ROOT, 'ABC', 'ABD');
   const violationTypeMismatch = new TypeMismatch(ROOT, 'Date', 'ABD');
   const violationEnumMismatch = new EnumMismatch(ROOT, 'EnumType', 'ABD');
 
   const noMatchesViolations: Violation[] = [violationHasValue, violationTypeMismatch, violationEnumMismatch];
 
-  const validator = V.anyOf(V.hasValue('2019-01-24T09:10:00Z'), V.date(), V.enum(EnumType, 'EnumType'));
+  const threeOptions = V.anyOf(V.hasValue('ABC'), V.date(), V.enum(EnumType, 'EnumType'));
 
   describe('single context', () => {
-    test('valid enum', () => expectValid('ABC', validator, EnumType.A));
-    test('valid date', () => expectValid(validDateString, validator, validDate));
-    test('no matches', () => expectViolations('ABD', validator, ...noMatchesViolations));
+    test('valid value & enum', () => expectValid('ABC', threeOptions, EnumType.A));
+    test('valid date', () => expectValid(validDateString, threeOptions, validDate));
+    test('no matches', () => expectViolations('ABD', threeOptions, ...noMatchesViolations));
   });
 
+  test('at least one validator required', () => expect(() => new AnyOfValidator([])).toThrow());
+
+  test('throws', async () => {
+    const validator = V.anyOf(new ThrowingValidator());
+    const result = await validator.validate('value');
+    expect(result.isSuccess()).toBe(false);
+    const violations = result.getViolations();
+    expect(violations).toHaveLength(1);
+    expect(violations[0]).toBeInstanceOf(ErrorViolation);
+  });
+
+  describe('conflicting validators', async () => {
+    const validator = V.anyOf(V.string(), V.string().nextMap(v => v.toUpperCase()));
+
+    test('valid value', () => expectValid('ABC', validator));
+
+    test('conflicting conversions', () => expectViolations('abc', validator, new Violation(ROOT, 'ConflictingConversions', ['abc', 'ABC'])));
+  });
+  
   describe('array context', () => {
-    const matchingArray = ['2019-01-24T09:10:00Z', validDate, 'ABC'];
-    const arrayValidator = V.array(validator);
+    const matchingArray = [validDate, 'ABC'];
+    const arrayValidator = V.array(threeOptions);
 
     test('valid items in array', async () =>
       arrayValidator.validate(matchingArray).then(result => {
-        expect(result.getValue().length).toBe(3);
+        expect(result.getValue().length).toBe(2);
         expect(result.getViolations()).toEqual([]);
       }));
+
     test('fails due to invalid item added', async () =>
       arrayValidator.validate([...matchingArray, 'ABD']).then(result => {
         expect(result.getViolations().length).toBe(3);
       }));
   });
+
+  test('anyOf validation must settle when a downstream validator throws', async () => {
+    const validator = V.anyOf(V.any(), V.any()).next(new ThrowingValidator());
+
+    const result = await validator.validate('value');
+
+    expect(result.isSuccess()).toBe(false);
+    expect(result.getViolations().map(v => v.type)).toEqual(['Error']);
+  }, 1000);
+
+  test('anyOf validation must settle when a downstream validator throws after an async branch', async () => {
+    const validator = V.anyOf(defer(V.any()), V.any()).next(new ThrowingValidator());
+
+    const result = await validator.validate('value');
+
+    expect(result.isSuccess()).toBe(false);
+    expect(result.getViolations().map(v => v.type)).toEqual(['Error']);
+  }, 1000);
 });
 
 describe('arrays', () => {
@@ -1362,6 +1652,24 @@ describe('arrays', () => {
     expect(violations).toHaveLength(1);
     expect(violations[0]).toBeInstanceOf(ErrorViolation);
   });
+
+  test('array validation must settle when a downstream validator throws', async () => {
+    const validator = V.array(V.any()).next(new ThrowingValidator());
+
+    const result = await validator.validate([1]);
+
+    expect(result.isSuccess()).toBe(false);
+    expect(result.getViolations().map(v => v.type)).toEqual(['Error']);
+  }, 1000);
+
+  test('array validation must settle when a downstream validator throws after an async item', async () => {
+    const validator = V.array(defer(V.any())).next(new ThrowingValidator());
+
+    const result = await validator.validate([1, 2, 3]);
+
+    expect(result.isSuccess()).toBe(false);
+    expect(result.getViolations().map(v => v.type)).toEqual(['Error']);
+  }, 1000);
 });
 
 describe('number', () => {
@@ -1507,7 +1815,7 @@ describe('async validation', () => {
 
     test('results must match', async () => {
       const validator = V.allOf(V.string(), V.toInteger());
-      await expectViolations('123', validator, new Violation(ROOT, 'ConflictingConversions', '123'));
+      await expectViolations('123', validator, new Violation(ROOT, 'ConflictingConversions', ['123', 123]));
     });
 
     test('return original', async () => {
@@ -1871,6 +2179,24 @@ describe('map function', () => {
     );
   });
 
+  test('map validation must settle when a downstream validator throws', async () => {
+    const validator = V.object({ properties: { a: V.map((value: any) => value) } }).next(new ThrowingValidator());
+
+    const result = await validator.validate({ a: 1 });
+
+    expect(result.isSuccess()).toBe(false);
+    expect(result.getViolations().map(v => v.type)).toEqual(['Error']);
+  }, 1000);
+
+  test('map validation must settle when a downstream validator throws after an async mapping function', async () => {
+    const validator = V.object({ properties: { a: V.map(async (value: any) => value) } }).next(new ThrowingValidator());
+
+    const result = await validator.validate({ a: 1 });
+
+    expect(result.isSuccess()).toBe(false);
+    expect(result.getViolations().map(v => v.type)).toEqual(['Error']);
+  }, 1000);
+
   test('promise throwing a ValidationError', async () => {
     await expectViolations(
       'abc',
@@ -1987,6 +2313,24 @@ describe('Map', () => {
     expect(violations[0]).toBeInstanceOf(ErrorViolation);
     expect(violations[1]).toBeInstanceOf(ErrorViolation);
   });
+
+  test('Map validation must settle when a downstream validator throws', async () => {
+    const validator = V.mapType(V.any(), V.any(), false).next(new ThrowingValidator());
+
+    const result = await validator.validate(new Map([['key', 'value']]));
+
+    expect(result.isSuccess()).toBe(false);
+    expect(result.getViolations().map(v => v.type)).toEqual(['Error']);
+  }, 1000);
+
+  test('Map validation must settle when a downstream validator throws after an async entry', async () => {
+    const validator = V.mapType(defer(V.any()), defer(V.any()), false).next(new ThrowingValidator());
+
+    const result = await validator.validate(new Map([['key', 'value']]));
+
+    expect(result.isSuccess()).toBe(false);
+    expect(result.getViolations().map(v => v.type)).toEqual(['Error']);
+  }, 1000);
 });
 
 describe('Set', () => {
@@ -2012,6 +2356,40 @@ describe('Set', () => {
     const parsedArray = jsonClone(set1);
     expect(parsedArray).toEqual(setArray);
   });
+
+  test('thrown errors', async () => {
+    const result = await V.setType(new ThrowingValidator(), false).validate(new Set([1]));
+    expect(result.isSuccess()).toBe(false);
+    const violations = result.getViolations();
+    expect(violations).toHaveLength(1);
+    expect(violations[0]).toBeInstanceOf(ErrorViolation);
+  });
+
+  test('item level thrown errors are reported per item and accumulated', async () => {
+    const result = await V.setType(new ThrowingValidator(), false).validate(new Set([1, 2]));
+    expect(result.getViolations()).toEqual([
+      new ErrorViolation(Path.of(0), ThrowingValidator.error),
+      new ErrorViolation(Path.of(1), ThrowingValidator.error),
+    ]);
+  });
+
+  test('Set validation must settle when a downstream validator throws', async () => {
+    const validator = V.setType(V.any(), false).next(new ThrowingValidator());
+
+    const result = await validator.validate(new Set([1]));
+
+    expect(result.isSuccess()).toBe(false);
+    expect(result.getViolations().map(v => v.type)).toEqual(['Error']);
+  }, 1000);
+
+  test('Set validation must settle when a downstream validator throws after an async item', async () => {
+    const validator = V.setType(defer(V.any()), false).next(new ThrowingValidator());
+
+    const result = await validator.validate(new Set([1, 2]));
+
+    expect(result.isSuccess()).toBe(false);
+    expect(result.getViolations().map(v => v.type)).toEqual(['Error']);
+  }, 1000);
 
   describe('typing', () => {
     test('JsonSet', async () => {
@@ -2122,6 +2500,24 @@ describe('fn', () => {
     const result = await V.fn(() => { throw violation; }).getValid('test', { ignoreUnknownProperties: true });
     expect(result).toEqual('test');
   });
+
+  test('fn validation must settle when a downstream validator throws', async () => {
+    const validator = V.object({ properties: { a: V.fn((value: any) => value) } }).next(new ThrowingValidator());
+
+    const result = await validator.validate({ a: 1 });
+
+    expect(result.isSuccess()).toBe(false);
+    expect(result.getViolations().map(v => v.type)).toEqual(['Error']);
+  }, 1000);
+
+  test('fn validation must settle when a downstream validator throws after an async function', async () => {
+    const validator = V.object({ properties: { a: V.fn(async (value: any) => value) } }).next(new ThrowingValidator());
+
+    const result = await validator.validate({ a: 1 });
+
+    expect(result.isSuccess()).toBe(false);
+    expect(result.getViolations().map(v => v.type)).toEqual(['Error']);
+  }, 1000);
 });
 
 describe('fn2', () => {
@@ -2147,6 +2543,27 @@ describe('fn2', () => {
       expect((violation as ErrorViolation).error).toBe(error);
     }
   });
+  test('fn2 validation must settle when a downstream validator throws', async () => {
+    const validator = V.object({ properties: { a: V.fn2((value: any, _path, _ctx, success) => success(value)) } })
+      .next(new ThrowingValidator());
+
+    const result = await validator.validate({ a: 1 });
+
+    expect(result.isSuccess()).toBe(false);
+    expect(result.getViolations().map(v => v.type)).toEqual(['Error']);
+  }, 1000);
+
+  test('fn2 validation must settle when a downstream validator throws after an async success', async () => {
+    const validator = V.object({
+      properties: { a: V.fn2((value: any, _path, _ctx, success) => { Promise.resolve().then(() => success(value)); }) },
+    }).next(new ThrowingValidator());
+
+    const result = await validator.validate({ a: 1 });
+
+    expect(result.isSuccess()).toBe(false);
+    expect(result.getViolations().map(v => v.type)).toEqual(['Error']);
+  }, 1000);
+
   test('Throws ignored violation', async () => {
     const violation = defaultViolations.unknownProperty(Path.of('foo'));
     const result = await V.fn2(() => { throw violation; }).getValid('test', { ignoreUnknownProperties: true });

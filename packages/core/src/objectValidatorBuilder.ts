@@ -10,9 +10,25 @@ export class ObjectValidatorBuilder<Props, Next, LocalProps, LocalNext> {
   private _additionalProperties: MapEntryModel[] = [];
   private _next?: Validator[] = [];
   private _localNext?: Validator[] = [];
+  private _propertyOrder: undefined | string[];
   constructor() {}
+  /**
+   * Extends the current object validator with the properties and additional properties of the given parent validator.
+   * The property order of the parent validator will be merged with the current property order.
+   * The order in which `extends`, `propertyOrder` and `additionalPropertyOrder` are called matters!
+   * 
+   * @param parent 
+   * @returns 
+   */
   extends<X>(parent: ObjectValidator<any, X>) {
     this._extends.push(parent);
+    if (parent.propertyOrder) {
+      if (this._propertyOrder === undefined) {
+        this._propertyOrder = inheritablePropertyOrder(parent);
+      } else {
+        this._propertyOrder = [...this._propertyOrder, ...inheritablePropertyOrder(parent)];
+      }
+    }
     return this as ObjectValidatorBuilder<Props & X, Next, LocalProps, LocalNext>;
   }
   properties<X>(properties: { [K in keyof X]: Validator<X[K]> }) {
@@ -46,6 +62,30 @@ export class ObjectValidatorBuilder<Props, Next, LocalProps, LocalNext> {
     this._localNext?.push(validator);
     return this as unknown as ObjectValidatorBuilder<Props, Next, LocalProps, NextOut>;
   }
+  /**
+   * Override possibly inherited property order.
+   * 
+   * @param propertyOrder 
+   * @returns 
+   */
+  propertyOrder(propertyOrder: undefined | string[]) {
+    this._propertyOrder = propertyOrder;
+    return this;
+  }
+  /**
+   * Append to possibly inherited property order.
+   * 
+   * @param propertyOrder 
+   * @returns 
+   */
+  additionalPropertyOrder(propertyOrder: string[]) {
+    if (this._propertyOrder === undefined) {
+      this._propertyOrder = propertyOrder;
+    } else {
+      this._propertyOrder = [...this._propertyOrder, ...propertyOrder];
+    }
+    return this;
+  }
   build() {
     return new ObjectValidator<
         (Next extends {} ? Next : Props) & (LocalNext extends {} ? LocalNext : LocalProps), 
@@ -57,6 +97,11 @@ export class ObjectValidatorBuilder<Props, Next, LocalProps, LocalNext> {
       next: this._next,
       localProperties: this._localProperties,
       localNext: this._localNext,
+      propertyOrder: this._propertyOrder,
     });
   }
 };
+
+export function inheritablePropertyOrder(parent: ObjectValidator<any, any>) {
+  return parent.propertyOrder!.filter((key) => Object.hasOwn(parent.properties, key));
+}

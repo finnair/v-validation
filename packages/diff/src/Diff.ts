@@ -1,5 +1,5 @@
 import { Node } from '@finnair/path';
-import { arrayOrPlainObject, Change, DiffNode, DiffNodeConfig } from './DiffNode';
+import { arrayOrPlainObject, Change, DiffNode, DiffNodeConfig } from './DiffNode.js';
 
 export interface DiffConfig extends DiffNodeConfig {
   readonly includeObjects?: boolean;

@@ -16,7 +16,7 @@ import {
   ValidatorFnWrapperV2,
   Violation,
   violationsOf,
-} from "./validators";
+} from "./validators.js";
 
 export type PropertyModel = { [s: string]: string | number | Validator };
 
@@ -27,10 +27,6 @@ export type Properties = { [s: string]: Validator };
 export interface MapEntryModel<K = unknown, V = unknown> {
   readonly keys: Validator<K>;
   readonly values: Validator<V>;
-}
-
-export interface PropertyFilter {
-  (key: string): boolean;
 }
 
 export type VInheritableType<V extends ObjectValidator<any, any>> = V extends ObjectValidator<any, infer Out> ? Out : unknown;
@@ -63,6 +59,31 @@ export interface ObjectModel<LocalType = unknown, InheritableType = unknown> {
    * Local, non-inheritable rules. 
    */
   readonly localNext?: Validator | Validator[];
+  /**
+   * Output property ordering:
+   * 
+   * Default is `undefined` (for backwards compatibility), which means that properties will be ordered in 
+   * 1) inherited properties first in inheritance order,
+   * 2) properties
+   * 3) localProperties
+   * 4) additionalProperties in input order.
+   * 
+   * If `propertyOrder` is defined, output properties will be ordered in
+   * 1) propertyOrder
+   * 2) inherited mandatory properties in inheritance order
+   * 3) mandatory properties
+   * 4) mandatory localProperties
+   * 5) optional and additionalProperties in input order.
+   * 
+   * For optimal performance it is recommended to define at least an empty array for `propertyOrder`. 
+   * That way missing optional properties are skipped entirely. 
+   * 
+   * NOTE: `propertyOrder` is **not** inherited via `ObjectModel.extends`. This is to allow full control
+   * of the property ordering in the child model. Please use `V.objectType()` which by default inherits
+   * the `propertyOrder` from the parent model, but also allows overriding it in the child model. `V.objectType()`
+   * also allows finer control over the order in which inherited vs own properties are ordered. 
+   */
+  readonly propertyOrder?: string[];
 }
 
 export class ObjectValidator<LocalType = unknown, InheritableType = LocalType, In = unknown> extends Validator<LocalType, In> {
@@ -75,6 +96,8 @@ export class ObjectValidator<LocalType = unknown, InheritableType = LocalType, I
   public readonly parentValidators: ObjectValidator[];
 
   public readonly nextValidator?: Validator;
+
+  public readonly propertyOrder?: string[];
 
   private readonly validator: Validator<LocalType, In>;
 
@@ -103,8 +126,9 @@ export class ObjectValidator<LocalType = unknown, InheritableType = LocalType, I
     this.additionalProperties = additionalProperties.concat(getMapEntryValidators(model.additionalProperties));
     this.properties = mergeProperties(getPropertyValidators(model.properties), properties);
     this.localProperties = getPropertyValidators(model.localProperties);
+    this.propertyOrder = model.propertyOrder ? [...model.propertyOrder] : undefined;
 
-    let validator: Validator = new PropertiesValidator<LocalType, In>(this.properties, this.localProperties, this.additionalProperties);
+    let validator: Validator = new PropertiesValidator<LocalType, In>(this.properties, this.localProperties, this.additionalProperties, this.propertyOrder);
     const next = nextValidators.length > 0 ? maybeCompositionOf(...(nextValidators as CompositionParameters)) : undefined;
     if (next) {
       this.nextValidator = next;
@@ -122,6 +146,7 @@ export class ObjectValidator<LocalType = unknown, InheritableType = LocalType, I
       }
     }
     this.validator = validator as Validator<LocalType, In>;
+    Object.freeze(this.propertyOrder);
     Object.freeze(this.parentValidators);
     Object.freeze(this);
   }
@@ -134,6 +159,7 @@ export class ObjectValidator<LocalType = unknown, InheritableType = LocalType, I
     return new ObjectValidator<Omit<LocalType, K extends keyof LocalType ? K : never>, Omit<InheritableType, K extends keyof InheritableType ? K : never>>({
       properties: pick(this.properties, key => !keys.includes(key as any)),
       localProperties: pick(this.localProperties, key => !keys.includes(key as any)),
+      propertyOrder: this.propertyOrder?.filter(key => !keys.includes(key as any)),
     });
   }
 
@@ -141,16 +167,41 @@ export class ObjectValidator<LocalType = unknown, InheritableType = LocalType, I
     return new ObjectValidator<Pick<LocalType, K extends keyof LocalType ? K : never>, Pick<InheritableType, K extends keyof InheritableType ? K : never>>({
       properties: pick(this.properties, key => keys.includes(key as any)),
       localProperties: pick(this.localProperties, key => keys.includes(key as any)),
+      propertyOrder: this.propertyOrder?.filter(key => keys.includes(key as any)),
     });
   }
 }
 
 export class PropertiesValidator<LocalType = unknown, In = unknown> extends Validator<LocalType, In> {
-  constructor(readonly properties: Properties, readonly localProperties: Properties, readonly additionalProperties: MapEntryValidator[]) {
+  private readonly validationOrder: string[];
+  constructor(readonly properties: Properties, readonly localProperties: Properties, readonly additionalProperties: MapEntryValidator[], propertyOrder?: string[]) {
     super();
+    const validationOrder: Set<string> = new Set();
+    if (propertyOrder === undefined) {
+      Object.keys(properties).forEach(key => validationOrder.add(key));
+      Object.keys(localProperties).forEach(key => validationOrder.add(key));
+    } else {
+      propertyOrder.forEach(key => {
+        if (Object.hasOwn(properties, key) || Object.hasOwn(localProperties, key)) {
+          validationOrder.add(key);
+        } else {
+          throw new Error(`Unknown property: '${key}'`);
+        }
+      });
+      const registerMandatoryProperty = ([key, validator]: [string, Validator<unknown, unknown>]) => {
+        if (!validator.skipUndefined()) {
+          validationOrder.add(key);
+        }
+      };
+      Object.entries(properties).forEach(registerMandatoryProperty);
+      Object.entries(localProperties).forEach(registerMandatoryProperty);
+    }
+    this.validationOrder = Array.from(validationOrder);
+
     Object.freeze(this.properties);
     Object.freeze(this.localProperties);
     Object.freeze(this.additionalProperties);
+    Object.freeze(this.validationOrder);
     Object.freeze(this);
   }
   validatePathV2(value: In, path: Path, ctx: ValidationContext, success: SuccessCallback<LocalType>, failure: FailureCallback): void {
@@ -164,7 +215,7 @@ export class PropertiesValidator<LocalType = unknown, In = unknown> extends Vali
     const convertedObject: any = {} as LocalType;
     let violations: Violation[] = [];
     
-    const keys = new Set<string>([...Object.keys(this.properties), ...Object.keys(this.localProperties)]);
+    const keys = new Set<string>(this.validationOrder);
     // Add all, including inherited keys
     for (const key in anyValue) {
       keys.add(key);
@@ -210,8 +261,8 @@ export class PropertiesValidator<LocalType = unknown, In = unknown> extends Vali
     const validateProperty = (key: string, propertyValue: unknown, propertyPath: Path) => {
       this.properties[key].validatePathV2(propertyValue, propertyPath, ctx,
         (result) => {
-          if (this.localProperties[key]) {
-            validateLocalProperty(key, propertyValue, propertyPath);
+          if (Object.hasOwn(this.localProperties, key)) {
+            validateLocalProperty(key, result, propertyPath);
           } else {
             reportSuccess(key, result);
           }
@@ -253,9 +304,9 @@ export class PropertiesValidator<LocalType = unknown, In = unknown> extends Vali
       const valuePath = path.property(key);
       const propertyValue = anyValue[key];
       try {
-        if (this.properties[key]) {
+        if (Object.hasOwn(this.properties, key)) {
           validateProperty(key, propertyValue, valuePath);
-        } else if (this.localProperties[key]) {
+        } else if (Object.hasOwn(this.localProperties, key)) {
           validateLocalProperty(key, propertyValue, valuePath);
         } else {
           validateAdditionalProperty(key, propertyValue, valuePath, 0, 0);
@@ -280,7 +331,7 @@ function pick(properties: Properties, fn: (key: keyof any) => boolean): Properti
 export function mergeProperties(from: Properties, to: Properties): Properties {
   if (from) {
     for (const key in from) {
-      if (to[key]) {
+      if (Object.hasOwn(to, key)) {
         to[key] = to[key].next(from[key]);
       } else {
         to[key] = from[key];

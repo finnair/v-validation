@@ -23,16 +23,69 @@ Or [`npm`](https://www.npmjs.com/):
 npm install @finnair/v-validation
 ```
 
-## Major Changes Coming in Version 11
+## Major Changes (Coming) in Version 11
 
+### Breaking Changes
+
+#### Internal Architecture
 Version 11 introduces better performing internal validator architecture. 
 
 This version refactors the internal architecture to be fully callback based which allows both synchronous and asynchronous validators to run without additional Promise/async-await overhead. From public API perspective (`Validator.validate/getValid`) nothing changes. Old and new validators can also be combined. However, **custom validators that extend internal validators (e.g. `ObjectValidator`) may need to be refactored**. 
 
-Performance was tested using ~126K MCT rules and resulted in around 3x faster validation (from 3 to 1 sec).
+See [Performance](#performance) for measurements.
 
-**Drop support for ObjectValidator property filters**
-ObjectValidator's property filter (which was available for subclasses to utilize) has been dropped. That feature broke typing, and the use case to conditionally validate only selected properties, is nowdays better implemented with `V.if` and `ObjectValidator.pick/omit`.
+#### AnyOf Semantics Clarified and Fixed
+`V.anyOf` validator no longer short-circuits on first success. Also just like `V.allOf` it now expects all succeeding 
+child validators to return `deepEquals` result. This is to make the result of this validator predictable regardless 
+of whether underlying validators are sync or async. Unfortunate side-effect is worse performance than before. Please
+consider using other constructs instead, e.g. `V.if(condition1, validator1).elseIf(condition2, validator2).else(elseValidator)`.
+
+Since every branch now runs, `V.anyOf` also reports ignored violations to `warnLogger` once per branch instead of once
+in total. See [Deduplicating `warnLogger` with `dedupWarnLogger`](#deduplicating-warnlogger-with-dedupwarnlogger).
+
+#### Drop support for ObjectValidator Property Filters
+ObjectValidator's property filter (which was available for subclasses to utilize) has been dropped. That feature broke typing, and the use case to conditionally validate only selected properties, is better implemented with `V.if` and `ObjectValidator.pick/omit`.
+
+### New feature: Configurable `propertyOrder` and Optimized Optional Properties Validation
+
+ObjectValidator allows defining custom `propertyOrder`, and when it's defined, validation of missing optional properties that are not included in `propertyOrder` are fully skipped. Using `propertyOrder` results in significantly better performance for object types with many optional properties.
+
+### Performance
+
+Measured on ~126K real MCT rules - 26 properties, most of them optional and absent on any given
+record - validated as one array (`V.array(ruleValidator)`) against the previous release 10.2.1, on
+Node 20:
+
+|                      | time    | throughput   | peak heap | retained heap |
+| -------------------- | ------- | ------------ | --------- | ------------- |
+| 10.2.1               | 2925 ms | 43K rules/s  | 537 MB    | 108 MB        |
+| 11                   | 744 ms  | 170K rules/s | 32 MB     | 18 MB         |
+| 11 + `propertyOrder` | 288 ms  | 439K rules/s | 29 MB     | 17 MB         |
+
+Two separate wins: the callback architecture accounts for 3.9x, and opting in to `propertyOrder`
+multiplies that by a further 2.6x.
+
+**How you call the library matters as much as the version.** Validating a collection as one
+`V.array(...)` call is a single Promise for the whole dataset; validating row by row costs a
+`validate()` Promise and an `await` turn per row, and that overhead is the same in every version. On
+the same data and validator, row-by-row measures 1.6x / 4.0x where the array measures 3.9x / 10.2x.
+
+**The peak memory difference is the bigger operational change.** Validating that array on 10.2.1
+peaked at 2.3 GB of heap with `Vluxon.localDate()` in the model, because a Promise per property was
+held alive for every row at once; the same work on v11 peaks at 157 MB. Under
+`--max-old-space-size=1024` the 10.2.1 run dies with *"Ineffective mark-compacts near heap limit"*
+while v11 completes, so collections that previously needed chunking to fit in a container may no
+longer need it.
+
+**Expect different numbers.** The gain depends heavily on the shape of your data and rules, and
+`propertyOrder` pays off in proportion to how many optional properties are actually absent. Adding
+three `Vluxon.localDate()` conversions - a cost unchanged between versions - moves the array
+measurement from 3.9x / 10.2x to 3.4x / 5.7x, because less of the total time is core validation.
+Measure your own schema against your own data with the [benchmark scaffold](../../benchmark).
+
+Converted output is unchanged, but v11 returns objects with V8 *fast properties* where 10.2.1
+returned dictionary-mode objects. That accounts for most of the retained-heap difference, even
+though the validated values are identical.
 
 ## Major Changes in Version 8
 
@@ -324,8 +377,8 @@ but that something may then cause "is declared but never used" -error.
 
 - All validators have [`Validator.next`](#next) function to chain validator rules. 
 - `compositionOf` - validators are run one after another against the (current) converted value (a shortcut for [`Validator.next`](#next)).
-- `allOf` - the input value must satisfy all the validators. Validators are run in parallel and must return the same value (deepEquals).
-- `anyOf` - at least one of the validators must match.
+- `allOf` - the input value must satisfy all the validators. All validators must return the same value (deepEquals).
+- `anyOf` - at least one of the validators must match. All matching validators must return the same value (deepEquals).
 - `oneOf` - exactly one validator must match while others should return false.
 
 ## <a name="object">V.object</a>
@@ -620,6 +673,41 @@ Options are passed to to `validate` function as optional second argument.
 // false
 ```
 
+### Deduplicating `warnLogger` with `dedupWarnLogger`
+
+`warnLogger` reports ignored `Violation`s, i.e. backwards compatible changes in source data: a
+source system started sending a new property, or a new enum value. That is a small and fixed set of
+findings, but `warnLogger` is called for every *occurrence* of one, so an undeduplicated logger
+reports the same finding over and over:
+
+- once per array element - and elements of an array share the same schema, so a new property in a
+  1000 element array is one finding reported 1000 times,
+- once per child validator of `V.anyOf`, `V.oneOf`, `V.allOf` and validator chains
+  (`Validator.next`/`V.compositionOf`), since each of them validates the same value,
+- and, most importantly, again on every single request until the validator is updated.
+
+Wrap your logger in `dedupWarnLogger` to report each distinct finding only once. Create it **once**
+and reuse it, so that deduplication spans validations - that is where the volume comes from:
+
+```typescript
+import { dedupWarnLogger } from '@finnair/v-validation';
+
+const warnLogger = dedupWarnLogger(violation => console.warn('Source data changed:', violation));
+
+// per request
+await validator.validate(input, { ignoreUnknownProperties: true, warnLogger });
+```
+
+Findings are identified by `warnLoggerKey`: violation type, path and `invalidValue`, with array
+indices replaced by `*` (`$.items[3].added` becomes `$.items[*].added` - see `anyIndexPath`). So a
+new property is reported once no matter which element or which request it arrives in, while genuinely
+different findings are all still reported: a different property, a different location in the schema,
+or a different unknown enum value. Pass a second argument to use a different identity.
+
+The set of reported findings is retained for the lifetime of the returned logger. It is bounded by
+the schema - violation type times normalized path times enum value - not by the amount of data
+validated.
+
 ## Custom Validators
 
 There are four main ways of defining custom validators
@@ -718,8 +806,8 @@ Unless otherwise stated, all validators require non-null and non-undefined value
 | array                   | ...items: Validator[]                                            | [Array validator](#array)                                                                                                                 |
 | toArray                 | items: Validator                                                 | Converts undefined to an empty array and non-arrays to single-valued arrays.                                                              |
 | size                    | min: number, max: number                                         | Asserts that input's numeric `length` property is between min and max (both inclusive).                                                   |
-| allOf                   | ...validators: Validator[]                                       | Requires that all given validators match. Validators are run in parallel and must provide the same output.                                |
-| anyOf                   | ...validators: Validator[]                                       | Requires minimum one of given validators matches. Validators are run in parallel and in case of failure, all violations will be returned. |
+| allOf                   | ...validators: Validator[]                                       | Requires that all given validators match. All child validators must result in the same output.                                |
+| anyOf                   | ...validators: Validator[]                                       | Requires minimum one of given validators matches. All matching validators must result in the same output.  |
 | oneOf                   | ...validators: Validator[]                                       | Requires that exactly one of the given validators match.                                                                                  |
 | emptyToUndefined        |                                                                  | Converts null or empty string to undefined. Does not touch any other values.                                                              |
 | emptyToNull             |                                                                  | Converts undefined or empty string to null. Does not touch any other values.                                                              |
