@@ -23,23 +23,13 @@ import {
 } from './luxon.js';
 import { DateTime, Duration, FixedOffsetZone, IANAZone, Settings } from 'luxon';
 import { Path } from '@finnair/path';
-import { fail } from 'assert';
 
-async function expectViolations<In>(value: In, validator: Validator<any, In>, ...violations: Violation[]) {
-  // SyncPromise allows a single subscriber, so bridge to a real Promise rather than chaining.
-  await new Promise<void>((resolve, reject) => {
-    validator.validatePath(value, Path.ROOT, new ValidationContext({})).then(
-      success => reject(new Error(`expected violations, got ${success}`)),
-      error => {
-        try {
-          expect(violationsOf(error, Path.ROOT)).toEqual(violations);
-          resolve();
-        } catch (assertion) {
-          reject(assertion);
-        }
-      },
-    );
-  });
+export async function expectViolations<In>(value: In, validator: Validator<any, In>, ...violations: Violation[]) {
+  const results = await validator.validate(value);
+  if (results.isSuccess()) {
+    throw new Error(`expected violations, got ${results.getValue()}`);
+  }
+  expect(results.getViolations()).toEqual(violations);
 }
 
 async function expectValid<Out, In>(value: In, validator: Validator<Out, In>, convertedValue?: Out, ctx?: ValidatorOptions) {

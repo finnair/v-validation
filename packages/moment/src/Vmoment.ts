@@ -11,18 +11,16 @@ export class MomentValidator extends Validator<Moment, string | Moment> {
     Object.freeze(this);
   }
   validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<Moment> {
-    return new SyncPromise((success: (value: Moment) => void, failure: (error: any) => void) => {
-      if (isNullOrUndefined(value)) {
-        return failure(defaultViolations.notNull(path));
+    if (isNullOrUndefined(value)) {
+      return SyncPromise.reject(defaultViolations.notNull(path));
+    }
+    if (isString(value) || moment.isMoment(value)) {
+      const convertedValue = this.parse(value);
+      if (convertedValue.isValid()) {
+        return SyncPromise.resolve(convertedValue);
       }
-      if (isString(value) || moment.isMoment(value)) {
-        const convertedValue = this.parse(value);
-        if (convertedValue.isValid()) {
-          return success(convertedValue);
-        }
-      }
-      return failure(defaultViolations.date(value, path, this.type));
-    });
+    }
+    return SyncPromise.reject(defaultViolations.date(value, path, this.type));
   }
 }
 
@@ -30,18 +28,16 @@ const durationPattern =
   /^P(?!$)(\d+(?:\.\d+)?Y)?(\d+(?:\.\d+)?M)?(\d+(?:\.\d+)?W)?(\d+(?:\.\d+)?D)?(T(?=\d)(\d+(?:\.\d+)?H)?(\d+(?:\.\d+)?M)?(\d+(?:\.\d+)?S)?)?$/;
 export class DurationValidator extends Validator<moment.Duration> {
   validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<moment.Duration> {
-    return new SyncPromise((success: (value: moment.Duration) => void, failure: (error: any) => void) => {
-      if (isNullOrUndefined(value)) {
-        return failure(defaultViolations.notNull(path));
+    if (isNullOrUndefined(value)) {
+      return SyncPromise.reject(defaultViolations.notNull(path));
+    }
+    if ((isString(value) && durationPattern.test(value)) || moment.isDuration(value)) {
+      const convertedValue = moment.duration(value);
+      if (convertedValue.isValid()) {
+        return SyncPromise.resolve(convertedValue);
       }
-      if ((isString(value) && durationPattern.test(value)) || moment.isDuration(value)) {
-        const convertedValue = moment.duration(value);
-        if (convertedValue.isValid()) {
-          return success(convertedValue);
-        }
-      }
-      return failure(new TypeMismatch(path, 'Duration', value));
-    });
+    }
+    return SyncPromise.reject(new TypeMismatch(path, 'Duration', value));
   }
 }
 

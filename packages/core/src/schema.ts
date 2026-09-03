@@ -7,6 +7,7 @@ import {
   isString,
   Violation,
   TypeMismatch,
+  SyncPromise,
 } from './validators.js';
 import {
   ObjectValidator,
@@ -90,7 +91,7 @@ export class SchemaValidator extends Validator {
 
   validateClass(value: any, path: Path, ctx: ValidationContext, expectedType?: string): PromiseLike<any> {
     if (isNullOrUndefined(value)) {
-      return Promise.reject(defaultViolations.notNull(path));
+      return SyncPromise.reject(defaultViolations.notNull(path));
     }
     // 1) Validate discriminator
     let type: string;
@@ -103,14 +104,14 @@ export class SchemaValidator extends Validator {
     }
     const validator = this.validators[type];
     if (!validator) {
-      return Promise.reject(new DiscriminatorViolation(typePath, type, Object.keys(this.validators)));
+      return SyncPromise.reject(new DiscriminatorViolation(typePath, type, Object.keys(this.validators)));
     }
 
     // 2) Validate that the type is assignable to the expected type (polymorphism)
     if (expectedType) {
       const expectedParent = this.validators[expectedType];
       if (!this.isSubtypeOf(validator, expectedParent)) {
-        return Promise.reject(new TypeMismatch(path, expectedType, type));
+        return SyncPromise.reject(new TypeMismatch(path, expectedType, type));
       }
     }
 

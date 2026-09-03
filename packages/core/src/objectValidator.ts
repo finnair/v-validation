@@ -151,9 +151,7 @@ export class ObjectValidator<LocalType = unknown, InheritableType = LocalType, I
   }
 
   validatePath(value: In, path: Path, ctx: ValidationContext): PromiseLike<LocalType> {
-    return new SyncPromise((success: (value: LocalType) => void, failure: (error: any) => void) => {
-      this.validator.validatePath(value, path, ctx).then(success, failure);
-    });
+    return this.validator.validatePath(value, path, ctx);
   }
 
   omit<T, K extends keyof (any & (InheritableType | LocalType))>(...keys: K[]) {

@@ -23,6 +23,11 @@ Or [`npm`](https://www.npmjs.com/):
 npm install @finnair/v-validation
 ```
 
+## Versions
+
+Please refer to [CHANGELOG.md](../../CHANGELOG.md) for comprehensive list of changes per version.
+Only the most notable changes are described here.
+
 ## Major Changes (Coming) in Version 11
 
 ### Breaking Changes
