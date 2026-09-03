@@ -48,8 +48,8 @@ describe('SyncPromise', () => {
     const seen: number[] = [];
     new SyncPromise<number>((resolve, reject) => {
       resolve(1);
-      resolve(2);
-      reject(new Error('ignored'));
+      expect(() => resolve(2)).toThrow(/already settled/);
+      expect(() => reject(new Error('ignored'))).toThrow(/already settled/);
     }).then(
       value => seen.push(value),
       () => seen.push(-1),
@@ -57,7 +57,7 @@ describe('SyncPromise', () => {
     expect(seen).toEqual([1]);
   });
 
-  test('settling after delivery is ignored', () => {
+  test('settling after delivery throws', () => {
     const seen: number[] = [];
     let settle!: (value: number) => void;
     const promise = new SyncPromise<number>(resolve => {
@@ -65,7 +65,7 @@ describe('SyncPromise', () => {
     });
     promise.then(value => seen.push(value));
     settle(1);
-    settle(2);
+    expect(() => settle(2)).toThrow(/already settled/);
     expect(seen).toEqual([1]);
   });
 

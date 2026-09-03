@@ -69,12 +69,13 @@ const DELIVERED = 3;
  * synchronous validators collapse into ordinary function calls while still returning something the
  * caller can `await`. Asynchronous validators keep working - settling later simply invokes the
  * handlers later. Measured against real Promises on ~126K objects, this is ~3x faster and needs
- * ~25x less peak heap; against raw callbacks it costs under 10%.
+ * ~25x less peak heap; against raw callbacks it costs around 10%.
  *
  * It is deliberately *not* a Promise and supports only what a validator chain needs:
  *
  * - **one subscriber.** `then` may be called once; a second call throws rather than silently
  *   dropping a handler. Use `Promise.resolve(...)` or `await` to get a real Promise from it.
+ * - can settle only once. A second call to `settle` throws rather than silently dropping a result.
  * - **no chaining.** `then` returns the instance so the type is structurally `PromiseLike`, but the
  *   return value carries no result and must not be chained.
  * - **no unhandled-rejection tracking.** A rejection nobody subscribes to is silent.
@@ -126,8 +127,7 @@ export class SyncPromise<T> implements PromiseLike<T> {
 
   private settle(state: number, value: any): void {
     if (this.state !== PENDING) {
-      // Settled already - ignored, as a Promise would.
-      return;
+      throw new Error('SyncPromise already settled');
     }
     if (this.subscribed) {
       this.state = DELIVERED;
@@ -508,7 +508,9 @@ export class ValidatorFnWrapper<Out = unknown, In = unknown> extends Validator<O
       try {
         const maybePromise = this.fn(value, path, ctx);
         if (isPromise(maybePromise)) {
-          maybePromise.then(success, error => ctx.failure(violationsOf(error, path), value).then(success, failure));
+          maybePromise.then(success, error => {
+            ctx.failure(violationsOf(error, path), value).then(success, failure);
+          });
         } else {
           success(maybePromise);
         }

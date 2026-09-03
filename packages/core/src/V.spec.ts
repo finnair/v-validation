@@ -1555,38 +1555,6 @@ describe('allOf', () => {
   }, 1000);
 });
 
-describe('allOf', () => {
-  // Other cases handled else where
-  test('throws', async () => {
-    const validator = new AllOfValidator([V.string(), new ThrowingValidator()]);
-    const result = await validator.validate('value');
-    expect(result.isSuccess()).toBe(false);
-    const violations = result.getViolations();
-    expect(violations).toHaveLength(1);
-    expect(violations[0]).toBeInstanceOf(ErrorViolation);
-  });
-
-  test('at least one validator require internally', () => expect(() => new AllOfValidator([] as any)).toThrow());
-
-  test('allOf validation must settle when a downstream validator throws', async () => {
-    const validator = V.allOf(V.any(), V.any()).next(new ThrowingValidator());
-
-    const result = await validator.validate('value');
-
-    expect(result.isSuccess()).toBe(false);
-    expect(result.getViolations().map(v => v.type)).toEqual(['Error']);
-  }, 1000);
-
-  test('allOf validation must settle when a downstream validator throws after an async branch', async () => {
-    const validator = V.allOf(defer(V.any()), V.any()).next(new ThrowingValidator());
-
-    const result = await validator.validate('value');
-
-    expect(result.isSuccess()).toBe(false);
-    expect(result.getViolations().map(v => v.type)).toEqual(['Error']);
-  }, 1000);
-});
-
 describe('anyOf', () => {
   enum EnumType {
     A = 'ABC',
