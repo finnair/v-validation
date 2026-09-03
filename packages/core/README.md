@@ -45,24 +45,19 @@ Promises costs 2-3x in time and 7-27x in peak heap when a collection is validate
 only ~1.2x and no extra memory, since one record's Promises are collected before the next starts.
 
 **Why not plain callbacks then?** Also measured. A callback-based `validatePath(value, path, ctx,
-success, failure)` is 7-13% faster still, but it forces every custom validator to be rewritten, gives
-up `await`, and needs its own error-propagation rules. `SyncPromise` keeps the `PromiseLike` contract
-for that price, which is why it won.
+success, failure)` is 7-13% faster still, but it is backwards incompatible architectural change and
+less intuitive API for extensions. `SyncPromise` keeps the `PromiseLike` contract for that price, which is why it won.
 
-A custom `SyncPromise` existed before version 8 and was dropped in favour of `Promise.resolve/reject`
-(see [Major Changes in Version 8](#major-changes-in-version-8)); it returns here with measurements
-behind it, and scoped strictly to `validatePath`.
+A custom `SyncPromise` existed before version 8 in a slightly different, more limited form, and was 
+dropped in favour of `Promise.resolve/reject` (see [Major Changes in Version 8 
+(#major-changes-in-version-8)); it returns here with measurements behind it, supporting also 
+real asynchronous nested validators and scoped strictly to `validatePath`.
 
 `SyncPromise` is an internal implementation detail: it is deliberately limited to a **single
 subscriber**, so `then` may be called once and a second call throws rather than silently dropping a
-handler. Call `Promise.resolve(...)` on it, or simply `await` it, to get a real chainable Promise.
-Public `validate` and `getValid` never expose it.
-
-**Removed:** `V.fn2`, `ValidatorFnV2`, `ValidatorFnWrapperV2` and `ValidationContext#failureV2`. The
-promise-returning `V.fn` and `ValidationContext#failure` cover the same ground now that
-`validatePath` is the only method - `failure` returns a `PromiseLike` that resolves with the value if
-the violation is ignorable and rejects otherwise. Custom validators implementing `validatePathV2`
-must be renamed back to `validatePath` and return a `PromiseLike`.
+handler. It also throws in case it's settled more than once as validation logic doesn't support that
+kind of cases. Call `Promise.resolve(...)` on it, or simply `await` it, to get a real chainable 
+Promise. Public `validate` and `getValid` never expose it.
 
 See [Performance](#performance) for measurements.
 
