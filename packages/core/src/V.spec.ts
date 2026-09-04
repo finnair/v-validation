@@ -26,8 +26,9 @@ import {
   FailureCallback,
   AnyOfValidator,
   AllOfValidator,
+  SyncPromise,
 } from './validators.js';
-import { ObjectValidator, VInheritableType } from './objectValidator.js';
+import { ObjectValidator, VInheritableType, lenientUnknownPropertyValidator } from './objectValidator.js';
 import { V } from './V.js';
 import { jsonClone, Path } from '@finnair/path';
 import { expectUndefined, expectValid, expectViolations, verifyValid } from './testUtil.spec.js';
@@ -64,7 +65,7 @@ class DeferredValidator<T> extends Validator<T> {
   }
 
   async validatePath(value: any, path: Path, ctx: ValidationContext): Promise<T> {
-    return new Promise<T>((resolve, reject) => {
+    return new SyncPromise<T>((resolve, reject) => {
       setTimeout(() => {
         this.validator.validatePath(value, path, ctx).then(resolve, reject);
       }, this.ms);
@@ -75,9 +76,9 @@ class DeferredValidator<T> extends Validator<T> {
 class DeprecatedValidator extends Validator<string> {
   async validatePath(value: any, path: Path, ctx: ValidationContext): Promise<string> {
     if (String(value) === 'true') {
-      return Promise.resolve('true');
+      return SyncPromise.resolve('true');
     } else {
-      return Promise.reject(new Violation(path, 'DeprecatedValidator', value));
+      return SyncPromise.reject(new Violation(path, 'DeprecatedValidator', value));
     }
   }
 }
@@ -605,6 +606,14 @@ describe('objects', () => {
       });
     });
 
+    describe('lenientUnknownPropertyValidator', () => {
+      test('reports an UnknownProperty violation by default', () =>
+        expectViolations('any', lenientUnknownPropertyValidator, defaultViolations.unknownProperty(ROOT)));
+
+      test('passes the value through when ignoreUnknownProperties is set', () =>
+        expectValid('any', lenientUnknownPropertyValidator, 'any', { ignoreUnknownProperties: true }));
+    });
+
     test('deny unknown/additional properties', async () => {
       const object = { unknownProperty: true };
       const result = await V.object({ additionalProperties: false }).validate(object);
@@ -794,9 +803,39 @@ describe('objects', () => {
       first.next = second;
       const result = await validator.validate(first);
       expect(result.isSuccess()).toBe(false);
-      const violation = result.getViolations()[0];
-      expect(violation).toBeInstanceOf(ErrorViolation);
-      expect((violation as ErrorViolation).error.message).toEqual('Maximum call stack size exceeded');
+      expect(result.getViolations()).toEqual([defaultViolations.cycle(Path.of('next', 'next'))]);
+    });
+
+    test('shared (non-cyclic) object is valid', async () => {
+      // A DAG: the same object appears in two sibling branches validated by the same validator.
+      // This is not a cycle, so cycle detection must not flag it (regression guard: the tracking is
+      // path-scoped and cleared on exit, so a repeat via an acyclic path is fine).
+      let node: ObjectValidator<any, any>;
+      const tree = V.objectType()
+        .properties({
+          first: V.string(),
+          left: V.optionalStrict(V.fn((value: any, path: Path, ctx: ValidationContext) => node.validatePath(value, path, ctx))),
+          right: V.optionalStrict(V.fn((value: any, path: Path, ctx: ValidationContext) => node.validatePath(value, path, ctx))),
+        })
+        .build();
+      node = tree;
+      const shared = { first: 'shared' };
+      const result = await tree.validate({ first: 'root', left: shared, right: shared });
+      expect(result.isSuccess()).toBe(true);
+      expect(result.getValue()).toEqual({ first: 'root', left: { first: 'shared' }, right: { first: 'shared' } });
+    });
+
+    test('same object validated concurrently by different validators (allOf) is valid', async () => {
+      // With a real async rule, the first schema is still in progress (entered, not yet settled)
+      // when allOf runs the same object through the second schema. Cycle detection is keyed by
+      // validator, so registering the same object under a second, different validator is not a
+      // cycle (exercises ValidationContext.enterValidation's "different validator" branch).
+      const asyncPassthrough = V.fn((value: any) => Promise.resolve(value));
+      const schemaA = V.object({ properties: { value: asyncPassthrough } });
+      const schemaB = V.object({ properties: { value: asyncPassthrough } });
+      const result = await V.allOf(schemaA, schemaB).validate({ value: 'x' });
+      expect(result.isSuccess()).toBe(true);
+      expect(result.getValue()).toEqual({ value: 'x' });
     });
   });
 
@@ -996,18 +1035,15 @@ describe('inheritance', () => {
       multiParentChild,
     ));
 
-  test('invalid multi-parent object', () =>
-    multiParentChild.validatePath({ additionalProperty: 123, name: '' }, Path.ROOT, new ValidationContext({})).then(
-      (success) => {
-        fail(`expected violations, got ${success}`)
-      },
-      (violations) => {
-        expect(violations).toHaveLength(3);
-        expect(violations).toContainEqual(defaultViolations.notEmpty(property('name')));
-        expect(violations).toContainEqual(defaultViolations.notNull(property('anything')));
-        expect(violations).toContainEqual(defaultViolations.notNull(property('id')));
-      }
-    ));
+  test('invalid multi-parent object', async () => {
+    const result = await multiParentChild.validate({ additionalProperty: 123, name: '' });
+    expect(result.isSuccess()).toBe(false);
+    const violations = result.getViolations();
+    expect(violations).toHaveLength(3);
+    expect(violations).toContainEqual(defaultViolations.notEmpty(property('name')));
+    expect(violations).toContainEqual(defaultViolations.notNull(property('anything')));
+    expect(violations).toContainEqual(defaultViolations.notNull(property('id')));
+  });
 
   test("child's extended property validators are only run after successful parent property validation", async () => {
     const parent = V.object({
@@ -2518,60 +2554,4 @@ describe('fn', () => {
     expect(result.isSuccess()).toBe(false);
     expect(result.getViolations().map(v => v.type)).toEqual(['Error']);
   }, 1000);
-});
-
-describe('fn2', () => {
-  test('successful', async () => {
-    const result = await V.fn2((value: string, _path, _ctx, success) => success(value.toUpperCase())).getValid('test');
-    expect(result).toEqual('TEST');
-  });
-  test('failure', async () => {
-    const violation = defaultViolations.string(123);
-    const result = await V.fn2((_value, _path, _ctx, _success, failure) => failure(violation)).validate(123);
-    expect(result.isFailure()).toBe(true);
-    expect(result.getViolations()).toEqual([violation]);
-  });
-  test('Throws Error', async () => {
-    const error = new Error('Error message');
-    try {
-      await V.fn2(() => { throw error; }).getValid('test');
-      fail('Expected an error');
-    } catch (e) {
-      expect(e).toBeInstanceOf(ValidationError);
-      const violation = (e as ValidationError).violations[0];
-      expect(violation).toBeInstanceOf(ErrorViolation);
-      expect((violation as ErrorViolation).error).toBe(error);
-    }
-  });
-  test('fn2 validation must settle when a downstream validator throws', async () => {
-    const validator = V.object({ properties: { a: V.fn2((value: any, _path, _ctx, success) => success(value)) } })
-      .next(new ThrowingValidator());
-
-    const result = await validator.validate({ a: 1 });
-
-    expect(result.isSuccess()).toBe(false);
-    expect(result.getViolations().map(v => v.type)).toEqual(['Error']);
-  }, 1000);
-
-  test('fn2 validation must settle when a downstream validator throws after an async success', async () => {
-    const validator = V.object({
-      properties: { a: V.fn2((value: any, _path, _ctx, success) => { Promise.resolve().then(() => success(value)); }) },
-    }).next(new ThrowingValidator());
-
-    const result = await validator.validate({ a: 1 });
-
-    expect(result.isSuccess()).toBe(false);
-    expect(result.getViolations().map(v => v.type)).toEqual(['Error']);
-  }, 1000);
-
-  test('Throws ignored violation', async () => {
-    const violation = defaultViolations.unknownProperty(Path.of('foo'));
-    const result = await V.fn2(() => { throw violation; }).getValid('test', { ignoreUnknownProperties: true });
-    expect(result).toEqual('test');
-  });
-  test('Reports ignored violation', async () => {
-    const violation = defaultViolations.unknownProperty(Path.of('foo'));
-    const result = await V.fn2((_value, _path, _ctx, _success, failure) => { failure(violation) }).getValid('test', { ignoreUnknownProperties: true });
-    expect(result).toEqual('test');
-  });
 });

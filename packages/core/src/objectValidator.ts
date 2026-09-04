@@ -13,7 +13,6 @@ import {
   SuccessCallback,
   ValidationContext,
   Validator,
-  ValidatorFnWrapperV2,
   Violation,
   violationsOf,
 } from "./validators.js";
@@ -172,7 +171,7 @@ export class ObjectValidator<LocalType = unknown, InheritableType = LocalType, I
   }
 }
 
-export class PropertiesValidator<LocalType = unknown, In = unknown> extends Validator<LocalType, In> {
+class PropertiesValidator<LocalType = unknown, In = unknown> extends Validator<LocalType, In> {
   private readonly validationOrder: string[];
   constructor(readonly properties: Properties, readonly localProperties: Properties, readonly additionalProperties: MapEntryValidator[], propertyOrder?: string[]) {
     super();
@@ -226,8 +225,16 @@ export class PropertiesValidator<LocalType = unknown, In = unknown> extends Vali
       return success(convertedObject as LocalType);
     }
 
+    // Cycle detection: a value that references itself through its properties would recurse forever.
+    // Register this (value, validator) pair before descending and clear it once we settle; re-entry
+    // of a pair still in progress is a cycle. See ValidationContext.enterValidation.
+    if (ctx.enterValidation(anyValue, this)) {
+      return failure([defaultViolations.cycle(path)]);
+    }
+
     const reportResult = () => {
       if (--expectedResponses === 0) {
+        ctx.leaveValidation(anyValue, this);
         if (violations.length > 0) {
           failure(violations);
         } else {
@@ -284,7 +291,7 @@ export class PropertiesValidator<LocalType = unknown, In = unknown> extends Vali
           (keyError) => validateAdditionalProperty(key, propertyValue, propertyPath, index + 1, keySuccessCount, keyError)
         );
       } else if (keySuccessCount === 0) {
-        ctx.failureV2(defaultViolations.unknownProperty(propertyPath), propertyValue,
+        ctx.failure(defaultViolations.unknownProperty(propertyPath), propertyValue).then(
           (result) => reportSuccess(key, result),
           (error) => {
             if (index === 1 && keyError) {
@@ -407,11 +414,29 @@ function getMapEntryValidators(additionalProperties?: boolean | MapEntryModel | 
   return validators;
 }
 
-export const lenientUnknownPropertyValidator = new ValidatorFnWrapperV2((value: any, path: Path, ctx: ValidationContext, success: SuccessCallback<any>, failure: FailureCallback) =>
-  ctx.failureV2(defaultViolations.unknownProperty(path), value, success, failure));
+/**
+ * Value validator for additional properties. When `denied` it always rejects; otherwise it reports
+ * an `UnknownProperty` violation, which `ctx.failure` resolves to the value when
+ * `ignoreUnknownProperties` is set and rejects otherwise.
+ */
+class UnknownPropertyValidator extends Validator<any> {
+  constructor(private readonly denied: boolean) {
+    super();
+    Object.freeze(this);
+  }
 
-export const strictUnknownPropertyValidator = new ValidatorFnWrapperV2((value: any, path: Path, ctx: ValidationContext, _success: SuccessCallback<any>, failure: FailureCallback) =>
-  failure([defaultViolations.unknownPropertyDenied(path)]));
+  validatePathV2(value: any, path: Path, ctx: ValidationContext, success: SuccessCallback<any>, failure: FailureCallback): void {
+    if (this.denied) {
+      failure([defaultViolations.unknownPropertyDenied(path)]);
+    } else {
+      ctx.failure(defaultViolations.unknownProperty(path), value).then(success, failure);
+    }
+  }
+}
+
+export const lenientUnknownPropertyValidator = new UnknownPropertyValidator(false);
+
+export const strictUnknownPropertyValidator = new UnknownPropertyValidator(true);
 
 const allowAllMapEntries: MapEntryValidator = new MapEntryValidator({
   keys: new AnyValidator(),
