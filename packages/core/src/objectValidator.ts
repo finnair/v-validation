@@ -13,7 +13,6 @@ import {
   SuccessCallback,
   ValidationContext,
   Validator,
-  ValidatorFnWrapperV2,
   Violation,
   violationsOf,
 } from "./validators.js";
@@ -415,11 +414,29 @@ function getMapEntryValidators(additionalProperties?: boolean | MapEntryModel | 
   return validators;
 }
 
-export const lenientUnknownPropertyValidator = new ValidatorFnWrapperV2((value: any, path: Path, ctx: ValidationContext, success: SuccessCallback<any>, failure: FailureCallback) =>
-  ctx.failure(defaultViolations.unknownProperty(path), value).then(success, failure));
+/**
+ * Value validator for additional properties. When `denied` it always rejects; otherwise it reports
+ * an `UnknownProperty` violation, which `ctx.failure` resolves to the value when
+ * `ignoreUnknownProperties` is set and rejects otherwise.
+ */
+class UnknownPropertyValidator extends Validator<any> {
+  constructor(private readonly denied: boolean) {
+    super();
+    Object.freeze(this);
+  }
 
-export const strictUnknownPropertyValidator = new ValidatorFnWrapperV2((value: any, path: Path, ctx: ValidationContext, _success: SuccessCallback<any>, failure: FailureCallback) =>
-  failure([defaultViolations.unknownPropertyDenied(path)]));
+  validatePathV2(value: any, path: Path, ctx: ValidationContext, success: SuccessCallback<any>, failure: FailureCallback): void {
+    if (this.denied) {
+      failure([defaultViolations.unknownPropertyDenied(path)]);
+    } else {
+      ctx.failure(defaultViolations.unknownProperty(path), value).then(success, failure);
+    }
+  }
+}
+
+export const lenientUnknownPropertyValidator = new UnknownPropertyValidator(false);
+
+export const strictUnknownPropertyValidator = new UnknownPropertyValidator(true);
 
 const allowAllMapEntries: MapEntryValidator = new MapEntryValidator({
   keys: new AnyValidator(),

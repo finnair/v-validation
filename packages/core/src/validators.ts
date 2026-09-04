@@ -8,10 +8,6 @@ export interface ValidatorFn<Out = unknown, In = unknown> {
   (value: In, path: Path, ctx: ValidationContext): Out | PromiseLike<Out>;
 }
 
-export interface ValidatorFnV2<Out = unknown, In = unknown> {
-  (value: In, path: Path, ctx: ValidationContext, success: SuccessCallback<Out>, failure: FailureCallback): void;
-}
-
 export interface MappingFn<Out = unknown, In = unknown> {
   (value: In, path: Path, ctx: ValidationContext): Out | PromiseLike<Out>;
 }
@@ -540,27 +536,6 @@ export class ValidatorFnWrapper<Out = unknown, In = unknown> extends Validator<O
       } else {
         success(maybePromise);
       }
-    } catch (error) {
-      ctx.failure<Out>(violationsOf(error, path), value).then(success, failure);
-    }
-  }
-}
-
-export class ValidatorFnWrapperV2<Out = unknown, In = unknown> extends Validator<Out, In> {
-  constructor(private readonly fn: ValidatorFnV2<Out, In>, public readonly type?: string) {
-    super();
-    Object.freeze(this);
-  }
-
-  validatePathV2(value: In, path: Path, ctx: ValidationContext, success: SuccessCallback<Out>, failure: FailureCallback): void {
-    try {
-      this.fn(value, path, ctx,
-        (result) => {
-          success(result);
-        },
-        error => {
-          ctx.failure<Out>(error, value).then(success, failure);
-        });
     } catch (error) {
       ctx.failure<Out>(violationsOf(error, path), value).then(success, failure);
     }

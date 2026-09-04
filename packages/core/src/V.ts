@@ -56,8 +56,6 @@ import {
   NullableValidator,
   JsonBigIntValidator,
   UnknownValidator,
-  ValidatorFnV2,
-  ValidatorFnWrapperV2,
 } from './validators.js';
 import {ObjectModel, ObjectValidator, ObjectNormalizer, PropertiesValidator, MapEntryValidator } from './objectValidator.js';
 import { ObjectValidatorBuilder } from './objectValidatorBuilder.js';
@@ -89,8 +87,6 @@ const ignoreValidator = new IgnoreValidator(),
 
 export const V = {
   fn: <Out, In>(fn: ValidatorFn<Out, In>, type?: string) => new ValidatorFnWrapper<Out, In>(fn, type),
-
-  fn2: <Out, In>(fn: ValidatorFnV2<Out, In>, type?: string) => new ValidatorFnWrapperV2<Out, In>(fn, type),
 
   map: <Out, In>(fn: MappingFn<Out, In>, error?: any) => new ValueMapper<Out, In>(fn, error),
 
