@@ -28,7 +28,7 @@ import {
   AllOfValidator,
   SyncPromise,
 } from './validators.js';
-import { ObjectValidator, VInheritableType } from './objectValidator.js';
+import { ObjectValidator, VInheritableType, lenientUnknownPropertyValidator } from './objectValidator.js';
 import { V } from './V.js';
 import { jsonClone, Path } from '@finnair/path';
 import { expectUndefined, expectValid, expectViolations, verifyValid } from './testUtil.spec.js';
@@ -604,6 +604,14 @@ describe('objects', () => {
         const result = await V.objectType().allowAdditionalProperties(false).build().validate(object, { ignoreUnknownProperties: true });
         expect(result).toEqual(new ValidationResult([defaultViolations.unknownPropertyDenied(property('unknownProperty'))]));
       });
+    });
+
+    describe('lenientUnknownPropertyValidator', () => {
+      test('reports an UnknownProperty violation by default', () =>
+        expectViolations('any', lenientUnknownPropertyValidator, defaultViolations.unknownProperty(ROOT)));
+
+      test('passes the value through when ignoreUnknownProperties is set', () =>
+        expectValid('any', lenientUnknownPropertyValidator, 'any', { ignoreUnknownProperties: true }));
     });
 
     test('deny unknown/additional properties', async () => {
