@@ -171,7 +171,7 @@ export class ObjectValidator<LocalType = unknown, InheritableType = LocalType, I
   }
 }
 
-export class PropertiesValidator<LocalType = unknown, In = unknown> extends Validator<LocalType, In> {
+class PropertiesValidator<LocalType = unknown, In = unknown> extends Validator<LocalType, In> {
   private readonly validationOrder: string[];
   constructor(readonly properties: Properties, readonly localProperties: Properties, readonly additionalProperties: MapEntryValidator[], propertyOrder?: string[]) {
     super();

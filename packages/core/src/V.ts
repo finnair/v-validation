@@ -57,7 +57,7 @@ import {
   JsonBigIntValidator,
   UnknownValidator,
 } from './validators.js';
-import {ObjectModel, ObjectValidator, ObjectNormalizer, PropertiesValidator, MapEntryValidator } from './objectValidator.js';
+import {ObjectModel, ObjectValidator, ObjectNormalizer } from './objectValidator.js';
 import { ObjectValidatorBuilder } from './objectValidatorBuilder.js';
 
 interface AllOfParameters {
@@ -203,10 +203,10 @@ export const V = {
   size: <T extends { length: number }>(min: number, max: number) => new SizeValidator<T>(min, max),
 
   properties: <Key extends keyof any, Value>(keys: Validator<Key>, values: Validator<Value>) => 
-    new PropertiesValidator<Record<Key, Value>>({}, {}, [new MapEntryValidator({ keys, values })]),
+    new ObjectValidator<Record<Key, Value>>({ additionalProperties: { keys, values } }),
 
   optionalProperties: <Key extends keyof any, Value>(keys: Validator<Key>, values: Validator<Value>) => 
-    new PropertiesValidator<Partial<Record<Key, Value>>>({}, {}, [new MapEntryValidator({ keys, values })]),
+    new ObjectValidator<Partial<Record<Key, Value>>>({ additionalProperties: { keys, values } }),
 
   allOf: AllOfConstructor,
 
