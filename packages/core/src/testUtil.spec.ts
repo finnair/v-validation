@@ -1,17 +1,12 @@
 import { test, expect } from 'vitest'
-import { Validator, Violation, ValidationResult, ValidatorOptions, ValidationContext, violationsOf } from './validators.js';
-import { Path } from '@finnair/path';
-import { fail } from 'assert';
+import { Validator, Violation, ValidationResult, ValidatorOptions } from './validators.js';
 
 export async function expectViolations<In>(value: In, validator: Validator<any, In>, ...violations: Violation[]) {
-  await validator.validatePath(value, Path.ROOT, new ValidationContext({})).then(
-    (success) => {
-      fail(`expected violations, got ${success}`)
-    },
-    (fail) => {
-      expect(violationsOf(fail, Path.ROOT)).toEqual(violations);
-    }
-  )
+  const results = await validator.validate(value);
+  if (results.isSuccess()) {
+    throw new Error(`expected violations, got ${results.getValue()}`);
+  }
+  expect(results.getViolations()).toEqual(violations);
 }
 
 export async function expectValid<Out, In>(value: In, validator: Validator<Out, In>, convertedValue?: Out, ctx?: ValidatorOptions) {

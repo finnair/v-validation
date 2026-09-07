@@ -28,9 +28,19 @@ npm install @finnair/v-validation
 ### Breaking Changes
 
 #### Internal Architecture
-Version 11 introduces better performing internal validator architecture. 
+Version 11 introduces a better-performing internal validator architecture.
 
-This version refactors the internal architecture to be fully callback based which allows both synchronous and asynchronous validators to run without additional Promise/async-await overhead. From public API perspective (`Validator.validate/getValid`) nothing changes. Old and new validators can also be combined. However, **custom validators that extend internal validators (e.g. `ObjectValidator`) may need to be refactored**. 
+Internally, validators now drive results through **callbacks** (`validatePathV2`) rather than one
+`Promise` per step, so synchronous and asynchronous rules alike run without per-step
+`Promise`/`async-await` overhead. The `PromiseLike` extension point (`validatePath`) is retained for
+custom validators and now returns a lightweight, synchronous [`SyncPromise`](#syncpromise) instead of a
+real `Promise`. Nothing changes for callers of `Validator.validate`/`getValid`, and both styles of
+validator interoperate freely - see [Custom Validators](#custom-validators) for when to use which
+extension point. **Custom validators that extend internal validators (e.g. `ObjectValidator`) may need
+minor refactoring.**
+
+Version 11 also adds deterministic **cycle detection**: validating data that references itself now
+fails with a `Cycle` violation instead of overflowing the stack (see [Recursive Models](#recursive-models)).
 
 See [Performance](#performance) for measurements.
 
@@ -87,11 +97,29 @@ Converted output is unchanged, but v11 returns objects with V8 *fast properties*
 returned dictionary-mode objects. That accounts for most of the retained-heap difference, even
 though the validated values are identical.
 
+**Where the promise abstraction itself lands.** A focused comparison on a 100K-object schema (median
+of 3, Node 20) isolates the cost of the abstraction from everything else:
+
+|                                    | rows: time / peak heap | array: time / peak heap |
+| ---------------------------------- | ---------------------- | ----------------------- |
+| 10.2.1 (real `Promise`s)           | 969 ms / 134 MB        | 1976 ms / 1283 MB       |
+| v11 callbacks (`validatePathV2`)   | 801 ms / 79 MB         | 756 ms / 76 MB          |
+| all-`SyncPromise` (`validatePath`) | 881 ms / 68 MB         | 796 ms / 71 MB          |
+
+The callback path and the `SyncPromise` path are close - an all-`SyncPromise` build trails the
+all-callback build by only ~10% - and **both** beat the real-`Promise` architecture by ~1.2x per row
+and ~2.6x for one `V.array(...)` call, where real `Promise`s also push peak heap ~17x higher (100K
+live promises vs a flat working set). Two practical consequences, both covered under
+[Custom Validators](#custom-validators): custom validators should return values or a `SyncPromise` and
+avoid real `Promise`s unless genuinely asynchronous; and the callback extension point
+(`validatePathV2`) is worth the extra complexity only for composite validators, since a leaf rule's
+one-`SyncPromise`-per-call is inside that ~10%.
+
 ## Major Changes in Version 8
 
 Drop (partial) support for cyclic data: There are cases where validation result (i.e. converted object) simply cannot retain cycles, e.g. the same object being validated with `V.oneOf` in different branches of the validator tree and resulting in different versions of the object. The rare use-cases for cyclic data simply do not justify the added complexity. 
 
-There is no special cycle detection, but if cyclic data is validated, the result will be an ErrorViolation due to "Maximum call stack size exceeded".
+Through v10 there was no special cycle detection, so validating cyclic data produced an `ErrorViolation` from "Maximum call stack size exceeded" (and, depending on where the stack ran out, could fail to settle at all). Since v11 cyclic data is detected and reported as a deterministic `Cycle` violation - see [Recursive Models](#recursive-models).
 
 The newly improved `V.oneOf` violations are further improved. Instead of `ValidationResult[]` the result is simplified to `OneOfResult[]` of either successes of error violations: `{ success: true } | { violations: Violation[] }`.
 
@@ -616,7 +644,12 @@ assertType<EqualTypes<ComparableType<VType<typeof validator>>, ComparableType<Re
 
 Another option is to use [`V.schema`](#schema).
 
-_NOTE, however that actually cyclic data is not supported._
+_NOTE: a recursive **model** is fully supported; recursive (cyclic) **data** is not. Since v11, if the
+value being validated contains a reference cycle, validation stops and reports a `Cycle` violation at
+the path where the cycle closes, rather than overflowing the stack. Detection is path-scoped and keyed
+by validator, so a value that legitimately appears more than once along different (acyclic) branches -
+including the same object run through several branches of `V.anyOf`/`V.allOf`/`V.oneOf` - is not
+mistaken for a cycle._
 
 ## Map
 
@@ -713,49 +746,92 @@ validated.
 There are four main ways of defining custom validators
 
 ```typescript
-// 1) Any function accepting any value and returning a boolean:
+// 1) A predicate: any function accepting a value and returning a boolean:
 V.assertTrue(...)
 
 
-// 2) Any function accepting any value and returning value on success or throwing an error on failure:
+// 2) A mapping function: accepts a value and returns the converted value on success, or throws on failure:
 V.map(...)
 
 
-// 3) If a validator doesn't have any parameters, but needs access to path and context,
-// it can be defined as a simple anonymous function
-// Depredated - use V.fn2 instead!
-V.fn((value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult> => {
-  // return either successful or rejected Promise or throw an error
-})
-
-V.fn2((value: In, path: Path, ctx: ValidationContext, success: SuccessCallback<Out>, failure: FailureCallback) => {
-   // call either success or failure callback with the results (valid/converted value or Violations).
+// 3) A function that also needs `path` and `ctx`. Return the (optionally converted) value or a
+//    `PromiseLike` of it; signal failure by throwing a `Violation` or returning a rejected promise.
+//    Prefer `SyncPromise` over a real `Promise` unless the work is genuinely asynchronous - see below.
+V.fn((value: any, path: Path, ctx: ValidationContext) => {
+  return isOK(value) ? value : SyncPromise.reject(new MyViolation(path, value));
 })
 
 
-// 4) Full parametrizable validators extend Validator
-class MyValidator extends Validator {
-  // Validators should be immutable!
+// 4) Full, parametrizable validators extend Validator. Implement `validatePath` (below):
+class MyValidator extends Validator<Out, In> {
+  // Validators must be immutable!
   constructor(public readonly myParameter: any) {
     super();
+    Object.freeze(this);
   }
-  // NOTE: validatePath() works is deprecated!
-  async validatePathV2(value: In, path: Path, ctx: ValidationContext, success: SuccessCallback<Out>, failure: FailureCallback): void {
+  validatePath(value: In, path: Path, ctx: ValidationContext): PromiseLike<Out> {
     if (isOK(value)) {
-      return success(value);
-    } else {
-      return failure(new MyViolation(path, myParameter, value));
+      return SyncPromise.resolve(value);
     }
+    return SyncPromise.reject(new MyViolation(path, this.myParameter, value));
   }
 }
 // Custom Violations may be used to convey additional parameters required for reporting the error
 class MyViolation extends Violation {
-  // Violations should be immutable
+  // Violations must be immutable
   constructor(path: Path, public readonly myParameter: any, invalidValue?: any) {
     super(path, 'MyError', invalidValue);
   }
 }
 ```
+
+### Extension points: `validatePath` vs `validatePathV2`
+
+A `Validator` has two overridable methods, and the base class implements each in terms of the other,
+so **you only need to override one** (overriding neither would recurse forever):
+
+```typescript
+// Promise-style - the simple extension point. Return a PromiseLike of the converted value.
+validatePath(value: In, path: Path, ctx: ValidationContext): PromiseLike<Out>;
+
+// Callback-style - the internal fast path. Deliver the result through the callbacks; return nothing.
+validatePathV2(value: In, path: Path, ctx: ValidationContext, success: SuccessCallback<Out>, failure: FailureCallback): void;
+```
+
+**Override `validatePath` for almost everything.** It reads naturally (return a value / a promise, or
+throw) and costs one lightweight [`SyncPromise`](#syncpromise) per call. That allocation is the only
+difference from the callback path, and it is small: validating ~126K objects, an all-`SyncPromise`
+build runs within ~10% of an all-callback build (see [Performance](#performance)). A single custom
+rule is a rounding error on that.
+
+**Override `validatePathV2` only for composite validators on a hot path** - ones that fan out to many
+child validators per call (objects, arrays, collections, `allOf`/`anyOf`-like combinators). There the
+saving multiplies: calling each child's `validatePathV2` avoids allocating a promise *per child per
+call*, which is exactly what the built-in `ObjectValidator`/`ArrayValidator` do and where the
+architecture's real gain comes from. A leaf rule delegates to nobody, so it has nothing to multiply -
+`validatePath` is the right choice there.
+
+#### `SyncPromise`
+
+`SyncPromise` is an internal `PromiseLike` that invokes its handler **synchronously** the instant it
+settles, instead of scheduling a microtask. That is what lets a chain of synchronous validators
+collapse into ordinary function calls while still returning something `validate()`/`getValid()` can
+`await`. Use it from a custom `validatePath`:
+
+- `SyncPromise.resolve(value)` / `SyncPromise.reject(violation)` for an immediate result;
+- `new SyncPromise((resolve, reject) => ...)` when you settle from a callback.
+
+It is deliberately minimal and **not** a drop-in `Promise`: it supports a **single subscriber**
+(`then` may be called once, and a second call throws) and is **not chainable** (`then` returns the
+instance, not a new promise). Inside a validator you never need more than that. If you must hand a
+`SyncPromise` to code that treats it as a real, chainable promise, wrap it: `Promise.resolve(syncPromise)`.
+
+> **Warning - don't reach for a real `Promise` unnecessarily.** Returning a real `Promise` (or making
+> your function `async`) forces a microtask hop and a heavier allocation on **every** call, even when
+> the rule is purely synchronous. Across a large collection that is precisely the overhead that made
+> the pre-v11 (real-`Promise`) architecture several times slower and far heavier on the heap - see
+> [Performance](#performance). Reserve real promises for genuinely asynchronous work (I/O, a remote
+> lookup); for everything else return the value directly or via `SyncPromise`.
 
 ## Built-In Validators
 
@@ -848,4 +924,5 @@ All `Violations` have following propertie in common:
 | Violation              | NotBlank              |                                 | Input (string) is `null`, `undefined` or empty when trimmed.                        |
 | Violation              | UnknownProperty       |                                 | Additional property that is denied by default (see ignoreUnknownProperties).        |
 | Violation              | UnknownPropertyDenied |                                 | Explicitly denied additional property.                                              |
+| Violation              | Cycle                 |                                 | The value being validated contains a reference cycle (self-referential data).       |
 | DiscriminatorViolation | Discriminator         | expectedOneOf: string[]         | Invalid discriminator value: `expectedOneOf` is a list of known types.              |
