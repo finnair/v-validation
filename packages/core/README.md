@@ -23,7 +23,7 @@ Or [`npm`](https://www.npmjs.com/):
 npm install @finnair/v-validation
 ```
 
-## Major Changes (Coming) in Version 11
+## Major Changes in Version 11
 
 ### Breaking Changes
 
