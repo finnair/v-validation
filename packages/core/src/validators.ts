@@ -175,7 +175,7 @@ export class SyncPromise<T> implements PromiseLike<T> {
     }
   }
 
-  then<R1 = T, R2 = never>(onFulfilled?: ((value: T) => any) | null, onRejected?: ((error: any) => any) | null): PromiseLike<R1 | R2> {
+  then<R1 = T, R2 = never>(onFulfilled: ((value: T) => any), onRejected: ((error: any) => any)): PromiseLike<R1 | R2> {
     if (this.state === SyncPromise.DELIVERED || this.subscribed) {
       throw new Error('SyncPromise supports a single subscriber: then() has already been called. Use Promise.resolve(syncPromise) for a chainable Promise.');
     }
@@ -183,12 +183,12 @@ export class SyncPromise<T> implements PromiseLike<T> {
       this.state = SyncPromise.DELIVERED;
       const value = this.value;
       this.value = undefined;
-      onFulfilled!(value);
+      onFulfilled(value);
     } else if (this.state === SyncPromise.REJECTED) {
       this.state = SyncPromise.DELIVERED;
       const error = this.value;
       this.value = undefined;
-      onRejected!(error);
+      onRejected(error);
     } else {
       this.subscribed = true;
       this.onFulfilled = onFulfilled;
