@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [11.0.1](https://github.com/finnair/v-validation/compare/v10.2.1...v11.0.1) (2026-09-08)
+
+### Features
+
+- internal validator architecture optimized for both sync and async rules ([#144](https://github.com/finnair/v-validation/issues/144)) ([ca2d9f4](https://github.com/finnair/v-validation/commit/ca2d9f4b3a1709811278720405ce45e6cee2c232))
+
 # [11.0.0](https://github.com/finnair/v-validation/compare/v10.2.1...v11.0.0) (2026-09-07)
 
 ### Features
