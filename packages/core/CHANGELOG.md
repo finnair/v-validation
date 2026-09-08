@@ -9,17 +9,22 @@ See [Conventional Commits](https://conventionalcommits.org) for commit guideline
 
 - **deps:** let consumers select uuid lib version via peerDependency ([#148](https://github.com/finnair/v-validation/issues/148)) ([49f7550](https://github.com/finnair/v-validation/commit/49f75508a78af0aea337c0c110005322b3e11043))
 
-### Features
-
-- hybrid architecture with full support for pure callbacks and promises ([#147](https://github.com/finnair/v-validation/issues/147)) ([aaa5225](https://github.com/finnair/v-validation/commit/aaa522588989bb471c2174125cd331756298bb06))
-- internal validator architecture optimized for both sync and async rules ([#144](https://github.com/finnair/v-validation/issues/144)) ([ca2d9f4](https://github.com/finnair/v-validation/commit/ca2d9f4b3a1709811278720405ce45e6cee2c232))
-
 # [11.0.0](https://github.com/finnair/v-validation/compare/v10.2.1...v11.0.0) (2026-09-07)
 
+See [Major Changes in Version 11](README.md#major-changes-in-version-11).
+
+### Breaking Changes
+
+- `ObjectValidator.validateFilteredPath` removed. Use `ObjectValidator.pick/omit` and `V.if` instead
+- `V.anyOf` semantics clarified and fixed: multiple valid conversions must be `deepEquals`
+
+
 ### Features
 
-- hybrid architecture with full support for pure callbacks and promises ([#147](https://github.com/finnair/v-validation/issues/147)) ([aaa5225](https://github.com/finnair/v-validation/commit/aaa522588989bb471c2174125cd331756298bb06))
 - internal validator architecture optimized for both sync and async rules ([#144](https://github.com/finnair/v-validation/issues/144)) ([ca2d9f4](https://github.com/finnair/v-validation/commit/ca2d9f4b3a1709811278720405ce45e6cee2c232))
+- configurable `propertyOrder` for `ObjectValidator` allowing it to skip missing optional properties that are not included in `propertyOrder`
+- deterministic cycle detection
+- hybrid architecture with full support for pure callbacks and promises ([#147](https://github.com/finnair/v-validation/issues/147)) ([aaa5225](https://github.com/finnair/v-validation/commit/aaa522588989bb471c2174125cd331756298bb06))
 
 ## [10.2.1](https://github.com/finnair/v-validation/compare/v10.2.0...v10.2.1) (2026-02-03)
 
