@@ -76,76 +76,132 @@ export class LuxonValidator<Out extends LuxonDateTime> extends Validator<Out> {
   }
 }
 
-const datePattern = /^\d{4}-\d{2}-\d{2}$/;
+/**
+ * Resolve an ISO offset into a cached `FixedOffsetZone` from its already-captured parts: the
+ * `[+-]` `sign`, two-digit `hours` and optional two-digit `minutes` groups. `sign` is `undefined`
+ * for a `Z` (UTC) offset, in which case `hours`/`minutes` are absent too. Reusing the pattern's
+ * capturing groups avoids re-parsing the offset substring here. `FixedOffsetZone.instance` caches
+ * instances (and returns the shared UTC instance for a zero offset), so this stays allocation free
+ * for repeated offsets.
+ */
+function offsetZone(sign: string | undefined, hours: string | undefined, minutes: string | undefined): FixedOffsetZone {
+  if (sign === undefined) {
+    return FixedOffsetZone.utcInstance;
+  }
+  const offset = +hours! * 60 + (minutes ? +minutes : 0);
+  return FixedOffsetZone.instance(sign === '-' ? -offset : offset);
+}
 
-function localDate(options: DateTimeOptions = { setZone: true }) {
+// Capturing groups: year, month, day. The pattern only guarantees the shape, so out-of-range
+// values (e.g. an invalid leap day) still yield an invalid DateTime that fails validation.
+const datePattern = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+function localDate() {
   return new LuxonValidator({
     type: 'Date',
     proto: LocalDateLuxon,
     pattern: datePattern,
-    parser: (value: string) => DateTime.fromISO(value, { zone: FixedOffsetZone.utcInstance }),
+    parser: (_value: string, match: RegExpExecArray) => DateTime.utc(+match[1], +match[2], +match[3]),
   });
 }
 
-const timePattern = /^\d{2}:\d{2}:\d{2}$/;
+// Capturing groups: hour, minute, second. LocalTimeLuxon discards the date, so any date works.
+const timePattern = /^(\d{2}):(\d{2}):(\d{2})$/;
 
-function localTime(options: DateTimeOptions = { zone: FixedOffsetZone.utcInstance }) {
+function localTime() {
   return new LuxonValidator({
     type: 'Time',
     proto: LocalTimeLuxon,
     pattern: timePattern,
-    parser: (value: string) => DateTime.fromISO(value, options),
+    parser: (_value: string, match: RegExpExecArray) => DateTime.utc(1970, 1, 1, +match[1], +match[2], +match[3]),
   });
 }
 
-const localDateTimePattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/;
+// Capturing groups: year, month, day, hour, minute, second.
+const localDateTimePattern = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})$/;
 
-function localDateTime(options: DateTimeOptions = { zone: FixedOffsetZone.utcInstance }) {
+function localDateTime() {
   return new LuxonValidator({
     type: 'DateTime',
     proto: LocalDateTimeLuxon,
     pattern: localDateTimePattern,
-    parser: (value: string) => DateTime.fromISO(value, options),
+    parser: (_value: string, match: RegExpExecArray) =>
+      DateTime.utc(+match[1], +match[2], +match[3], +match[4], +match[5], +match[6]),
   });
 }
 
-const dateTimeTzPattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:Z|[+-]\d{2}(?::?\d{2})?)$/;
+// Capturing groups: year, month, day, hour, minute, second, then the offset split into sign,
+// hours and (optional) minutes; all three offset groups are absent for a `Z` (UTC) offset. The
+// DateTime is built in the parsed fixed-offset zone; the *Utc wrappers convert to UTC during
+// normalization.
+const dateTimeTzPattern = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:Z|([+-])(\d{2})(?::?(\d{2}))?)$/;
 
-function dateTime(options: DateTimeOptions = { setZone: true }) {
+function parseDateTimeTz(match: RegExpExecArray): DateTime {
+  return DateTime.fromObject(
+    {
+      year: +match[1],
+      month: +match[2],
+      day: +match[3],
+      hour: +match[4],
+      minute: +match[5],
+      second: +match[6],
+    },
+    { zone: offsetZone(match[7], match[8], match[9]) },
+  );
+}
+
+function dateTime() {
   return new LuxonValidator({
     type: 'DateTime',
     proto: DateTimeLuxon,
     pattern: dateTimeTzPattern,
-    parser: (value: string) => DateTime.fromISO(value, options),
+    parser: (_value: string, match: RegExpExecArray) => parseDateTimeTz(match),
   });
 }
 
-function dateTimeUtc(options: DateTimeOptions = { zone: FixedOffsetZone.utcInstance }) {
+function dateTimeUtc() {
   return new LuxonValidator({
     type: 'DateTime',
     proto: DateTimeUtcLuxon,
     pattern: dateTimeTzPattern,
-    parser: (value: string) => DateTime.fromISO(value, options),
+    parser: (_value: string, match: RegExpExecArray) => parseDateTimeTz(match),
   });
 }
 
-const dateTimeMillisPattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}(?:Z|[+-]\d{2}(?::?\d{2})?)$/;
+// Capturing groups: year, month, day, hour, minute, second, millisecond, then the offset split
+// into sign, hours and (optional) minutes; all three offset groups are absent for a `Z` offset.
+const dateTimeMillisPattern = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})\.(\d{3})(?:Z|([+-])(\d{2})(?::?(\d{2}))?)$/;
 
-function dateTimeMillis(options: DateTimeOptions = { setZone: true }) {
+function parseDateTimeMillisTz(match: RegExpExecArray): DateTime {
+  return DateTime.fromObject(
+    {
+      year: +match[1],
+      month: +match[2],
+      day: +match[3],
+      hour: +match[4],
+      minute: +match[5],
+      second: +match[6],
+      millisecond: +match[7],
+    },
+    { zone: offsetZone(match[8], match[9], match[10]) },
+  );
+}
+
+function dateTimeMillis() {
   return new LuxonValidator<DateTimeMillisLuxon>({
     type: 'DateTimeMillis',
     proto: DateTimeMillisLuxon,
     pattern: dateTimeMillisPattern,
-    parser: (value: string) => DateTime.fromISO(value, options),
+    parser: (_value: string, match: RegExpExecArray) => parseDateTimeMillisTz(match),
   });
 }
 
-function dateTimeMillisUtc<DateTimeMillisUtcLuxon>(options: DateTimeOptions = { zone: FixedOffsetZone.utcInstance }) {
+function dateTimeMillisUtc() {
   return new LuxonValidator({
     type: 'DateTimeMillis',
     proto: DateTimeMillisUtcLuxon,
     pattern: dateTimeMillisPattern,
-    parser: (value: string) => DateTime.fromISO(value, options),
+    parser: (_value: string, match: RegExpExecArray) => parseDateTimeMillisTz(match),
   });
 }
 
