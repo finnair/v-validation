@@ -10,11 +10,32 @@ describe('path', () => {
     expect(Path.property('@foo').property('a5').property('http://xmlns.com/foaf/0.1/name').toJSON()).toEqual('$["@foo"].a5["http://xmlns.com/foaf/0.1/name"]'));
 
   describe('of', () => {
-    test('equal to path constructed by builder', () => expect(Path.of(0, 'foo')).toEqual(Path.index(0).property('foo')));
+    test('equal to path constructed by builder', () => expect(Path.of(0, 'foo').equals(Path.index(0).property('foo'))).toBe(true));
 
-    test('without root', () => expect(Path.of(0, 'foo')).toEqual(Path.index(0).property('foo')));
+    test('without root', () => expect(Path.of(0, 'foo').equals(Path.index(0).property('foo'))).toBe(true));
 
     test('alias for root', () => expect(Path.of()).toEqual(Path.ROOT));
+  });
+
+  describe('freeze', () => {
+    test('lazily-built path structurally equals its eager counterpart', () =>
+      // Guards the invariant that materializing a lazy path yields the exact same object shape
+      // as eager construction, so structural deep-equality (used by consumers and tests) holds.
+      expect(Path.index(0).property('foo').freeze()).toEqual(Path.of(0, 'foo')));
+
+    test('deeply-nested lazy path structurally equals its eager counterpart', () =>
+      expect(Path.property('a').index(1).property('b').freeze()).toEqual(Path.of('a', 1, 'b')));
+
+    test('returns the same instance', () => {
+      const path = Path.index(0).property('foo');
+      expect(path.freeze()).toBe(path);
+    });
+
+    test('is idempotent on an already-eager path', () => {
+      const path = Path.of(0, 'foo');
+      expect(path.freeze()).toBe(path);
+      expect(path.freeze()).toEqual(Path.of(0, 'foo'));
+    });
   });
 
   describe('iterable path', () => {
@@ -118,8 +139,18 @@ describe('path', () => {
     expect(path).toEqual(Path.of('parent', 'nested', 0));
   });
 
+  test('parent of a lazy path returns the stored parent instance', () => {
+    // A not-yet-materialized (lazy) path keeps a reference to the exact Path it was built from,
+    // so parent() returns that instance directly instead of rebuilding it (and without forcing
+    // materialization). Identity (toBe) is what distinguishes this fast path from the slow branch,
+    // which would allocate a new, structurally-equal-but-not-identical Path.
+    const parent = Path.property('parent').property('nested');
+    const child = parent.index(0);
+    expect(child.parent()).toBe(parent);
+  });
+
   test('child', () => {
-    expect(Path.of('foo').child(1).child('bar')).toEqual(Path.of('foo', 1, 'bar'));
+    expect(Path.of('foo').child(1).child('bar').equals(Path.of('foo', 1, 'bar'))).toBe(true);
   });
 
   describe('equals', () => {

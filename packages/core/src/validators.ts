@@ -350,7 +350,10 @@ export class ValidationError extends Error {
 }
 
 export class Violation {
-  constructor(public readonly path: Path, public readonly type: string, public readonly invalidValue?: any) { }
+  public readonly path: Path
+  constructor(path: Path, public readonly type: string, public readonly invalidValue?: any) {
+    this.path = path.freeze();
+  }
 }
 
 export class TypeMismatch extends Violation {

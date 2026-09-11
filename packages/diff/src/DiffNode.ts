@@ -81,7 +81,7 @@ export class DiffNode {
   getScalarChange(includeObjects = false): undefined | Change {
     if (this.isScalarChange(includeObjects)) {
       const change: { -readonly [P in keyof Change]: Change[P] } = {
-        path: this.path, 
+        path: this.path.freeze(),
       };
       if (this.oldType) {
         change.oldValue = scalarValue(this.oldType, this.oldValue);
@@ -224,9 +224,9 @@ function* changedPathGenerator(node: DiffNode, includeObjects = false): Generato
 function* patchGenerator(node: DiffNode): Generator<Patch> {
   if (node.isChange) {
     if (node.newType === undefined) {
-      yield { path: node.path }
+      yield { path: node.path.freeze() }
     } else {
-      yield { path: node.path, value: node.newValue }
+      yield { path: node.path.freeze(), value: node.newValue }
     }
   } else if (node.children) {
     for (const child of node.children.values()) {
