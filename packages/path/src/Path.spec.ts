@@ -140,6 +140,48 @@ describe('path', () => {
     })
   });
 
+  describe('startsWith', () => {
+    test('a path starts with a proper prefix of itself', () => {
+      expect(Path.of('a', 'b', 'c').startsWith(Path.of('a', 'b'))).toBe(true);
+    });
+
+    test('a path starts with itself', () => {
+      expect(Path.of('a', 'b').startsWith(Path.of('a', 'b'))).toBe(true);
+    });
+
+    test('every path starts with ROOT', () => {
+      expect(Path.of('a').startsWith(Path.ROOT)).toBe(true);
+      expect(Path.ROOT.startsWith(Path.ROOT)).toBe(true);
+    });
+
+    test('mixed property/index prefix', () => {
+      expect(Path.of('a', 0, 'b').startsWith(Path.of('a', 0))).toBe(true);
+    });
+
+    test('diverging component is not a prefix', () => {
+      expect(Path.of('a', 'b').startsWith(Path.of('a', 'c'))).toBe(false);
+    });
+
+    test('sibling paths do not start with each other', () => {
+      expect(Path.of('left').startsWith(Path.of('right'))).toBe(false);
+      expect(Path.of('right').startsWith(Path.of('left'))).toBe(false);
+    });
+
+    test('differing index is not a prefix', () => {
+      expect(Path.of('a', 0).startsWith(Path.of('a', 1))).toBe(false);
+    });
+
+    test('a longer path is not a prefix', () => {
+      expect(Path.of('a').startsWith(Path.of('a', 'b'))).toBe(false);
+      expect(Path.of('a').startsWith(Path.of('b', 'c'))).toBe(false);
+    });
+
+    test('string and number indexes match, consistent with equals', () => {
+      expect(Path.of('a', 0, 'b').startsWith(Path.of('a', '0'))).toBe(true);
+      expect(Path.of('a', '0').startsWith(Path.of('a', 0))).toBe(true);
+    });
+  });
+
   describe('validate components', () => {
     test('string is not valid index', () => {
       const component: any = 'foo';

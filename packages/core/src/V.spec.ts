@@ -825,17 +825,50 @@ describe('objects', () => {
       expect(result.getValue()).toEqual({ first: 'root', left: { first: 'shared' }, right: { first: 'shared' } });
     });
 
-    test('same object validated concurrently by different validators (allOf) is valid', async () => {
-      // With a real async rule, the first schema is still in progress (entered, not yet settled)
-      // when allOf runs the same object through the second schema. Cycle detection is keyed by
-      // validator, so registering the same object under a second, different validator is not a
-      // cycle (exercises ValidationContext.enterValidation's "different validator" branch).
-      const asyncPassthrough = V.fn((value: any) => Promise.resolve(value));
-      const schemaA = V.object({ properties: { value: asyncPassthrough } });
-      const schemaB = V.object({ properties: { value: asyncPassthrough } });
-      const result = await V.allOf(schemaA, schemaB).validate({ value: 'x' });
+    test('asynchronously validated DAG is valid', async () => {
+      interface Tree {
+        left?: Tree;
+        right?: Tree;
+      }
+      const tree = V.objectType()
+        .properties({
+          left: V.optionalStrict(V.fn((value: any, path: Path, ctx: ValidationContext): Promise<Tree> => Promise.resolve(tree.validatePath(value, path, ctx)))),
+          right: V.optionalStrict(V.fn((value: any, path: Path, ctx: ValidationContext): Promise<Tree> => Promise.resolve(tree.validatePath(value, path, ctx))))
+        })
+        .build();
+      
+      const child = {};
+      const parent = { left: child, right: child };
+      
+      const result = await tree.validate(parent);
       expect(result.isSuccess()).toBe(true);
-      expect(result.getValue()).toEqual({ value: 'x' });
+      expect(result.getValue()).toEqual(parent);
+    });
+
+    test('shared object that is itself cyclic is caught on every branch (async, interleaved)', async () => {
+      // The hard case: a single object is both shared across sibling branches (a DAG) AND part of a
+      // reference cycle (child.self === child), validated with a real async rule so the branches are
+      // in progress concurrently. Cycle detection must flag the cycle on *both* branches - a naive
+      // "one path per object, delete on exit" scheme lets whichever branch settles first clear the
+      // other's guard, so the surviving branch recurses until the stack overflows.
+      let node: any;
+      node = V.objectType()
+        .properties({
+          self: V.optionalStrict(V.fn((value: any, path: Path, ctx: ValidationContext): Promise<any> => Promise.resolve(node.validatePath(value, path, ctx)))),
+          left: V.optionalStrict(V.fn((value: any, path: Path, ctx: ValidationContext): Promise<any> => Promise.resolve(node.validatePath(value, path, ctx)))),
+          right: V.optionalStrict(V.fn((value: any, path: Path, ctx: ValidationContext): Promise<any> => Promise.resolve(node.validatePath(value, path, ctx)))),
+        })
+        .build();
+      const child: any = {};
+      child.self = child;
+      const parent = { left: child, right: child };
+
+      const result = await node.validate(parent);
+      expect(result.isSuccess()).toBe(false);
+      expect(result.getViolations()).toEqual([
+        defaultViolations.cycle(Path.of('left', 'self')),
+        defaultViolations.cycle(Path.of('right', 'self')),
+      ]);
     });
   });
 

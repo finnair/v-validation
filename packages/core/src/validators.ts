@@ -23,44 +23,65 @@ export class ValidationContext {
   constructor(public readonly options: ValidatorOptions) { }
 
   /**
-   * Path-scoped cycle detection. Tracks the `(object, validator)` pairs whose validation is
-   * currently in progress on the path from the root to the value being validated. It is keyed by
-   * validator because `anyOf`/`allOf`/`oneOf` legitimately run the *same* object through several
-   * *different* validators - only the same validator re-entering the same object is a cycle.
+   * Path-scoped cycle detection. For each object currently being validated, tracks the paths at
+   * which its validation is in progress on the way down from the root. Keyed by object (not by
+   * validator) so that the same object run through several validators *at the same path* -
+   * `anyOf`/`allOf`/`oneOf` - is not a cycle; only re-entering an object as a *descendant* of a
+   * path already in progress for it is.
    *
-   * Container validators (objects, arrays, maps, sets) call `enterValidation` before descending
-   * into children and `leaveValidation` once they settle. Because the pair is removed on exit, the
-   * map only ever holds the current path, so a DAG (the same object reached again via an acyclic
-   * path) is not mistaken for a cycle and the memory cost is bounded by nesting depth, not object
-   * count.
+   * A single object can be in progress at several paths at once when it is shared across sibling
+   * branches (a DAG) validated concurrently, and `leaveValidation` must remove exactly the path it
+   * settled - a plain delete-by-object would pull a still-live sibling's cycle guard out from under
+   * it. The overwhelmingly common case is an object reached at just one path, so the entry holds a
+   * bare `Path` and only promotes to a `Path[]` when a second concurrent path appears; this keeps
+   * the hot path allocation-free while still tracking every live path. Either way the entry is
+   * cleared on exit, so a DAG (an object reached again via an acyclic path) is not mistaken for a
+   * cycle and memory stays bounded by nesting depth, not object count.
    */
-  private readonly inProgress = new Map<object, Set<Validator>>();
+  private readonly inProgress = new Map<object, Path | Path[]>();
 
   /**
-   * Marks validation of `value` by `validator` as in progress. Returns `true` if the same pair is
-   * already in progress - i.e. a reference cycle - in which case the caller must not descend and
-   * must not call `leaveValidation`. Only called for object values (`typeof value === 'object'`).
+   * Marks validation of `value` at `path` as in progress. Returns `true` if `value` is already
+   * being validated at an ancestor of `path` - i.e. a reference cycle - in which case the caller
+   * must not descend and must not call `leaveValidation`. Only called for object values.
    */
-  enterValidation(value: object, validator: Validator): boolean {
-    let validators = this.inProgress.get(value);
-    if (validators === undefined) {
-      this.inProgress.set(value, new Set([validator]));
-    } else if (validators.has(validator)) {
-      return true;
+  enterValidation(value: object, path: Path): boolean {
+    const existing = this.inProgress.get(value);
+    if (existing === undefined) {
+      this.inProgress.set(value, path);
+    } else if (Array.isArray(existing)) {
+      for (let i = 0; i < existing.length; i++) {
+        const existingPath = existing[i];
+        if (existingPath.length < path.length && path.startsWith(existingPath)) {
+          return true;
+        }
+      }
+      existing.push(path);
     } else {
-      validators.add(validator);
+      if (existing.length < path.length && path.startsWith(existing)) {
+        return true;
+      }
+      this.inProgress.set(value, [existing, path]);
     }
     return false;
   }
 
-  /** Clears the `(value, validator)` pair registered by a successful `enterValidation`. */
-  leaveValidation(value: object, validator: Validator): void {
-    const validators = this.inProgress.get(value);
-    if (validators !== undefined) {
-      validators.delete(validator);
-      if (validators.size === 0) {
+  /** Clears the `path` registered by a successful `enterValidation` of `value`. */
+  leaveValidation(value: object, path: Path): void {
+    const existing = this.inProgress.get(value);
+    if (existing === undefined) {
+      return;
+    }
+    if (Array.isArray(existing)) {
+      const i = existing.findIndex(existingPath => existingPath.equals(path));
+      if (i >= 0) {
+        existing.splice(i, 1);
+      }
+      if (existing.length === 0) {
         this.inProgress.delete(value);
       }
+    } else {
+      this.inProgress.delete(value);
     }
   }
 

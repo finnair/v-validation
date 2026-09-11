@@ -30,6 +30,16 @@ export class Path {
     return this.property(key);
   }
 
+  startsWith(other: Path) {
+    for (let i = 0; i < other.path.length; i++) {
+      // Loose comparison so string and number indexes match, consistent with `equals`.
+      if (this.path[i] != other.path[i]) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   connectTo(newRootPath: Path) {
     return new Path(newRootPath.path.concat(this.path));
   }
