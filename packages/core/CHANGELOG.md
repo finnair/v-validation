@@ -3,6 +3,10 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [12.0.0](https://github.com/finnair/v-validation/compare/v11.0.1...v12.0.0) (2026-09-11)
+
+**Note:** Version bump only for package @finnair/v-validation
+
 ## [11.0.1](https://github.com/finnair/v-validation/compare/v10.2.1...v11.0.1) (2026-09-08)
 
 ### Bug Fixes
@@ -17,7 +21,6 @@ See [Major Changes in Version 11](README.md#major-changes-in-version-11).
 
 - `ObjectValidator.validateFilteredPath` removed. Use `ObjectValidator.pick/omit` and `V.if` instead
 - `V.anyOf` semantics clarified and fixed: multiple valid conversions must be `deepEquals`
-
 
 ### Features
 
