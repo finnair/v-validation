@@ -1,0 +1,310 @@
+import { describe, test, expect } from 'vitest';
+import { Path } from '@finnair/path';
+import { V } from './V.js';
+import { defaultViolations, Validator } from './validators.js';
+import { DEFAULT_MEMOIZE_MAX_SIZE } from './memoizeValidator.js';
+
+const ROOT = Path.ROOT;
+
+describe('MemoizeValidator', () => {
+  // A validator that counts how many times it actually runs and returns a fresh object each time,
+  // so a cache hit is observable both as an unchanged count and as an identical output reference.
+  const counting = () => {
+    const state = { calls: 0 };
+    const validator = V.fn((value: any) => {
+      state.calls++;
+      return { value };
+    });
+    return { state, validator };
+  };
+
+  test('validates a repeated input only once and returns the same result reference', async () => {
+    const { state, validator } = counting();
+    const memo = V.memoize(validator);
+
+    const first = (await memo.validate('x')).getValue();
+    const second = (await memo.validate('x')).getValue();
+
+    expect(state.calls).toBe(1);
+    expect(second).toBe(first);
+    expect(first).toEqual({ value: 'x' });
+  });
+
+  test('validates distinct inputs separately', async () => {
+    const { state, validator } = counting();
+    const memo = V.memoize(validator);
+
+    await memo.validate('x');
+    await memo.validate('y');
+    await memo.validate('x');
+
+    expect(state.calls).toBe(2);
+  });
+
+  test('memoizes parsed values so a primitive input maps to one shared instance', async () => {
+    // Stand-in for a Vluxon parse: an ISO-like string converted to an object.
+    const memo = V.memoize(V.fn((value: string) => ({ parsedFrom: value })));
+
+    const a = (await memo.validate('2026-09-11')).getValue();
+    const b = (await memo.validate('2026-09-11')).getValue();
+
+    expect(b).toBe(a);
+  });
+
+  test('caches an undefined result as a hit rather than re-validating', async () => {
+    let calls = 0;
+    const memo = V.memoize(
+      V.fn(() => {
+        calls++;
+        return undefined;
+      }),
+    );
+
+    expect((await memo.validate('x')).getValue()).toBeUndefined();
+    expect((await memo.validate('x')).getValue()).toBeUndefined();
+    expect(calls).toBe(1);
+  });
+
+  test('does not cache failures', async () => {
+    let calls = 0;
+    const memo = V.memoize(
+      V.fn(() => {
+        calls++;
+        throw new Error('always fails');
+      }),
+    );
+
+    const first = await memo.validate('x');
+    const second = await memo.validate('x');
+
+    expect(first.isSuccess()).toBe(false);
+    expect(second.isSuccess()).toBe(false);
+    expect(calls).toBe(2);
+  });
+
+  test('a synchronously validated DAG converts a shared value to one shared output instance', async () => {
+    // Interface is needed since the tree structure is recursive and TypeScript requires a named type for self-references.
+    interface Tree {
+      name: string;
+      left?: Tree;
+      right?: Tree;
+    }
+    const tree: Validator<Tree> = V.memoize(
+      V.objectType()
+        .properties({
+          name: V.string(),
+          left: V.optionalStrict(V.proxy(() => tree)),
+          right: V.optionalStrict(V.proxy(() => tree)),
+        })
+        .build(),
+    );
+
+    const shared = { name: 'shared' };
+    const result: any = await tree.getValid({ name: 'root', left: shared, right: shared });
+
+    expect(result.left).toEqual({ name: 'shared' });
+    expect(result.left).toBe(result.right);
+  });
+
+  describe('LRU eviction', () => {
+    test('evicts the least-recently-used entry past maxSize', async () => {
+      const { state, validator } = counting();
+      const memo = V.memoize(validator, { maxSize: 2 });
+
+      await memo.validate('a'); // [a]
+      await memo.validate('b'); // [a, b]
+      await memo.validate('c'); // [b, c] - 'a' evicted
+      expect(state.calls).toBe(3);
+
+      await memo.validate('a'); // miss: re-validated
+      expect(state.calls).toBe(4);
+
+      await memo.validate('c'); // still cached
+      expect(state.calls).toBe(4);
+    });
+
+    test('a cache hit refreshes recency so the hit entry is not the next evicted', async () => {
+      const { state, validator } = counting();
+      const memo = V.memoize(validator, { maxSize: 2 });
+
+      await memo.validate('a'); // [a]
+      await memo.validate('b'); // [a, b]
+      await memo.validate('a'); // hit -> [b, a]
+      expect(state.calls).toBe(2);
+
+      await memo.validate('c'); // [a, c] - 'b' evicted, 'a' survived
+      expect(state.calls).toBe(3);
+
+      await memo.validate('a'); // still cached
+      expect(state.calls).toBe(3);
+
+      await memo.validate('b'); // miss: 'b' had been evicted
+      expect(state.calls).toBe(4);
+    });
+  });
+
+  describe('shouldCache', () => {
+    test('caches only results the predicate accepts, so rejected ones re-validate', async () => {
+      const { state, validator } = counting();
+      // Cache only even-valued inputs; odd inputs pass through uncached.
+      const memo = V.memoize(validator, { shouldCache: result => (result.value as number) % 2 === 0 });
+
+      await memo.validate(2); // cached
+      await memo.validate(2); // hit
+      expect(state.calls).toBe(1);
+
+      await memo.validate(3); // not cached
+      await memo.validate(3); // re-validated
+      expect(state.calls).toBe(3);
+    });
+
+    test('receives both the converted result and the original input', async () => {
+      const seen: Array<[unknown, unknown]> = [];
+      const memo = V.memoize(
+        V.fn((value: string) => ({ parsedFrom: value })),
+        {
+          shouldCache: (result, value) => {
+            seen.push([result, value]);
+            return true;
+          },
+        },
+      );
+
+      const result = (await memo.validate('x')).getValue();
+      expect(seen).toEqual([[result, 'x']]);
+    });
+  });
+
+  describe('asynchronous validators are rejected', () => {
+    const asyncPassthrough = () => {
+      const state = { calls: 0 };
+      const validator = V.fn((value: any) => {
+        state.calls++;
+        return Promise.resolve({ value });
+      });
+      return { state, validator };
+    };
+
+    test('fails validation with an async-not-supported error rather than caching', async () => {
+      const { state, validator } = asyncPassthrough();
+      const memo = V.memoize(validator);
+
+      const result = await memo.validate('x');
+
+      expect(result.isSuccess()).toBe(false);
+      expect(result.getViolations()).toEqual([defaultViolations.async(ROOT)]);
+      expect(state.calls).toBe(1);
+    });
+
+    test('does not cache the late async result: every attempt re-validates and fails', async () => {
+      const { state, validator } = asyncPassthrough();
+      const memo = V.memoize(validator);
+
+      expect((await memo.validate('x')).isSuccess()).toBe(false);
+      // Let the abandoned microtask run before the second attempt.
+      await Promise.resolve();
+      expect((await memo.validate('x')).isSuccess()).toBe(false);
+
+      expect(state.calls).toBe(2);
+    });
+
+    test('an async validator that eventually rejects is still rejected up front and its late failure is ignored', async () => {
+      let calls = 0;
+      const memo = V.memoize(
+        V.fn(() => {
+          calls++;
+          return Promise.reject(new Error('rejected later'));
+        }),
+      );
+
+      const result = await memo.validate('x');
+      // Let the abandoned rejection microtask run; it must be a harmless no-op.
+      await Promise.resolve();
+
+      expect(result.isSuccess()).toBe(false);
+      expect(result.getViolations()).toEqual([defaultViolations.async(ROOT)]);
+      expect(calls).toBe(1);
+    });
+
+    test('routes a synchronous throw from the wrapped validator through the failure callback (not the async path)', async () => {
+      class Throwing extends Validator<any> {
+        calls = 0;
+        validatePathV2(): void {
+          this.calls++;
+          throw new Error('boom');
+        }
+      }
+      const throwing = new Throwing();
+      const memo = V.memoize(throwing);
+
+      const first = await memo.validate('x');
+      const second = await memo.validate('x');
+
+      expect(first.isSuccess()).toBe(false);
+      expect(second.isSuccess()).toBe(false);
+      // Reported as the thrown error, not as an Async violation, and never cached (re-validated).
+      expect(first.getViolations()[0].type).toBe('Error');
+      expect(throwing.calls).toBe(2);
+    });
+
+    test('ignores a throw that happens after the validator already settled', async () => {
+      // A misbehaving validator that delivers a result and then throws: the settled outcome wins and
+      // the spurious throw is swallowed rather than reported a second time.
+      class SettleThenThrow extends Validator<any> {
+        validatePathV2(value: any, path: any, ctx: any, success: any): void {
+          success(value);
+          throw new Error('after settle');
+        }
+      }
+      const memo = V.memoize(new SettleThenThrow());
+
+      const first = await memo.validate('x');
+      const second = await memo.validate('x');
+
+      expect(first.isSuccess()).toBe(true);
+      expect(first.getValue()).toBe('x');
+      expect(second.getValue()).toBe('x'); // cached from the successful settle
+    });
+
+    test('surfaces as a violation at the property path when nested, without crashing', async () => {
+      const parent = V.objectType()
+        .properties({ when: V.memoize(V.fn((value: any) => Promise.resolve(value))) })
+        .build();
+
+      const result = await parent.validate({ when: 'x' });
+
+      expect(result.isSuccess()).toBe(false);
+      expect(result.getViolations()).toEqual([defaultViolations.async(Path.of('when'))]);
+    });
+  });
+
+  describe('options', () => {
+    test('defaults to DEFAULT_MEMOIZE_MAX_SIZE', async () => {
+      const { state, validator } = counting();
+      const memo = V.memoize(validator);
+
+      for (let i = 0; i < DEFAULT_MEMOIZE_MAX_SIZE; i++) {
+        await memo.validate(`v${i}`);
+      }
+      const callsAfterFill = state.calls;
+      await memo.validate('v0'); // still within the default window, so cached
+
+      expect(callsAfterFill).toBe(DEFAULT_MEMOIZE_MAX_SIZE);
+      expect(state.calls).toBe(DEFAULT_MEMOIZE_MAX_SIZE);
+    });
+
+    test('rejects a non-positive or non-integer maxSize', () => {
+      expect(() => V.memoize(V.string(), { maxSize: 0 })).toThrow();
+      expect(() => V.memoize(V.string(), { maxSize: -1 })).toThrow();
+      expect(() => V.memoize(V.string(), { maxSize: 1.5 })).toThrow();
+    });
+  });
+
+  test('delegates skipUndefined to the wrapped validator', () => {
+    const wrappedFalse = V.string();
+    const wrappedTrue = V.optionalStrict(V.string());
+
+    expect(V.memoize(wrappedFalse).skipUndefined()).toBe(wrappedFalse.skipUndefined());
+    expect(V.memoize(wrappedTrue).skipUndefined()).toBe(wrappedTrue.skipUndefined());
+  });
+});

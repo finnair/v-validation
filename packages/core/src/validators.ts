@@ -490,6 +490,7 @@ export enum ValidatorType {
   Pattern = 'Pattern',
   NotUndefined = "NotUndefined",
   Cycle = 'Cycle',
+  Async = 'Async',
 }
 
 export const defaultViolations = {
@@ -511,6 +512,7 @@ export const defaultViolations = {
   unknownProperty: (path: Path) => new Violation(path, ValidatorType.UnknownProperty),
   unknownPropertyDenied: (path: Path) => new Violation(path, ValidatorType.UnknownPropertyDenied),
   cycle: (path: Path = ROOT) => new Violation(path, ValidatorType.Cycle),
+  async: (path: Path = ROOT) => new Violation(path, ValidatorType.Async),
 };
 
 export interface AssertTrue<In = unknown> {

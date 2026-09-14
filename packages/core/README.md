@@ -642,6 +642,33 @@ recursion = validator;
 assertType<EqualTypes<ComparableType<VType<typeof validator>>, ComparableType<RecursiveModel>>>(true);
 ```
 
+### <a name="proxy">V.proxy</a>
+
+`V.proxy` does the same with less ceremony: it defers construction to a factory that is called at
+most once, on first use, so the validator can reference itself.
+
+```typescript
+interface RecursiveModel {
+  first: string;
+  next?: RecursiveModel;
+}
+
+const validator: Validator<RecursiveModel> = V.objectType()
+  .properties({
+    first: V.string(),
+    next: V.optionalStrict(V.proxy(() => validator)),
+  })
+  .build();
+```
+
+The explicit `Validator<RecursiveModel>` annotation is required: TypeScript cannot infer a type that
+is referenced in its own initializer.
+
+_NOTE: a proxy cannot report `skipUndefined`, since that is called while the enclosing
+`ObjectValidator` is being constructed - before the proxied validator exists. Wrap the proxy in
+`V.optional`/`V.optionalStrict` rather than proxying an already-optional validator: the latter still
+validates correctly, but the optional property is visited even when `undefined`._
+
 Another option is to use [`V.schema`](#schema).
 
 _NOTE: a recursive **model** is fully supported; recursive (cyclic) **data** is not. Since v11, if the
@@ -740,6 +767,81 @@ or a different unknown enum value. Pass a second argument to use a different ide
 The set of reported findings is retained for the lifetime of the returned logger. It is bounded by
 the schema - violation type times normalized path times enum value - not by the amount of data
 validated.
+
+## <a name="memoization">Memoization</a>
+
+`V.memoize` wraps any validator and caches its **successful** results, keyed by the input value, so a
+repeated input is returned from cache instead of being validated again. The most common use is
+avoiding repeated parsing of the same value - for example the same ISO date string parsed into a
+Luxon `DateTime` over and over:
+
+```typescript
+import { V } from '@finnair/v-validation';
+import { Vluxon } from '@finnair/v-validation-luxon';
+
+const date = V.memoize(Vluxon.localDate());
+
+const a = (await date.validate('2026-09-11')).getValue();
+const b = (await date.validate('2026-09-11')).getValue();
+
+a === b; // true - parsed once, same instance returned
+```
+
+Because the cache is keyed by the raw input value, it works for primitive inputs (parsed strings and
+numbers) as well as objects (by reference identity). When the same object is validated more than once
+in a single **synchronous** validation - a DAG where a value is shared across the graph - it converts
+to one shared output instance:
+
+```typescript
+// Interface is needed since the tree structure is recursive and TypeScript requires a named type for self-references.
+interface Tree {
+  name: string;
+  left?: Tree;
+  right?: Tree;
+}
+const tree: Validator<Tree> = V.memoize(V.objectType().properties({ 
+  name: V.string(),
+  left: V.optionalStrict(V.proxy(() => tree)),
+  right: V.optionalStrict(V.proxy(() => tree)),
+}).build());
+
+const shared = { name: 'shared' };
+const result: any = await tree.getValid({ name: 'root', left: shared, right: shared });
+
+result.left === result.right; // true
+```
+
+The cache is a bounded LRU that lives on the validator instance and persists across `validate()`
+calls, so create the memoizing validator **once** and reuse it. When it grows past `maxSize`
+(default `1000`) the least-recently-used entry is evicted:
+
+```typescript
+const date = V.memoize(Vluxon.localDate(), { maxSize: 10000 });
+```
+
+Pass a `shouldCache` predicate to keep outliers out of the cache, so that rare values do not evict
+common ones. It runs on a cache miss after successful validation, receiving the converted result and
+the original input; return `false` to pass the result through without caching it. For example, cache
+only timestamps within the last 24 hours:
+
+```typescript
+const recent = V.memoize(Vluxon.dateTime(), {
+  shouldCache: dateTime => dateTime.dateTime.diffNow('hours').hours >= -24,
+});
+```
+
+Three things to keep in mind:
+
+- **Only synchronous validators are supported.** An asynchronous result settles after validation
+  returns, with no guarantee of when - or whether - it arrives, so it cannot be cached or returned
+  meaningfully. Wrapping an async validator fails validation with an `Async` violation. The built-in
+  `Vluxon` parsers are synchronous, as are the core converting validators.
+- **Only successes are cached.** A failure's violations carry the `path` at which the value appeared,
+  so replaying them elsewhere would report the wrong path, and the same input might still be valid in
+  another position.
+- **The wrapped validator must be a pure function of its input.** The cache key is the input value
+  alone, so a validator whose result depends on the active `group` or other `ValidatorOptions` should
+  not be memoized.
 
 ## Custom Validators
 
@@ -893,6 +995,8 @@ Unless otherwise stated, all validators require non-null and non-undefined value
 | if...elseif...else      | fn: AssertTrue, ...validators: Validator[]                       | Configures validators (`compositionOf`) to be executed for cases where if/elseif AssertTrue fn returns true.                              |
 | whenGroup...otherwise   | group: GroupOrName, ...validators: Validator[]                   | Defines validation rules (`compositionOf`) to be executed for given `ValidatorOptions.group`.                                             |
 | json                    | ...validators: Validator[]                                       | Parse JSON input and validate it against given validators.                                                                                |
+| memoize                 | validator: Validator, options?: MemoizeValidatorOptions          | Caches a wrapped validator's successful results by input value in a bounded LRU (`maxSize`, `shouldCache`). See [Memoization](#memoization). |
+| proxy                   | factory: () => Validator                                         | Defers validator construction to a factory, for e.g. self-reference. See [V.proxy](#proxy).  |
 
 ## Violations
 
@@ -925,4 +1029,5 @@ All `Violations` have following propertie in common:
 | Violation              | UnknownProperty       |                                 | Additional property that is denied by default (see ignoreUnknownProperties).        |
 | Violation              | UnknownPropertyDenied |                                 | Explicitly denied additional property.                                              |
 | Violation              | Cycle                 |                                 | The value being validated contains a reference cycle (self-referential data).       |
+| Violation              | Async                 |                                 | An asynchronous validator was wrapped in `V.memoize`, which supports only sync ones. |
 | DiscriminatorViolation | Discriminator         | expectedOneOf: string[]         | Invalid discriminator value: `expectedOneOf` is a list of known types.              |

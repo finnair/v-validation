@@ -59,6 +59,8 @@ import {
 } from './validators.js';
 import {ObjectModel, ObjectValidator, ObjectNormalizer } from './objectValidator.js';
 import { ObjectValidatorBuilder } from './objectValidatorBuilder.js';
+import { MemoizeValidator, MemoizeValidatorOptions } from './memoizeValidator.js';
+import { ProxyValidator, ProxyValidatorFactory } from './proxyValidator.js';
 
 interface AllOfParameters {
   <In, Out1, Out2>(v1: Validator<Out1, In>, v2: Validator<Out2, In>): Validator<Out1 & Out2, In>;
@@ -171,6 +173,7 @@ export const V = {
 
   jsonBigInt: () => jsonBigIntValidator,
 
+  /** Use `V.objectType()` instead for typed validators. */
   object: <T, I = T>(model: ObjectModel<T, I>) => new ObjectValidator<T, I>(model),
 
   objectType: () => new ObjectValidatorBuilder(),
@@ -225,7 +228,27 @@ export const V = {
 
   hasValue: <InOut>(expectedValue: InOut) => new HasValueValidator<InOut>(expectedValue),
 
-  json: <Out, T1, T2, T3, T4, T5>(...validators: CompositionParameters<Out, string, T1, T2, T3, T4, T5>) => 
+  json: <Out, T1, T2, T3, T4, T5>(...validators: CompositionParameters<Out, string, T1, T2, T3, T4, T5>) =>
     new JsonValidator(maybeCompositionOf(...validators)),
+
+  /**
+   * Defers validator construction to a factory, allowing a validator to reference itself - e.g. a
+   * recursive tree type. The factory is called at most once, on first use, and its result is reused.
+   *
+   * NOTE: A proxy cannot report `skipUndefined` (see {@link ProxyValidator}), so wrap the proxy in
+   * `V.optional`/`V.optionalStrict` rather than the other way around.
+   *
+   * @param factory A function that produces a `Validator` instance when called.
+   * @returns A `ProxyValidator` that delegates to the validator produced by the factory.
+   */
+  proxy: <Out = unknown, In = unknown>(factory: ProxyValidatorFactory<Out, In>) => new ProxyValidator<Out, In>(factory),
+
+  /**
+   * Wraps a validator so that successful results are memoized by input value in a bounded LRU cache.
+   * A repeated input returns the earlier result directly - e.g. the same ISO string parses to one
+   * shared `DateTime` instance. See {@link MemoizeValidator}.
+   */
+  memoize: <Out, In>(validator: Validator<Out, In>, options?: MemoizeValidatorOptions<Out, In>) =>
+    new MemoizeValidator<Out, In>(validator, options),
 };
 Object.freeze(V);
