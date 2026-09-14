@@ -216,15 +216,15 @@ class PropertiesValidator<LocalType = unknown, In = unknown> extends Validator<L
     let expectedResponses = 1;
 
     // Cycle detection: a value that references itself through its properties would recurse forever.
-    // Register this (value, validator) pair before descending and clear it once we settle; re-entry
-    // of a pair still in progress is a cycle. See ValidationContext.enterValidation.
-    if (ctx.enterValidation(anyValue, this)) {
+    // Register this value at the current path before descending and clear it once we settle; re-entry
+    // of the same value at a descendant path is a cycle. See ValidationContext.enterValidation.
+    if (ctx.enterValidation(anyValue, path)) {
       return failure([defaultViolations.cycle(path)]);
     }
 
     const reportResult = () => {
       if (--expectedResponses === 0) {
-        ctx.leaveValidation(anyValue, this);
+        ctx.leaveValidation(anyValue, path);
         if (violations.length > 0) {
           failure(violations);
         } else {

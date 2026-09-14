@@ -73,6 +73,16 @@ export class Path {
     return this.property(key);
   }
 
+  startsWith(other: Path) {
+    for (let i = 0; i < other.path.length; i++) {
+      // Loose comparison so string and number indexes match, consistent with `equals`.
+      if (String(this.path[i]) !== String(other.path[i])) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   connectTo(newRootPath: Path) {
     return Path.newPath(newRootPath.path.concat(this.path));
   }
@@ -101,7 +111,7 @@ export class Path {
       const otherLength = other.length;
       if (otherLength === this.length) {
         for (let i = 0; i < otherLength; i++) {
-          if (other.componentAt(i) != this.componentAt(i)) {
+          if (String(other.componentAt(i)) !== String(this.componentAt(i))) {
             return false;
           }
         }
