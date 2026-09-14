@@ -172,7 +172,7 @@ export class ObjectValidator<LocalType = unknown, InheritableType = LocalType, I
 }
 
 class PropertiesValidator<LocalType = unknown, In = unknown> extends Validator<LocalType, In> {
-  private readonly validationOrder: string[];
+  private readonly validationOrder: Set<string>;
   constructor(readonly properties: Properties, readonly localProperties: Properties, readonly additionalProperties: MapEntryValidator[], propertyOrder?: string[]) {
     super();
     const validationOrder: Set<string> = new Set();
@@ -195,7 +195,7 @@ class PropertiesValidator<LocalType = unknown, In = unknown> extends Validator<L
       Object.entries(properties).forEach(registerMandatoryProperty);
       Object.entries(localProperties).forEach(registerMandatoryProperty);
     }
-    this.validationOrder = Array.from(validationOrder);
+    this.validationOrder = validationOrder;
 
     Object.freeze(this.properties);
     Object.freeze(this.localProperties);
@@ -213,17 +213,7 @@ class PropertiesValidator<LocalType = unknown, In = unknown> extends Validator<L
     const anyValue = value as any;
     const convertedObject: any = {} as LocalType;
     let violations: Violation[] = [];
-    
-    const keys = new Set<string>(this.validationOrder);
-    // Add all, including inherited keys
-    for (const key in anyValue) {
-      keys.add(key);
-    }
-    let expectedResponses = keys.size;
-
-    if (expectedResponses === 0) {
-      return success(convertedObject as LocalType);
-    }
+    let expectedResponses = 1;
 
     // Cycle detection: a value that references itself through its properties would recurse forever.
     // Register this (value, validator) pair before descending and clear it once we settle; re-entry
@@ -306,7 +296,7 @@ class PropertiesValidator<LocalType = unknown, In = unknown> extends Validator<L
       }
     };
 
-    for (const key of keys) {
+    const validateKey = (key: string) => {
       convertedObject[key] = undefined;
       const valuePath = path.property(key);
       const propertyValue = anyValue[key];
@@ -321,7 +311,18 @@ class PropertiesValidator<LocalType = unknown, In = unknown> extends Validator<L
       } catch (error) {
         reportFailure(key, error);
       }
+    };
+    for (const key of this.validationOrder) {
+      expectedResponses++;
+      validateKey(key);
     }
+    for (const key in anyValue) {
+      if (!this.validationOrder.has(key)) {
+        expectedResponses++;
+        validateKey(key);
+      }
+    }
+    reportResult();
   }
 }
 
