@@ -222,6 +222,12 @@ describe('Vluxon', () => {
         ['2019-05'], // Time zone not allowed
         ['2019-02-29'], // invalid leap date
         ['20160525'], // Valid ISO not allowed
+        ['2019-00-15'], // month 00 out of range
+        ['2019-13-15'], // month 13 out of range
+        ['2019-05-00'], // day 00 out of range
+        ['2019-05-32'], // day 32 out of range
+        ['2019-04-31'], // April has 30 days
+        ['2019-02-30'], // February never has 30 days
         [Date.now()],
       ])('%s is invalid', (value: any) => expectViolations(value, Vluxon.localDate(), defaultViolations.date(value)));
     });
@@ -284,6 +290,8 @@ describe('Vluxon', () => {
         ['24:00:01'],
         ['12:60:00'],
         ['12:00:60'],
+        ['25:00:00'], // hour out of range
+        ['99:00:00'], // hour out of range
         [Date.now()],
       ])('%s is invalid', (value: any) => expectViolations(value, Vluxon.localTime(), defaultViolations.date(value, Path.ROOT, 'Time')));
     });
@@ -350,6 +358,14 @@ describe('Vluxon', () => {
         ['2019-05-21T12:13:14.123'], // milliseconds not allowed
         ['20190521T12:13:14'], // abreviated date form not supported
         ['2019-05-21T121314'], // abreviated time form not supported
+        ['2019-00-15T12:13:14'], // month 00 out of range
+        ['2019-13-15T12:13:14'], // month 13 out of range
+        ['2019-05-00T12:13:14'], // day 00 out of range
+        ['2019-05-32T12:13:14'], // day 32 out of range
+        ['2019-04-31T12:13:14'], // April has 30 days
+        ['2019-05-21T25:00:00'], // hour out of range
+        ['2019-05-21T12:60:00'], // minute out of range
+        ['2019-05-21T12:00:60'], // second out of range
         [Date.now()],
       ])('%s is invalid', (value: any) => expectViolations(value, Vluxon.localDateTime(), defaultViolations.date(value, Path.ROOT, 'DateTime')));
     });
@@ -359,6 +375,10 @@ describe('Vluxon', () => {
         ['2020-02-29T12:00:00'],
         ['2020-02-29T00:00:00'], // leap day
       ])('%s is valid', (value: string) => expectValid(value, Vluxon.localDateTime().next(toJSON), value));
+
+      // Hour 24 means midnight of the following day - the only rollover Luxon accepts.
+      test('2019-05-21T24:00:00 is normalized to the next day', () =>
+        expectValid('2019-05-21T24:00:00', Vluxon.localDateTime().next(toJSON), '2019-05-22T00:00:00'));
     });
   });
 
@@ -419,6 +439,14 @@ describe('Vluxon', () => {
         ['2019-05-21T12:13:14+3'], // invalid zone
         ['20190521T12:13:14Z'], // abreviated date form not supported
         ['2019-05-21T121314Z'], // abreviated time form not supported
+        ['2019-00-15T12:13:14Z'], // month 00 out of range
+        ['2019-13-15T12:13:14Z'], // month 13 out of range
+        ['2019-05-00T12:13:14Z'], // day 00 out of range
+        ['2019-05-32T12:13:14Z'], // day 32 out of range
+        ['2019-04-31T12:13:14Z'], // April has 30 days
+        ['2019-05-21T25:00:00Z'], // hour out of range
+        ['2019-05-21T12:60:00Z'], // minute out of range
+        ['2019-05-21T12:00:60Z'], // second out of range
         [Date.now()],
       ])('%s is invalid', (value: any) => expectViolations(value, Vluxon.dateTime(), defaultViolations.date(value, Path.ROOT, 'DateTime')));
     });
@@ -497,6 +525,14 @@ describe('Vluxon', () => {
         ['2019-05-21T12:13:14+3'], // invalid zone
         ['20190521T12:13:14Z'], // abreviated date form not supported
         ['2019-05-21T121314Z'], // abreviated time form not supported
+        ['2019-00-15T12:13:14Z'], // month 00 out of range
+        ['2019-13-15T12:13:14Z'], // month 13 out of range
+        ['2019-05-00T12:13:14Z'], // day 00 out of range
+        ['2019-05-32T12:13:14Z'], // day 32 out of range
+        ['2019-04-31T12:13:14Z'], // April has 30 days
+        ['2019-05-21T25:00:00Z'], // hour out of range
+        ['2019-05-21T12:60:00Z'], // minute out of range
+        ['2019-05-21T12:00:60Z'], // second out of range
         [Date.now()],
       ])('%s is invalid', (value: any) => expectViolations(value, Vluxon.dateTimeUtc(), defaultViolations.date(value, Path.ROOT, 'DateTime')));
     });
@@ -577,6 +613,14 @@ describe('Vluxon', () => {
         ['2019-05-21T12:13:14.123+3'], // invalid zone
         ['20190521T12:13:14.123Z'], // abreviated date form not supported
         ['2019-05-21T121314.123Z'], // abreviated time form not supported
+        ['2019-00-15T12:13:14.123Z'], // month 00 out of range
+        ['2019-13-15T12:13:14.123Z'], // month 13 out of range
+        ['2019-05-00T12:13:14.123Z'], // day 00 out of range
+        ['2019-05-32T12:13:14.123Z'], // day 32 out of range
+        ['2019-04-31T12:13:14.123Z'], // April has 30 days
+        ['2019-05-21T25:00:00.123Z'], // hour out of range
+        ['2019-05-21T12:60:00.123Z'], // minute out of range
+        ['2019-05-21T12:00:60.123Z'], // second out of range
         [Date.now()],
       ])('%s is invalid', (value: any) => expectViolations(value, Vluxon.dateTimeMillis(), defaultViolations.date(value, Path.ROOT, 'DateTimeMillis')));
     });
@@ -657,6 +701,14 @@ describe('Vluxon', () => {
         ['2019-05-21T12:13:14.123+3'], // invalid zone
         ['20190521T12:13:14.123Z'], // abreviated date form not supported
         ['2019-05-21T121314.123Z'], // abreviated time form not supported
+        ['2019-00-15T12:13:14.123Z'], // month 00 out of range
+        ['2019-13-15T12:13:14.123Z'], // month 13 out of range
+        ['2019-05-00T12:13:14.123Z'], // day 00 out of range
+        ['2019-05-32T12:13:14.123Z'], // day 32 out of range
+        ['2019-04-31T12:13:14.123Z'], // April has 30 days
+        ['2019-05-21T25:00:00.123Z'], // hour out of range
+        ['2019-05-21T12:60:00.123Z'], // minute out of range
+        ['2019-05-21T12:00:60.123Z'], // second out of range
         [Date.now()],
       ])('%s is invalid', (value: any) => expectViolations(value, Vluxon.dateTimeMillisUtc(), defaultViolations.date(value, Path.ROOT, 'DateTimeMillis')));
     });
