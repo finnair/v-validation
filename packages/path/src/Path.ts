@@ -33,7 +33,7 @@ export class Path {
   startsWith(other: Path) {
     for (let i = 0; i < other.path.length; i++) {
       // Loose comparison so string and number indexes match, consistent with `equals`.
-      if (this.path[i] != other.path[i]) {
+      if (String(this.path[i]) !== String(other.path[i])) {
         return false;
       }
     }
@@ -65,7 +65,7 @@ export class Path {
       const otherLength = other.length;
       if (otherLength === this.length) {
         for (let i = 0; i < otherLength; i++) {
-          if (other.componentAt(i) != this.componentAt(i)) {
+          if (String(other.componentAt(i)) !== String(this.componentAt(i))) {
             return false;
           }
         }
