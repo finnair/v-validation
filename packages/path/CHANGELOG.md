@@ -3,6 +3,16 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [12.1.0](https://github.com/finnair/v-validation/compare/v12.0.0...v12.1.0) (2026-09-14)
+
+### Features
+
+- **path:** materialize Path components lazily ([#150](https://github.com/finnair/v-validation/issues/150)) ([cf5ce68](https://github.com/finnair/v-validation/commit/cf5ce68c4af9ffa83e87b3890f825bf296f1c9e6))
+
+### Performance Improvements
+
+- **core:** track cycle detection by path instead of (object, validator) pair ([#152](https://github.com/finnair/v-validation/issues/152)) ([5123c2c](https://github.com/finnair/v-validation/commit/5123c2cb4b0c3469d249622900a16f3a6cf86679))
+
 # [12.0.0](https://github.com/finnair/v-validation/compare/v11.0.1...v12.0.0) (2026-09-11)
 
 **Note:** Version bump only for package @finnair/path

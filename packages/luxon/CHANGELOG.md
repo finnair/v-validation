@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [12.1.0](https://github.com/finnair/v-validation/compare/v12.0.0...v12.1.0) (2026-09-14)
+
+### Features
+
+- **core:** V.memoize and V.proxy validators ([#153](https://github.com/finnair/v-validation/issues/153)) ([92d789b](https://github.com/finnair/v-validation/commit/92d789bb27a3e72b9f9c47cc70ff77700db13cbb))
+
 # [12.0.0](https://github.com/finnair/v-validation/compare/v11.0.1...v12.0.0) (2026-09-11)
 
 **Note:** Version bump only for package @finnair/v-validation-luxon
