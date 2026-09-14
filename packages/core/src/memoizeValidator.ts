@@ -45,6 +45,15 @@ export interface MemoizeValidatorOptions<Out = unknown, In = unknown> {
  */
 export class MemoizeValidator<Out = unknown, In = unknown> extends Validator<Out, In> {
   private readonly cache = new Map<In, Out>();
+  /**
+   * Cursor over the cache's keys, used to find the eviction victim. `Map` iterators are live and
+   * advance in insertion order, so reusing one cursor visits each key at most once instead of
+   * re-scanning the table from the front on every eviction - `keys().next()` has to skip the
+   * entries deleted by earlier evictions, which makes a fresh iterator per eviction cost
+   * O(deleted) and the eviction path degrade with `maxSize`. Held in a mutable box because the
+   * instance itself is frozen.
+   */
+  private readonly evictCursor: { it: Iterator<In> };
   readonly maxSize: number;
   private readonly shouldCache?: (result: Out, value: In) => boolean;
 
@@ -58,6 +67,7 @@ export class MemoizeValidator<Out = unknown, In = unknown> extends Validator<Out
       throw new Error(`maxSize must be an integer >= 1, got ${this.maxSize}`);
     }
     this.shouldCache = options.shouldCache;
+    this.evictCursor = { it: this.cache.keys() };
     Object.freeze(this);
   }
 
@@ -87,7 +97,7 @@ export class MemoizeValidator<Out = unknown, In = unknown> extends Validator<Out
           if (this.shouldCache === undefined || this.shouldCache(result, value)) {
             cache.set(value, result);
             if (cache.size > this.maxSize) {
-              cache.delete(cache.keys().next().value!);
+              this.evictOldest();
             }
           }
           success(result);
@@ -117,6 +127,23 @@ export class MemoizeValidator<Out = unknown, In = unknown> extends Validator<Out
       settled = true;
       failure([defaultViolations.async(path)]);
     }
+  }
+
+  /**
+   * Removes the least recently used entry, which is the cursor's next key: a hit re-inserts its key
+   * at the back and each eviction removes the key the cursor just returned, so every live key sits
+   * at or after the cursor. Eviction only runs with more than `maxSize` (>= 1) entries cached, so
+   * the cursor yields a key; it is only ever exhausted if that invariant is broken, and a fresh one
+   * then restarts from the oldest key.
+   */
+  private evictOldest(): void {
+    const cursor = this.evictCursor;
+    let next = cursor.it.next();
+    if (next.done) {
+      cursor.it = this.cache.keys();
+      next = cursor.it.next();
+    }
+    this.cache.delete(next.value as In);
   }
 
   skipUndefined(): boolean {

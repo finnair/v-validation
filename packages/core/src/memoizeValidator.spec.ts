@@ -300,6 +300,25 @@ describe('MemoizeValidator', () => {
     });
   });
 
+  test('evicts from a fresh cursor if the eviction cursor is exhausted', async () => {
+    // The cursor cannot run out while the invariant in evictOldest holds, so force the state to
+    // check the fallback still evicts exactly one entry rather than letting the cache grow.
+    const { state, validator } = counting();
+    const memo = V.memoize(validator, { maxSize: 2 });
+
+    await memo.validate('a');
+    await memo.validate('b');
+    (memo as any).evictCursor.it = new Map().keys();
+
+    await memo.validate('c');
+
+    expect((memo as any).cache.size).toBe(2);
+    expect(state.calls).toBe(3);
+    // 'a' was the oldest, so it is the one dropped.
+    await memo.validate('c');
+    expect(state.calls).toBe(3);
+  });
+
   test('delegates skipUndefined to the wrapped validator', () => {
     const wrappedFalse = V.string();
     const wrappedTrue = V.optionalStrict(V.string());
