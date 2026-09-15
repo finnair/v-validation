@@ -1481,8 +1481,10 @@ export class MaxValidator extends Validator<number, number> {
 }
 
 export class EnumValidator<Out extends Record<string, string | number>> extends Validator<Out[keyof Out]> {
+  private readonly _values: Set<string | number>;
   constructor(public readonly enumType: Out, public readonly name: string) {
     super();
+    this._values = new Set(Object.values(enumType));
     Object.freeze(this);
   }
 
@@ -1491,7 +1493,7 @@ export class EnumValidator<Out extends Record<string, string | number>> extends 
       return failure([defaultViolations.notNull(path)]);
     }
     if (typeof value === 'string' || typeof value === 'number') {
-      const isValid = Object.values(this.enumType).includes(value);
+      const isValid = this._values.has(value);
       if (isValid) {
         return success(value as Out[keyof Out]);
       }

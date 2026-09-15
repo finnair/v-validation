@@ -3,12 +3,31 @@ import { defaultViolations, FailureCallback, SuccessCallback, ValidationContext,
 
 export const DEFAULT_MEMOIZE_MAX_SIZE = 1000;
 
+/**
+ * Order in which entries are evicted once the cache is full.
+ *
+ * - `fifo` evicts in insertion order and never touches the cache on a hit, so a hit is a single
+ *   lookup. The default: it is faster whenever the cache can hold most of the working set, which is
+ *   the point of sizing `maxSize` (and narrowing `shouldCache`) so that eviction is rare.
+ * - `lru` additionally re-inserts an entry on every hit to mark it most recently used, which keeps
+ *   hot values alive at the cost of two extra `Map` operations per hit. Only worth it for a cache
+ *   deliberately smaller than its working set over skewed input, where the better hit rate pays for
+ *   the bookkeeping.
+ */
+export type MemoizeEvictionPolicy = 'fifo' | 'lru';
+
 export interface MemoizeValidatorOptions<Out = unknown, In = unknown> {
   /**
-   * Maximum number of input -> result entries to retain. When the cache grows past this, the
-   * least-recently-used entry is evicted. Defaults to {@link DEFAULT_MEMOIZE_MAX_SIZE}.
+   * Maximum number of input -> result entries to retain. When the cache grows past this, one entry
+   * is evicted in {@link evictionPolicy} order. Defaults to {@link DEFAULT_MEMOIZE_MAX_SIZE}.
    */
   readonly maxSize?: number;
+
+  /**
+   * Which entry to evict when the cache is full. Defaults to `fifo`; see
+   * {@link MemoizeEvictionPolicy} for when `lru` is worth its per-hit cost.
+   */
+  readonly evictionPolicy?: MemoizeEvictionPolicy;
 
   /**
    * Predicate deciding whether a successful result should be cached, given the converted `result`
@@ -27,10 +46,15 @@ export interface MemoizeValidatorOptions<Out = unknown, In = unknown> {
  * time it is seen. For a synchronously validated DAG this also means a value shared across the graph
  * converts to one shared output instance.
  *
- * The cache is a bounded LRU keyed by the raw input value, so it works for primitive inputs (parsed
+ * The cache is bounded and keyed by the raw input value, so it works for primitive inputs (parsed
  * strings and numbers) as well as objects (by reference identity). It lives on the validator
  * instance and persists across `validate()` calls. `Map` iteration order is insertion order, so the
- * oldest live key is evicted first and a cache hit re-inserts its key to mark it most recently used.
+ * oldest live key is evicted first; under `lru` a cache hit re-inserts its key to mark it most
+ * recently used (see {@link MemoizeEvictionPolicy}).
+ *
+ * An `undefined` result is not cached, which lets a hit be a single lookup rather than a
+ * containment check followed by a read. Wrap the memoized validator rather than the other way round
+ * - `V.optionalStrict(V.memoize(...))` - if undefined is an accepted input.
  *
  * Only successes are cached: a failure's violations carry the `path` at which the value appeared, so
  * replaying them elsewhere would report the wrong path, and the input might yet be valid in another
@@ -56,6 +80,8 @@ export class MemoizeValidator<Out = unknown, In = unknown> extends Validator<Out
   private readonly evictCursor: { it: Iterator<In> };
   readonly maxSize: number;
   private readonly shouldCache?: (result: Out, value: In) => boolean;
+  /** True for `lru`; kept as a boolean so the hit path tests a flag rather than compares strings. */
+  private readonly refreshOnHit: boolean;
 
   constructor(
     readonly validator: Validator<Out, In>,
@@ -66,6 +92,11 @@ export class MemoizeValidator<Out = unknown, In = unknown> extends Validator<Out
     if (!Number.isInteger(this.maxSize) || this.maxSize < 1) {
       throw new Error(`maxSize must be an integer >= 1, got ${this.maxSize}`);
     }
+    const evictionPolicy = options.evictionPolicy ?? 'fifo';
+    if (evictionPolicy !== 'fifo' && evictionPolicy !== 'lru') {
+      throw new Error(`evictionPolicy must be 'fifo' or 'lru', got ${evictionPolicy}`);
+    }
+    this.refreshOnHit = evictionPolicy === 'lru';
     this.shouldCache = options.shouldCache;
     this.evictCursor = { it: this.cache.keys() };
     Object.freeze(this);
@@ -73,11 +104,14 @@ export class MemoizeValidator<Out = unknown, In = unknown> extends Validator<Out
 
   validatePathV2(value: In, path: Path, ctx: ValidationContext, success: SuccessCallback<Out>, failure: FailureCallback): void {
     const cache = this.cache;
-    if (cache.has(value)) {
-      const result = cache.get(value)!;
-      cache.delete(value);
-      cache.set(value, result);
-      return success(result);
+    // An `undefined` result is never cached, so a plain `get` distinguishes a hit from a miss.
+    const cached = cache.get(value);
+    if (cached !== undefined) {
+      if (this.refreshOnHit) {
+        cache.delete(value);
+        cache.set(value, cached);
+      }
+      return success(cached);
     }
     // `settled` records whether the wrapped validator has produced its outcome synchronously - via a
     // callback or by throwing. If it has not by the time the call returns, the validator is
@@ -94,7 +128,7 @@ export class MemoizeValidator<Out = unknown, In = unknown> extends Validator<Out
             return;
           }
           settled = true;
-          if (this.shouldCache === undefined || this.shouldCache(result, value)) {
+          if (result !== undefined && (this.shouldCache === undefined || this.shouldCache(result, value))) {
             cache.set(value, result);
             if (cache.size > this.maxSize) {
               this.evictOldest();
@@ -130,9 +164,9 @@ export class MemoizeValidator<Out = unknown, In = unknown> extends Validator<Out
   }
 
   /**
-   * Removes the least recently used entry, which is the cursor's next key: a hit re-inserts its key
-   * at the back and each eviction removes the key the cursor just returned, so every live key sits
-   * at or after the cursor. Eviction only runs with more than `maxSize` (>= 1) entries cached, so
+   * Removes the oldest entry, which is the cursor's next key: entries are appended at the back, an
+   * `lru` hit re-inserts its key there, and each eviction removes the key the cursor just returned,
+   * so every live key sits at or after the cursor. Eviction only runs with more than `maxSize` (>= 1) entries cached, so
    * the cursor yields a key; it is only ever exhausted if that invariant is broken, and a fresh one
    * then restarts from the oldest key.
    */
