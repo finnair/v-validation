@@ -811,12 +811,25 @@ const result: any = await tree.getValid({ name: 'root', left: shared, right: sha
 result.left === result.right; // true
 ```
 
-The cache is a bounded LRU that lives on the validator instance and persists across `validate()`
-calls, so create the memoizing validator **once** and reuse it. When it grows past `maxSize`
-(default `1000`) the least-recently-used entry is evicted:
+The cache is bounded and lives on the validator instance, persisting across `validate()` calls, so
+create the memoizing validator **once** and reuse it. When it grows past `maxSize` (default `1000`)
+one entry is evicted:
 
 ```typescript
 const date = V.memoize(Vluxon.localDate(), { maxSize: 10000 });
+```
+
+By default eviction is `fifo`: entries go in insertion order and a cache hit does not touch the
+cache at all, which makes a hit a single lookup. Size `maxSize` (and narrow `shouldCache`) so that
+the cache holds most of its working set and eviction stays rare - that is where `fifo` is fastest.
+
+Pass `evictionPolicy: 'lru'` to re-insert an entry on every hit so that hot values are evicted last.
+That costs two extra cache operations per hit, and only pays for itself when the cache is
+deliberately smaller than its working set and the input is skewed enough that the better hit rate
+outweighs the bookkeeping:
+
+```typescript
+const date = V.memoize(Vluxon.localDate(), { maxSize: 1000, evictionPolicy: 'lru' });
 ```
 
 Pass a `shouldCache` predicate to keep outliers out of the cache, so that rare values do not evict
@@ -839,6 +852,9 @@ Three things to keep in mind:
 - **Only successes are cached.** A failure's violations carry the `path` at which the value appeared,
   so replaying them elsewhere would report the wrong path, and the same input might still be valid in
   another position.
+- **An `undefined` result is not cached**, so that a cache hit is a single lookup. Such an input is
+  simply re-validated; wrap the memoized validator rather than the other way round -
+  `V.optionalStrict(V.memoize(...))` - when `undefined` is an accepted input.
 - **The wrapped validator must be a pure function of its input.** The cache key is the input value
   alone, so a validator whose result depends on the active `group` or other `ValidatorOptions` should
   not be memoized.
@@ -995,7 +1011,7 @@ Unless otherwise stated, all validators require non-null and non-undefined value
 | if...elseif...else      | fn: AssertTrue, ...validators: Validator[]                       | Configures validators (`compositionOf`) to be executed for cases where if/elseif AssertTrue fn returns true.                              |
 | whenGroup...otherwise   | group: GroupOrName, ...validators: Validator[]                   | Defines validation rules (`compositionOf`) to be executed for given `ValidatorOptions.group`.                                             |
 | json                    | ...validators: Validator[]                                       | Parse JSON input and validate it against given validators.                                                                                |
-| memoize                 | validator: Validator, options?: MemoizeValidatorOptions          | Caches a wrapped validator's successful results by input value in a bounded LRU (`maxSize`, `shouldCache`). See [Memoization](#memoization). |
+| memoize                 | validator: Validator, options?: MemoizeValidatorOptions          | Caches a wrapped validator's successful results by input value in a bounded cache (`maxSize`, `evictionPolicy`, `shouldCache`). See [Memoization](#memoization). |
 | proxy                   | factory: () => Validator                                         | Defers validator construction to a factory, for e.g. self-reference. See [V.proxy](#proxy).  |
 
 ## Violations

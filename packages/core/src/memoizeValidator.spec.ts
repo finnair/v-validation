@@ -51,7 +51,10 @@ describe('MemoizeValidator', () => {
     expect(b).toBe(a);
   });
 
-  test('caches an undefined result as a hit rather than re-validating', async () => {
+  test('does not cache an undefined result, so it re-validates', async () => {
+    // Skipping undefined lets a hit be a single lookup. The result is still correct; only the
+    // wrapped validator runs again. Wrap from the outside - V.optionalStrict(V.memoize(...)) - when
+    // undefined is an accepted input.
     let calls = 0;
     const memo = V.memoize(
       V.fn(() => {
@@ -62,7 +65,25 @@ describe('MemoizeValidator', () => {
 
     expect((await memo.validate('x')).getValue()).toBeUndefined();
     expect((await memo.validate('x')).getValue()).toBeUndefined();
-    expect(calls).toBe(1);
+    expect(calls).toBe(2);
+  });
+
+  test('an uncached undefined result does not disturb the entries around it', async () => {
+    let calls = 0;
+    const memo = V.memoize(
+      V.fn((value: any) => {
+        calls++;
+        return value === 'skip' ? undefined : { value };
+      }),
+    );
+
+    expect((await memo.validate('skip')).getValue()).toBeUndefined();
+    const kept = (await memo.validate('keep')).getValue();
+    expect((await memo.validate('skip')).getValue()).toBeUndefined();
+
+    expect((await memo.validate('keep')).getValue()).toBe(kept);
+    // 'skip' ran twice (never cached), 'keep' once.
+    expect(calls).toBe(3);
   });
 
   test('does not cache failures', async () => {
@@ -106,8 +127,10 @@ describe('MemoizeValidator', () => {
     expect(result.left).toBe(result.right);
   });
 
-  describe('LRU eviction', () => {
-    test('evicts the least-recently-used entry past maxSize', async () => {
+  describe('eviction', () => {
+    // Distinct inputs only, so both policies evict the same entry; per-policy behaviour on a hit is
+    // covered under 'evictionPolicy'.
+    test('evicts the oldest entry past maxSize', async () => {
       const { state, validator } = counting();
       const memo = V.memoize(validator, { maxSize: 2 });
 
@@ -123,9 +146,46 @@ describe('MemoizeValidator', () => {
       expect(state.calls).toBe(4);
     });
 
-    test('a cache hit refreshes recency so the hit entry is not the next evicted', async () => {
+    test('keeps evicting correctly well past maxSize', async () => {
+      const { state, validator } = counting();
+      const memo = V.memoize(validator, { maxSize: 3 });
+
+      for (let i = 0; i < 50; i++) {
+        await memo.validate(`v${i}`);
+      }
+      expect(state.calls).toBe(50);
+
+      // Only the last three remain.
+      await memo.validate('v49');
+      await memo.validate('v48');
+      await memo.validate('v47');
+      expect(state.calls).toBe(50);
+
+      await memo.validate('v46');
+      expect(state.calls).toBe(51);
+    });
+  });
+
+  describe('evictionPolicy', () => {
+    test('defaults to fifo: a hit does not protect an entry from eviction', async () => {
       const { state, validator } = counting();
       const memo = V.memoize(validator, { maxSize: 2 });
+
+      await memo.validate('a'); // [a]
+      await memo.validate('b'); // [a, b]
+      await memo.validate('a'); // hit, but recency is not tracked -> still [a, b]
+      expect(state.calls).toBe(2);
+
+      await memo.validate('c'); // [b, c] - 'a' evicted despite the hit
+      expect(state.calls).toBe(3);
+
+      await memo.validate('a'); // miss
+      expect(state.calls).toBe(4);
+    });
+
+    test('lru: a hit refreshes recency so the hit entry survives', async () => {
+      const { state, validator } = counting();
+      const memo = V.memoize(validator, { maxSize: 2, evictionPolicy: 'lru' });
 
       await memo.validate('a'); // [a]
       await memo.validate('b'); // [a, b]
@@ -137,9 +197,23 @@ describe('MemoizeValidator', () => {
 
       await memo.validate('a'); // still cached
       expect(state.calls).toBe(3);
+    });
 
-      await memo.validate('b'); // miss: 'b' had been evicted
+    test('fifo evicts in insertion order', async () => {
+      const { state, validator } = counting();
+      const memo = V.memoize(validator, { maxSize: 2, evictionPolicy: 'fifo' });
+
+      await memo.validate('a');
+      await memo.validate('b');
+      await memo.validate('c'); // 'a' evicted
+      await memo.validate('b'); // still cached
+      expect(state.calls).toBe(3);
+      await memo.validate('a'); // re-validated
       expect(state.calls).toBe(4);
+    });
+
+    test('rejects an unknown policy', () => {
+      expect(() => V.memoize(V.string(), { evictionPolicy: 'mru' as any })).toThrow();
     });
   });
 
