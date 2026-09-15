@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [12.1.1](https://github.com/finnair/v-validation/compare/v12.1.0...v12.1.1) (2026-09-15)
+
+### Performance Improvements
+
+- **core:** find V.memoize eviction victim with a persistent cursor ([#154](https://github.com/finnair/v-validation/issues/154)) ([80bdef9](https://github.com/finnair/v-validation/commit/80bdef93838c91b006e8cfe7db639a86582f216a))
+
 # [12.1.0](https://github.com/finnair/v-validation/compare/v12.0.0...v12.1.0) (2026-09-14)
 
 ### Features

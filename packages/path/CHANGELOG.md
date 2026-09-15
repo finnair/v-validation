@@ -3,6 +3,10 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [12.1.1](https://github.com/finnair/v-validation/compare/v12.1.0...v12.1.1) (2026-09-15)
+
+**Note:** Version bump only for package @finnair/path
+
 # [12.1.0](https://github.com/finnair/v-validation/compare/v12.0.0...v12.1.0) (2026-09-14)
 
 ### Features
