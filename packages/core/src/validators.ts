@@ -40,6 +40,30 @@ export class ValidationContext {
    */
   private readonly inProgress = new Map<object, Path | Path[]>();
 
+  /** Not readonly: `withFreeze` sets it on a derived context. Private, so it stays an internal. */
+  private _freeze = false;
+
+  /** True when converted output in this scope must be frozen. */
+  get freeze(): boolean {
+    return this._freeze;
+  }
+
+  /**
+   * A context for a subtree whose output must be frozen. Derived by prototype from `this`, so it
+   * shares cycle-detection state (a subtree is still the same traversal) and preserves any
+   * subclass, differing only in `_freeze`. NOTE: this relies on `inProgress` being a TypeScript
+   * `private` field - a `#private` one lives in a per-instance slot and would not resolve through
+   * the prototype. Returns `this` when already freezing, so a deep frozen subtree derives once.
+   */
+  withFreeze(): this {
+    if (this._freeze) {
+      return this;
+    }
+    const derived: this = Object.create(this);
+    derived._freeze = true;
+    return derived;
+  }
+
   /**
    * Marks validation of `value` at `path` as in progress. Returns `true` if `value` is already
    * being validated at an ancestor of `path` - i.e. a reference cycle - in which case the caller
@@ -568,6 +592,29 @@ export class ValidatorFnWrapper<Out = unknown, In = unknown> extends Validator<O
   }
 }
 
+/**
+ * Switches its wrapped validator's whole subtree to frozen output: every object and array converted
+ * beneath it is passed through `Object.freeze`. Freezing is a property of *this view* of a schema,
+ * not of the schema itself, so the same validator can be used mutably elsewhere.
+ *
+ * NOTE: `Object.freeze` seals properties only. Nested `Map`, `Set` and `Date` values stay mutable
+ * (their mutators go through internal slots), as does the state of any other class instance.
+ */
+export class FreezeValidator<Out = unknown, In = unknown> extends Validator<Out, In> {
+  constructor(public readonly validator: Validator<Out, In>) {
+    super();
+    Object.freeze(this);
+  }
+
+  validatePathV2(value: In, path: Path, ctx: ValidationContext, success: SuccessCallback<Out>, failure: FailureCallback): void {
+    this.validator.validatePathV2(value, path, ctx.withFreeze(), success, failure);
+  }
+
+  skipUndefined(): boolean {
+    return this.validator.skipUndefined();
+  }
+}
+
 export class ArrayValidator<Out = unknown> extends Validator<Out[]> {
   constructor(public readonly itemsValidator: Validator<Out>) {
     super();
@@ -575,6 +622,14 @@ export class ArrayValidator<Out = unknown> extends Validator<Out[]> {
   }
 
   validatePathV2(value: unknown, path: Path, ctx: ValidationContext, success: SuccessCallback<Out[]>, failure: FailureCallback): void {
+    // Object.freeze returns `readonly Out[]`, which is not assignable to `Out[]` - so freeze for
+    // effect and pass the original reference on, keeping the declared output type.
+    const successFn = ctx.freeze
+      ? (result: Out[]) => {
+          Object.freeze(result);
+          success(result);
+        }
+      : success;
     if (isNullOrUndefined(value)) {
       return failure([defaultViolations.notNull(path)]);
     }
@@ -583,7 +638,7 @@ export class ArrayValidator<Out = unknown> extends Validator<Out[]> {
     }
     const convertedArray: Out[] = [];
     if (value.length === 0) {
-      return success(convertedArray);
+      return successFn(convertedArray);
     }
     let expectedResponses = value.length;
     let violations: Violation[] = [];
@@ -593,7 +648,7 @@ export class ArrayValidator<Out = unknown> extends Validator<Out[]> {
         if (violations.length > 0) {
           failure(violations);
         } else {
-          success(convertedArray);
+          successFn(convertedArray);
         }
       }
     };
@@ -928,7 +983,12 @@ export class MapValidator<K = unknown, V = unknown, E extends boolean = true> ex
       if (violations.length > 0) {
         failure(violations);
       } else {
-        success(this.jsonSafeMap ? new JsonMap<K, V>(entries) : new Map<K, V>(entries) as any);
+        const result = this.jsonSafeMap
+          ? new JsonMap<K, V>(entries)
+          : ctx.freeze
+            ? new FreezableMap<K, V>(entries)
+            : new Map<K, V>(entries);
+        success((ctx.freeze ? (result as FreezableMap<K, V>).freeze() : result) as any);
       }
     }
 
@@ -1004,7 +1064,46 @@ export class MapNormalizer<K = unknown, V = unknown, E extends boolean = true> e
   }
 }
 
-export class JsonMap<K, V> extends Map<K, V> {
+/**
+ * Thrown-on-mutation guard installed by `FreezableMap.freeze`/`FreezableSet.freeze`.
+ *
+ * The guard is installed as own properties on the instance rather than as overridden prototype
+ * methods, for two reasons. `Map`/`Set` constructors call `this.set`/`this.add` for each entry of
+ * their argument, *before* subclass fields are installed - an override that consulted a `#private`
+ * flag would throw during construction - and shadowing keeps the native methods on the prototype,
+ * so a collection that is never frozen pays nothing.
+ */
+function throwFrozen(type: string, method: string): () => never {
+  return () => {
+    throw new TypeError(`Cannot ${method} a frozen ${type}`);
+  };
+}
+
+/**
+ * A `Map` that can be made read-only in place by `freeze()`, used for the output of a memoized or
+ * otherwise shared validator. `Object.freeze` cannot do this: it seals properties, while a `Map`'s
+ * contents live in an internal slot and `set`/`delete`/`clear` go straight past it.
+ *
+ * NOTE: this is a guard against accidental mutation, not immutability. The instance is frozen so
+ * the guard cannot be removed, but invoking the native method directly -
+ * `Map.prototype.set.call(frozenMap, k, v)` - still mutates the map.
+ */
+export class FreezableMap<K, V> extends Map<K, V> {
+  /** Makes this map reject `set`, `delete` and `clear`. Idempotent; returns `this`. */
+  freeze(): this {
+    if (Object.isFrozen(this)) {
+      return this;
+    }
+    this.set = throwFrozen('Map', 'set');
+    this.delete = throwFrozen('Map', 'delete');
+    this.clear = throwFrozen('Map', 'clear');
+    // Freeze the instance too, so the guard cannot be assigned or deleted away.
+    Object.freeze(this);
+    return this;
+  }
+}
+
+export class JsonMap<K, V> extends FreezableMap<K, V> {
   constructor(entries?: readonly (readonly [K, V])[] | null) {
     super(entries);
   }
@@ -1034,7 +1133,12 @@ export class SetValidator<T = unknown, E extends boolean = true> extends Validat
       if (violations.length > 0) {
         failure(violations);
       } else {
-        success(this.jsonSafeSet ? new JsonSet<T>(items) : new Set<T>(items) as any);
+        const result = this.jsonSafeSet
+          ? new JsonSet<T>(items)
+          : ctx.freeze
+            ? new FreezableSet<T>(items)
+            : new Set<T>(items);
+        success((ctx.freeze ? (result as FreezableSet<T>).freeze() : result) as any);
       }
     };
 
@@ -1068,7 +1172,25 @@ export class SetValidator<T = unknown, E extends boolean = true> extends Validat
   }
 }
 
-export class JsonSet<K> extends Set<K> {
+/**
+ * A `Set` that can be made read-only in place by `freeze()`. See {@link FreezableMap} for why
+ * `Object.freeze` is not enough and for the limits of the guard.
+ */
+export class FreezableSet<T> extends Set<T> {
+  /** Makes this set reject `add`, `delete` and `clear`. Idempotent; returns `this`. */
+  freeze(): this {
+    if (Object.isFrozen(this)) {
+      return this;
+    }
+    this.add = throwFrozen('Set', 'add');
+    this.delete = throwFrozen('Set', 'delete');
+    this.clear = throwFrozen('Set', 'clear');
+    Object.freeze(this);
+    return this;
+  }
+}
+
+export class JsonSet<K> extends FreezableSet<K> {
   constructor(values?: readonly K[] | null) {
     super(values);
   }

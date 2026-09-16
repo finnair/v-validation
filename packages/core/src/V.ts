@@ -44,6 +44,7 @@ import {
   AnyOfValidator,
   OneOfValidator,
   EnumValidator,
+  FreezeValidator,
   HasValueValidator,
   JsonValidator,
   RequiredValidator,
@@ -248,7 +249,13 @@ export const V = {
    * A repeated input returns the earlier result directly - e.g. the same ISO string parses to one
    * shared `DateTime` instance. See {@link MemoizeValidator}.
    */
-  memoize: <Out, In>(validator: Validator<Out, In>, options?: MemoizeValidatorOptions<Out, In>) =>
-    new MemoizeValidator<Out, In>(validator, options),
+  /**
+   * A view of `validator` whose whole subtree produces frozen output. The schema itself is
+   * unchanged, so the same validator can still be used mutably elsewhere.
+   */
+  frozen: <Out, In>(validator: Validator<Out, In>) => new FreezeValidator<Out, In>(validator),
+
+  memoize: <Out, In, K = In>(validator: Validator<Out, In>, options?: MemoizeValidatorOptions<Out, In, K>) =>
+    new MemoizeValidator<Out, In, K>(validator, options),
 };
 Object.freeze(V);

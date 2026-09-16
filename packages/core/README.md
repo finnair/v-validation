@@ -832,6 +832,26 @@ outweighs the bookkeeping:
 const date = V.memoize(Vluxon.localDate(), { maxSize: 1000, evictionPolicy: 'lru' });
 ```
 
+By default the cache is keyed by the input value itself, which means an *object* input is keyed by
+identity - an equal but distinct object always misses. Pass `cacheKeyFn` to key by something derived
+from the input instead, which is what makes caching objects worthwhile:
+
+```typescript
+const legById = V.memoize(V.frozen(leg), {
+  maxSize: 10000,
+  cacheKeyFn: (value: any) => `${value.id}:${value.version}`,
+});
+```
+
+The key must be a primitive - keys are compared the way `Map` compares them, so a freshly built
+object is a new key every time and never hits. It must also identify the payload completely: two
+inputs sharing a key are the same value as far as the cache is concerned, so a payload that changes
+without its key changing serves stale results for as long as it is cached. `cacheKeyFn` runs on
+every validation, hit or miss, so keep it cheap.
+
+Note that the input of an object or array validator is `unknown`, so a key function usually
+annotates its parameter (`(value: any) => ...`) or the call states its types explicitly.
+
 Pass a `shouldCache` predicate to keep outliers out of the cache, so that rare values do not evict
 common ones. It runs on a cache miss after successful validation, receiving the converted result and
 the original input; return `false` to pass the result through without caching it. For example, cache
@@ -855,9 +875,80 @@ Three things to keep in mind:
 - **An `undefined` result is not cached**, so that a cache hit is a single lookup. Such an input is
   simply re-validated; wrap the memoized validator rather than the other way round -
   `V.optionalStrict(V.memoize(...))` - when `undefined` is an accepted input.
-- **The wrapped validator must be a pure function of its input.** The cache key is the input value
-  alone, so a validator whose result depends on the active `group` or other `ValidatorOptions` should
-  not be memoized.
+- **A cached result is shared by every caller**, so mutating it corrupts every later read. Wrap the
+  memoized validator in [`V.frozen`](#frozen) when the cached values are objects.
+- **The wrapped validator must be a pure function of its cache key.** Neither the active `group` nor
+  any other `ValidatorOptions` is part of the key, so a validator whose result depends on them
+  should not be memoized.
+
+## <a name="frozen">Immutable Output</a>
+
+`V.frozen` wraps a validator so that everything its subtree converts is passed through
+`Object.freeze`. It is a *view* of a schema rather than a property of it, so the same validator can
+still be used mutably elsewhere:
+
+```typescript
+const leg = V.objectType()
+  .properties({
+    id: V.string(),
+    version: V.number(),
+    tags: V.array(V.string()),
+    times: V.toMapType(V.string(), Vluxon.dateTimeUtc(), true),
+  })
+  .build();
+
+// Mutable, for code that builds or patches a leg.
+const draft = await leg.getValid(input);
+draft.id = 'changed'; // fine
+
+// Read-only, for code that shares results.
+const readOnly = V.frozen(leg);
+const shared: any = await readOnly.getValid(input);
+shared.id = 'changed'; // TypeError
+shared.tags.push('x'); // TypeError
+shared.times.set('k', dt); // TypeError
+```
+
+This pairs with [memoization](#memoization): a memoized validator hands the *same* instance to every
+caller of a repeated input, so a single careless mutation corrupts every later read. Freezing the
+memoized subtree makes that sharing safe:
+
+```typescript
+const cached = V.memoize(V.frozen(leg), {
+  maxSize: 10000,
+  cacheKeyFn: leg => `${leg.id}:${leg.version}`,
+});
+```
+
+Freezing propagates through the context, so it reaches everything below the wrapper - nested
+objects, arrays and their items, values behind `V.optional`/`V.oneOf`/`V.compositionOf`, and
+recursive schemas built with [`V.proxy`](#proxy).
+
+### Maps and Sets
+
+`Object.freeze` cannot make a `Map` or `Set` read-only: it seals properties, while their contents
+live in an internal slot that `set`/`add`/`delete`/`clear` reach directly. `JsonMap` and `JsonSet`
+therefore extend `FreezableMap`/`FreezableSet`, which expose a `freeze()` that makes those methods
+throw. `V.frozen` calls it for you; you can also call it directly on a map or set you built:
+
+```typescript
+const rates = new FreezableMap([['EUR', 1]]).freeze();
+rates.set('USD', 2); // TypeError: Cannot set a frozen Map
+rates.get('EUR'); // 1 - reads are unaffected
+```
+
+`V.mapType`/`V.setType` with `jsonSafeMap`/`jsonSafeSet` set to `false` produce a plain `Map`/`Set`
+unless the output is being frozen, in which case they produce the freezable subclass instead. Either
+way the result is a `Map`/`Set`, so nothing changes for code that does not use `V.frozen`.
+
+_NOTE: a frozen `Map`/`Set` is a **guard against accidental mutation, not immutability**. The
+instance itself is frozen so the guard cannot be removed, but invoking the native method directly -
+`Map.prototype.set.call(frozenMap, key, value)` - still mutates it. `Object.freeze` on a plain
+object or array, by contrast, is enforced by the engine._
+
+_NOTE: freezing is shallow per value, and only object, array, `Map` and `Set` validators freeze
+their output. A `Date`, a Luxon `DateTime` or any other class instance reached by a validated value
+keeps its mutable internal state._
 
 ## Custom Validators
 
@@ -1011,8 +1102,9 @@ Unless otherwise stated, all validators require non-null and non-undefined value
 | if...elseif...else      | fn: AssertTrue, ...validators: Validator[]                       | Configures validators (`compositionOf`) to be executed for cases where if/elseif AssertTrue fn returns true.                              |
 | whenGroup...otherwise   | group: GroupOrName, ...validators: Validator[]                   | Defines validation rules (`compositionOf`) to be executed for given `ValidatorOptions.group`.                                             |
 | json                    | ...validators: Validator[]                                       | Parse JSON input and validate it against given validators.                                                                                |
-| memoize                 | validator: Validator, options?: MemoizeValidatorOptions          | Caches a wrapped validator's successful results by input value in a bounded cache (`maxSize`, `evictionPolicy`, `shouldCache`). See [Memoization](#memoization). |
+| memoize                 | validator: Validator, options?: MemoizeValidatorOptions          | Caches a wrapped validator's successful results in a bounded cache (`maxSize`, `evictionPolicy`, `shouldCache`, `cacheKeyFn`). See [Memoization](#memoization). |
 | proxy                   | factory: () => Validator                                         | Defers validator construction to a factory, for e.g. self-reference. See [V.proxy](#proxy).  |
+| frozen                  | validator: Validator                                             | A view of `validator` whose subtree produces frozen output. See [Immutable Output](#frozen). |
 
 ## Violations
 

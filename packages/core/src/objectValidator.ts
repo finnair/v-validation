@@ -151,7 +151,13 @@ export class ObjectValidator<LocalType = unknown, InheritableType = LocalType, I
   }
 
   validatePathV2(value: In, path: Path, ctx: ValidationContext, success: SuccessCallback<LocalType>, failure: FailureCallback): void {
-    this.validator.validatePathV2(value, path, ctx, success, failure);
+    const successFn = ctx.freeze
+      ? (result: LocalType) => {
+          Object.freeze(result);
+          success(result);
+        }
+      : success;
+    this.validator.validatePathV2(value, path, ctx, successFn, failure);
   }
 
   omit<T, K extends keyof (any & (InheritableType | LocalType))>(...keys: K[]) {
