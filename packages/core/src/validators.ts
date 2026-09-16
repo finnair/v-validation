@@ -1091,6 +1091,7 @@ export class JsonBigInt {
       default:
         throw new Error('Expected bigint, got ' + typeof value);
     }
+    Object.freeze(this);
   }
   valueOf() {
     return this.value;
