@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [12.2.0](https://github.com/finnair/v-validation/compare/v12.1.1...v12.2.0) (2026-09-16)
+
+### Features
+
+- configurable V.memoize eviction policy (fifo or lru) and optimized enum validation ([#155](https://github.com/finnair/v-validation/issues/155)) ([dab6e6f](https://github.com/finnair/v-validation/commit/dab6e6f4bbc7fc204ecf74be2b40d301ea12e8a6))
+
 ## [12.1.1](https://github.com/finnair/v-validation/compare/v12.1.0...v12.1.1) (2026-09-15)
 
 ### Performance Improvements
