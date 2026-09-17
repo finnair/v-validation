@@ -1432,7 +1432,7 @@ describe('Date', () => {
     }
     const validator = V.object({
       properties: {
-        date: V.date().next(V.fn(notInstanceOfDate, 'NotInstanceOfDate')),
+        date: V.date().next(V.fn(notInstanceOfDate)),
       },
     });
     const object = {

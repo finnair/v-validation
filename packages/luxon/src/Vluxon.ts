@@ -30,6 +30,19 @@ export class DateTimeValidator extends Validator<DateTime> {
     Object.freeze(params);
     Object.freeze(this);
   }
+
+  /**
+   * A plain Luxon `DateTime` is *not* frozen, and cannot be: `weekYear`, `weekNumber`, `weekday`,
+   * `localWeek*` and `toISOWeekDate`/week format tokens all cache their computation on the instance
+   * on first read, so freezing one makes those accessors throw. Luxon's API is immutable - every
+   * method returns a new instance - but its instances are not, so this validator cannot promise
+   * what `V.frozen` asks for. Use one of the wrapper validators (`dateTime`, `dateTimeUtc`, ...)
+   * inside a frozen schema; their `LuxonDateTime` output freezes itself.
+   */
+  supportsFreeze(): boolean {
+    return false;
+  }
+
   validatePathV2(value: any, path: Path, ctx: ValidationContext, success: SuccessCallback<DateTime>, failure: FailureCallback): void {
     const params = this.params;
     if (isNullOrUndefined(value)) {
@@ -61,6 +74,16 @@ export class LuxonValidator<Out extends LuxonDateTime> extends Validator<Out> {
     super();
     this.dateTimeValidator = new DateTimeValidator(params);
     Object.freeze(this);
+  }
+
+  /**
+   * `LuxonDateTime` freezes itself in its constructor, so this validator's output is already
+   * immutable as far as `Object.freeze` reaches. NOTE: the wrapped `dateTime` property is a plain
+   * Luxon `DateTime`, whose internals stay mutable - see {@link DateTimeValidator.supportsFreeze}.
+   * Reassigning the property itself is blocked by the frozen wrapper.
+   */
+  supportsFreeze(): boolean {
+    return true;
   }
 
   validatePathV2(value: any, path: Path, ctx: ValidationContext, success: SuccessCallback<Out>, failure: FailureCallback): void {
@@ -289,6 +312,11 @@ const durationPattern =
   /^P(?!$)(\d+(?:\.\d+)?Y)?(\d+(?:\.\d+)?M)?(\d+(?:\.\d+)?W)?(\d+(?:\.\d+)?D)?(T(?=\d)(\d+(?:\.\d+)?H)?(\d+(?:\.\d+)?M)?(\d+(?:\.\d+)?S)?)?$/;
 
 export class DurationValidator extends Validator<Duration> {
+  /** A plain Luxon `Duration` is not frozen; see {@link DateTimeValidator.supportsFreeze}. */
+  supportsFreeze(): boolean {
+    return false;
+  }
+
   validatePathV2(value: any, path: Path, ctx: ValidationContext, success: SuccessCallback<Duration>, failure: FailureCallback): void {
     if (isNullOrUndefined(value)) {
       return failure(defaultViolations.notNull(path));
@@ -305,6 +333,11 @@ export class DurationValidator extends Validator<Duration> {
 }
 
 export class TimeDurationValidator extends Validator<Duration> {
+  /** A plain Luxon `Duration` is not frozen; see {@link DateTimeValidator.supportsFreeze}. */
+  supportsFreeze(): boolean {
+    return false;
+  }
+
   validatePathV2(value: any, path: Path, ctx: ValidationContext, success: SuccessCallback<Duration>, failure: FailureCallback): void {
     if (isNullOrUndefined(value)) {
       return failure(defaultViolations.notNull(path));

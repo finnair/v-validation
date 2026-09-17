@@ -166,6 +166,148 @@ describe('MemoizeValidator', () => {
     });
   });
 
+  describe('cacheKeyFn', () => {
+    test('defaults to keying by the input value itself', async () => {
+      const { state, validator } = counting();
+      const memo = V.memoize(validator);
+
+      await memo.validate('a');
+      await memo.validate('a');
+      await memo.validate('b');
+
+      expect(state.calls).toBe(2);
+    });
+
+    test('keys by a derived value, so distinct inputs sharing a key hit the cache', async () => {
+      const { state, validator } = counting();
+      // The motivating case: an object cached by id and version rather than by identity.
+      const memo = V.memoize(validator, { cacheKeyFn: (value: any) => `${value.id}:${value.version}` });
+
+      const first = (await memo.validate({ id: 'a', version: 1, payload: 'x' })).getValue();
+      // A different object, but the same id and version - served from cache.
+      const second = (await memo.validate({ id: 'a', version: 1, payload: 'y' })).getValue();
+
+      expect(state.calls).toBe(1);
+      expect(second).toBe(first);
+    });
+
+    test('a changed key misses, so a new version is re-validated', async () => {
+      const { state, validator } = counting();
+      const memo = V.memoize(validator, { cacheKeyFn: (value: any) => `${value.id}:${value.version}` });
+
+      await memo.validate({ id: 'a', version: 1 });
+      await memo.validate({ id: 'a', version: 2 });
+      await memo.validate({ id: 'b', version: 1 });
+      expect(state.calls).toBe(3);
+
+      await memo.validate({ id: 'a', version: 1 });
+      expect(state.calls).toBe(3);
+    });
+
+    test('a stale key returns the earlier result: the key must identify the payload', async () => {
+      // Documented consequence of keying by a derived value - two payloads sharing a key are the
+      // same as far as the cache is concerned, so a mutation without a version bump serves stale.
+      const memo = V.memoize(
+        V.fn((value: any) => ({ name: value.name })),
+        { cacheKeyFn: (value: any) => value.id },
+      );
+
+      expect((await memo.validate({ id: 1, name: 'original' })).getValue()).toEqual({ name: 'original' });
+      expect((await memo.validate({ id: 1, name: 'changed' })).getValue()).toEqual({ name: 'original' });
+    });
+
+    test('without a key function, distinct objects never hit - identity is the key', async () => {
+      const { state, validator } = counting();
+      const memo = V.memoize(validator);
+
+      await memo.validate({ id: 'a' });
+      await memo.validate({ id: 'a' });
+
+      expect(state.calls).toBe(2);
+    });
+
+    test('is called for hits as well as misses', async () => {
+      const keys: unknown[] = [];
+      const memo = V.memoize(
+        V.fn((value: any) => ({ value })),
+        {
+          cacheKeyFn: (value: any) => {
+            keys.push(value);
+            return value.id;
+          },
+        },
+      );
+
+      await memo.validate({ id: 'a' });
+      await memo.validate({ id: 'a' });
+
+      expect(keys).toHaveLength(2);
+    });
+
+    test('receives the raw input while shouldCache receives the converted result', async () => {
+      const seen: Array<[unknown, unknown]> = [];
+      const memo = V.memoize(
+        V.fn((value: any) => ({ converted: value.id })),
+        {
+          cacheKeyFn: (value: any) => value.id,
+          shouldCache: (result, value) => {
+            seen.push([result, value]);
+            return true;
+          },
+        },
+      );
+
+      const input = { id: 'a' };
+      const result = (await memo.validate(input)).getValue();
+
+      expect(seen).toEqual([[result, input]]);
+    });
+
+    test('eviction and lru recency use the derived key', async () => {
+      const { state, validator } = counting();
+      const memo = V.memoize(validator, {
+        maxSize: 2,
+        evictionPolicy: 'lru',
+        cacheKeyFn: (value: any) => value.id,
+      });
+
+      await memo.validate({ id: 'a' });
+      await memo.validate({ id: 'b' });
+      await memo.validate({ id: 'a' }); // hit by key -> 'a' becomes most recent
+      expect(state.calls).toBe(2);
+
+      await memo.validate({ id: 'c' }); // evicts 'b'
+      expect(state.calls).toBe(3);
+
+      await memo.validate({ id: 'a' }); // survived
+      expect(state.calls).toBe(3);
+
+      await memo.validate({ id: 'b' }); // evicted
+      expect(state.calls).toBe(4);
+    });
+
+    test('KNOWN LIMITATION: a key function returning a fresh object never hits', async () => {
+      // Map keys are compared by identity, so a derived key must be a primitive.
+      const { state, validator } = counting();
+      const memo = V.memoize(validator, { cacheKeyFn: (value: any) => ({ id: value.id }) as any });
+
+      await memo.validate({ id: 'a' });
+      await memo.validate({ id: 'a' });
+
+      expect(state.calls).toBe(2);
+    });
+
+    test('handles an undefined input', async () => {
+      const { state, validator } = counting();
+      const memo = V.memoize(validator, { cacheKeyFn: value => (value === undefined ? 'none' : (value as any).id) });
+
+      await memo.validate(undefined as any);
+      await memo.validate(undefined as any);
+
+      expect(state.calls).toBe(1);
+    });
+  });
+
   describe('evictionPolicy', () => {
     test('defaults to fifo: a hit does not protect an entry from eviction', async () => {
       const { state, validator } = counting();

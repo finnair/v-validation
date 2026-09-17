@@ -150,8 +150,18 @@ export class ObjectValidator<LocalType = unknown, InheritableType = LocalType, I
     Object.freeze(this);
   }
 
+  supportsFreeze(): boolean {
+    return this.validator.supportsFreeze();
+  }
+
   validatePathV2(value: In, path: Path, ctx: ValidationContext, success: SuccessCallback<LocalType>, failure: FailureCallback): void {
-    this.validator.validatePathV2(value, path, ctx, success, failure);
+    const successFn = ctx.freeze
+      ? (result: LocalType) => {
+          Object.freeze(result);
+          success(result);
+        }
+      : success;
+    this.validator.validatePathV2(value, path, ctx, successFn, failure);
   }
 
   omit<T, K extends keyof (any & (InheritableType | LocalType))>(...keys: K[]) {
@@ -172,6 +182,7 @@ export class ObjectValidator<LocalType = unknown, InheritableType = LocalType, I
 }
 
 class PropertiesValidator<LocalType = unknown, In = unknown> extends Validator<LocalType, In> {
+  private readonly _supportsFreeze: boolean;
   private readonly validationOrder: Set<string>;
   constructor(readonly properties: Properties, readonly localProperties: Properties, readonly additionalProperties: MapEntryValidator[], propertyOrder?: string[]) {
     super();
@@ -196,12 +207,20 @@ class PropertiesValidator<LocalType = unknown, In = unknown> extends Validator<L
       Object.entries(localProperties).forEach(registerMandatoryProperty);
     }
     this.validationOrder = validationOrder;
+    this._supportsFreeze = 
+      Object.values(this.properties).every(value => value.supportsFreeze())
+      && Object.values(this.localProperties).every(value => value.supportsFreeze())
+      && this.additionalProperties.every(value => value.keyValidator.supportsFreeze() && value.valueValidator.supportsFreeze());
 
     Object.freeze(this.properties);
     Object.freeze(this.localProperties);
     Object.freeze(this.additionalProperties);
     Object.freeze(this.validationOrder);
     Object.freeze(this);
+  }
+
+  supportsFreeze(): boolean {
+    return this._supportsFreeze;
   }
   validatePathV2(value: In, path: Path, ctx: ValidationContext, success: SuccessCallback<LocalType>, failure: FailureCallback): void {
     if (value === null || value === undefined) {
