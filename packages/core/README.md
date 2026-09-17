@@ -946,9 +946,58 @@ instance itself is frozen so the guard cannot be removed, but invoking the nativ
 `Map.prototype.set.call(frozenMap, key, value)` - still mutates it. `Object.freeze` on a plain
 object or array, by contrast, is enforced by the engine._
 
+### What V.frozen guarantees
+
+Every validator declares whether it can produce frozen output, and `V.frozen` refuses to wrap a
+schema that contains one which cannot:
+
+```typescript
+V.frozen(V.object({ properties: { a: V.fn(value => ({ wrapped: value })) } }));
+// Error: Wrapped validator does not support freeze
+```
+
+The default is `false`, so anything that hands a value back from user code - `V.fn`, `V.map`,
+`V.assertTrue`, `V.hasValue` - is rejected until you assert otherwise. Assert it when the function
+returns a primitive, or a value it has frozen itself:
+
+```typescript
+V.frozen(V.object({ properties: { a: V.fn(value => String(value), true) } })); // accepted
+```
+
+`V.any()`, `V.unknown()` and `V.check()` are rejected for the same reason: they pass their input
+through unchanged, so they can hand out an object nobody has frozen.
+
+A `V.proxy` cannot answer the question without forcing its factory, which would defeat the point of
+deferring it, so its answer is asserted too - needed for any recursive schema you want to freeze:
+
+```typescript
+const tree: Validator<Tree> = V.objectType()
+  .properties({ name: V.string(), child: V.optionalStrict(V.proxy(() => tree, true)) })
+  .build();
+V.frozen(tree); // accepted
+```
+
+The assertion is checked against the proxied validator once the factory runs, so a wrong one fails
+on first validation instead of leaking. It surfaces as an `Error` violation carrying the message -
+a schema configuration problem reported on the data path.
+
+So the guarantee is: **every plain object, array, `Map` and `Set` in the output is frozen, and every
+validator that produces a value has been reviewed.** It is not a promise that nothing reachable from
+the result can change, and the assertions are exactly that - promises the caller makes, which
+`V.frozen` cannot verify.
+
 _NOTE: freezing is shallow per value, and only object, array, `Map` and `Set` validators freeze
 their output. A `Date`, a Luxon `DateTime` or any other class instance reached by a validated value
 keeps its mutable internal state._
+
+_NOTE: for Luxon, the wrapper validators (`Vluxon.dateTime`, `dateTimeUtc`, `localDate`, ...) support
+freezing, because `LuxonDateTime` freezes itself - which also blocks reassigning its `dateTime`
+property. The plain ones (`dateTimeFromISO`, `dateTimeFromRFC2822`, `dateTimeFromHTTP`,
+`dateTimeFromSQL`, `duration`, `timeDuration`) do not: a raw Luxon `DateTime` or `Duration` is not
+frozen, and cannot be. Luxon caches week data on the instance the first time `weekYear`,
+`weekNumber`, `weekday`, a `localWeek*` field or a week format token is read, so freezing one makes
+those accessors throw. Luxon's API is immutable - every method returns a new instance - but its
+instances are not._
 
 ## Custom Validators
 

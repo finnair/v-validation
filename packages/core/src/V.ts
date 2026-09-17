@@ -89,9 +89,15 @@ const ignoreValidator = new IgnoreValidator(),
   dateValidator = new DateValidator(ValidatorType.Date);
 
 export const V = {
-  fn: <Out, In>(fn: ValidatorFn<Out, In>, type?: string) => new ValidatorFnWrapper<Out, In>(fn, type),
+  /**
+   * @param supportsFreeze Assert that `fn` cannot return a value that `V.frozen` would fail to
+   * freeze - it returns a primitive, or a value it has frozen itself. Defaults to `false`, which
+   * makes `V.frozen` reject a schema containing this validator.
+   */
+  fn: <Out, In>(fn: ValidatorFn<Out, In>, supportsFreeze?: boolean) => new ValidatorFnWrapper<Out, In>(fn, supportsFreeze),
 
-  map: <Out, In>(fn: MappingFn<Out, In>, error?: any) => new ValueMapper<Out, In>(fn, error),
+  /** @param supportsFreeze See {@link V.fn}. */
+  map: <Out, In>(fn: MappingFn<Out, In>, error?: any, supportsFreeze?: boolean) => new ValueMapper<Out, In>(fn, error, supportsFreeze),
 
   ignore: () => ignoreValidator,
 
@@ -225,9 +231,12 @@ export const V = {
 
   enum: <Out extends Record<string, string | number>>(enumType: Out, name: string) => new EnumValidator<Out>(enumType, name),
 
-  assertTrue: <In>(fn: AssertTrue<In>, type: string = 'AssertTrue', path?: Path) => new AssertTrueValidator<In>(fn, type, path),
+  /** @param supportsFreeze See {@link V.fn}; an assertion passes its input through unchanged. */
+  assertTrue: <In>(fn: AssertTrue<In>, type: string = 'AssertTrue', path?: Path, supportsFreeze?: boolean) =>
+    new AssertTrueValidator<In>(fn, type, path, supportsFreeze),
 
-  hasValue: <InOut>(expectedValue: InOut) => new HasValueValidator<InOut>(expectedValue),
+  /** @param supportsFreeze See {@link V.fn}; needed only when `expectedValue` is an object. */
+  hasValue: <InOut>(expectedValue: InOut, supportsFreeze?: boolean) => new HasValueValidator<InOut>(expectedValue, supportsFreeze),
 
   json: <Out, T1, T2, T3, T4, T5>(...validators: CompositionParameters<Out, string, T1, T2, T3, T4, T5>) =>
     new JsonValidator(maybeCompositionOf(...validators)),
@@ -242,10 +251,10 @@ export const V = {
    * @param factory A function that produces a `Validator` instance when called.
    * @returns A `ProxyValidator` that delegates to the validator produced by the factory.
    */
-  proxy: <Out = unknown, In = unknown>(factory: ProxyValidatorFactory<Out, In>) => new ProxyValidator<Out, In>(factory),
+  proxy: <Out = unknown, In = unknown>(factory: ProxyValidatorFactory<Out, In>, supportsFreeze: boolean = false) => new ProxyValidator<Out, In>(factory, supportsFreeze),
 
   /**
-   * Wraps a validator so that successful results are memoized by input value in a bounded LRU cache.
+   * Wraps a validator so that successful results are memoized by cache key in a bounded cache.
    * A repeated input returns the earlier result directly - e.g. the same ISO string parses to one
    * shared `DateTime` instance. See {@link MemoizeValidator}.
    */

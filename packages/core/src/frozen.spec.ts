@@ -1,6 +1,6 @@
 import { describe, test, expect } from 'vitest';
 import { V } from './V.js';
-import { FreezableMap, FreezableSet, JsonMap, JsonSet, Validator } from './validators.js';
+import { FreezableMap, FreezableSet, IdentityValidator, JsonMap, JsonSet, Validator, ValidatorConfigurationError } from './validators.js';
 
 describe('V.frozen', () => {
   const model = V.objectType()
@@ -58,7 +58,8 @@ describe('V.frozen', () => {
       child?: Tree;
     }
     const tree: Validator<Tree> = V.objectType()
-      .properties({ name: V.string(), child: V.optionalStrict(V.proxy(() => tree)) })
+      // A proxy cannot report supportsFreeze without forcing its factory, so the author asserts it.
+      .properties({ name: V.string(), child: V.optionalStrict(V.proxy(() => tree, true)) })
       .build();
 
     const result: any = await V.frozen(tree).getValid({ name: 'a', child: { name: 'b', child: { name: 'c' } } });
@@ -66,6 +67,75 @@ describe('V.frozen', () => {
     expect(Object.isFrozen(result)).toBe(true);
     expect(Object.isFrozen(result.child)).toBe(true);
     expect(Object.isFrozen(result.child.child)).toBe(true);
+  });
+
+  test('a recursive schema is rejected unless the proxy asserts supportsFreeze', () => {
+    interface Tree {
+      name: string;
+      child?: Tree;
+    }
+    const tree: Validator<Tree> = V.objectType()
+      .properties({ name: V.string(), child: V.optionalStrict(V.proxy(() => tree)) })
+      .build();
+
+    expect(() => V.frozen(tree)).toThrow();
+  });
+
+  test('a proxy that asserts supportsFreeze wrongly throws a configuration error', async () => {
+    // The assertion cannot be checked at construction time without forcing the factory, so it is
+    // verified once the factory has run. It is a schema bug, not invalid data, so it propagates out
+    // of validation instead of being reported as a violation.
+    const lying = V.frozen(
+      V.objectType()
+        .properties({ child: V.optionalStrict(V.proxy(() => V.any(), true)) })
+        .build(),
+    );
+
+    await expect(lying.validate({ child: {} })).rejects.toThrow(ValidatorConfigurationError);
+    await expect(lying.getValid({ child: {} })).rejects.toThrow(/supportsFreeze/);
+  });
+
+  test('it keeps throwing: the proxied validator is not cached until the assertion holds', async () => {
+    const lying = V.frozen(
+      V.objectType()
+        .properties({ child: V.optionalStrict(V.proxy(() => V.any(), true)) })
+        .build(),
+    );
+
+    // Caching before the check would make it fire once and then silently leak an unfrozen value.
+    for (let i = 0; i < 3; i++) {
+      await expect(lying.validate({ child: {} })).rejects.toThrow(ValidatorConfigurationError);
+    }
+  });
+
+  test('it propagates from every position, including past an async validator', async () => {
+    const bad = () => V.proxy(() => V.any(), true);
+
+    await expect(V.frozen(bad()).validate('x')).rejects.toThrow(ValidatorConfigurationError);
+    await expect(V.frozen(V.array(bad())).validate([{}])).rejects.toThrow(ValidatorConfigurationError);
+    await expect(V.frozen(V.oneOf(bad(), V.string())).validate('x')).rejects.toThrow(ValidatorConfigurationError);
+    // An async validator upstream means the failure travels the promise path; it must still escape
+    // rather than becoming an unhandled rejection.
+    await expect(
+      V.frozen(
+        V.compositionOf(
+          V.fn(async (value: any) => value, true),
+          bad(),
+        ),
+      ).validate('x'),
+    ).rejects.toThrow(ValidatorConfigurationError);
+  });
+
+  test('a proxy asserting supportsFreeze over a freezable target validates normally', async () => {
+    const validator = V.frozen(
+      V.objectType()
+        .properties({ child: V.optionalStrict(V.proxy(() => V.object({ properties: { v: V.string() } }), true)) })
+        .build(),
+    );
+
+    const result: any = await validator.getValid({ child: { v: 'x' } });
+
+    expect(Object.isFrozen(result.child)).toBe(true);
   });
 
   test('propagates through V.oneOf branches', async () => {
@@ -223,5 +293,171 @@ describe('V.frozen with Map and Set validators', () => {
 
     expect(() => map.set('x', 'y')).toThrow(TypeError);
     expect(() => set.add('x')).toThrow(TypeError);
+  });
+});
+
+describe('supportsFreeze classification', () => {
+  // Every validator that can appear in a frozen schema declares whether its output is freezable.
+  // This pins each answer so a change is deliberate rather than incidental.
+  describe('validators whose output is a primitive or already frozen', () => {
+    test.each([
+      ['V.toString()', V.toString()],
+      ['V.nullOrUndefined()', V.nullOrUndefined()],
+      ['V.notBlank()', V.notBlank()],
+      ['V.toBoolean()', V.toBoolean()],
+      ['V.jsonBigInt()', V.jsonBigInt()],
+      ['V.uuid()', V.uuid()],
+      ['V.size(1, 2)', V.size(1, 2)],
+      ['V.string()', V.string()],
+      ['V.number()', V.number()],
+      ['V.object(...)', V.object({ properties: { a: V.string() } })],
+      ['V.array(V.string())', V.array(V.string())],
+      ['V.toMapType(...)', V.toMapType(V.string(), V.string(), true)],
+      ['V.setType(...)', V.setType(V.string(), true)],
+    ])('%s supports freeze', (_name, validator) => expect(validator.supportsFreeze()).toBe(true));
+  });
+
+  describe('validators that can hand out a value nobody froze', () => {
+    test.each([
+      ['V.any()', V.any()],
+      ['V.unknown()', V.unknown()],
+      ['V.check(V.any())', V.check(V.any())],
+      ['V.fn(...)', V.fn((value: any) => value)],
+      ['V.map(...)', V.map((value: any) => value)],
+      ['V.assertTrue(...)', V.assertTrue(() => true)],
+      ['V.hasValue(...)', V.hasValue({ a: 1 })],
+      ['V.date()', V.date()],
+      ['V.proxy(...)', V.proxy(() => V.string())],
+      ['V.whenGroup(...)', V.whenGroup('g', V.string())],
+      ['V.whenGroup(...).otherwiseSuccess()', V.whenGroup('g', V.string()).otherwiseSuccess()],
+      // Used by otherwiseSuccess(); passes the input straight through, like V.any().
+      ['new IdentityValidator()', new IdentityValidator()],
+    ])('%s does not support freeze', (_name, validator) => expect(validator.supportsFreeze()).toBe(false));
+  });
+
+  describe('composites derive their answer from their children', () => {
+    const freezable = V.string();
+    const notFreezable = V.any();
+
+    test('V.nullable delegates', () => {
+      expect(V.nullable(freezable).supportsFreeze()).toBe(true);
+      expect(V.nullable(notFreezable).supportsFreeze()).toBe(false);
+    });
+
+    test('V.json delegates', () => {
+      expect(V.json(V.object({ properties: { a: V.string() } })).supportsFreeze()).toBe(true);
+      expect(V.json(notFreezable).supportsFreeze()).toBe(false);
+    });
+
+    test('V.anyOf requires all branches', () => {
+      expect(V.anyOf(freezable, V.number()).supportsFreeze()).toBe(true);
+      expect(V.anyOf(freezable, notFreezable).supportsFreeze()).toBe(false);
+    });
+
+    test('V.oneOf requires all branches', () => {
+      expect(V.oneOf(freezable, V.number()).supportsFreeze()).toBe(true);
+      expect(V.oneOf(freezable, notFreezable).supportsFreeze()).toBe(false);
+    });
+
+    test('V.allOf requires all branches', () => {
+      expect(V.allOf(freezable, V.string()).supportsFreeze()).toBe(true);
+      expect(V.allOf(freezable, notFreezable).supportsFreeze()).toBe(false);
+    });
+
+    test('V.if requires every conditional branch and the else branch', () => {
+      expect(V.if(() => true, freezable).supportsFreeze()).toBe(true);
+      expect(V.if(() => true, notFreezable).supportsFreeze()).toBe(false);
+      expect(
+        V.if(() => true, freezable)
+          .elseIf(() => true, V.number())
+          .supportsFreeze(),
+      ).toBe(true);
+      expect(
+        V.if(() => true, freezable)
+          .elseIf(() => true, notFreezable)
+          .supportsFreeze(),
+      ).toBe(false);
+      expect(
+        V.if(() => true, freezable)
+          .else(V.number())
+          .supportsFreeze(),
+      ).toBe(true);
+      expect(
+        V.if(() => true, freezable)
+          .else(notFreezable)
+          .supportsFreeze(),
+      ).toBe(false);
+    });
+
+    test('V.optional / V.optionalStrict delegate', () => {
+      expect(V.optionalStrict(freezable).supportsFreeze()).toBe(true);
+      expect(V.optionalStrict(notFreezable).supportsFreeze()).toBe(false);
+    });
+
+    test('an object requires every property, local property and additional property', () => {
+      expect(V.object({ properties: { a: freezable } }).supportsFreeze()).toBe(true);
+      expect(V.object({ properties: { a: notFreezable } }).supportsFreeze()).toBe(false);
+      expect(V.object({ localProperties: { a: notFreezable } }).supportsFreeze()).toBe(false);
+      expect(V.object({ additionalProperties: { keys: V.string(), values: notFreezable } }).supportsFreeze()).toBe(false);
+    });
+
+    test('an array requires its items', () => {
+      expect(V.array(freezable).supportsFreeze()).toBe(true);
+      expect(V.array(notFreezable).supportsFreeze()).toBe(false);
+    });
+
+    test('a Map/Set requires its keys and values', () => {
+      expect(V.toMapType(V.string(), notFreezable, true).supportsFreeze()).toBe(false);
+      expect(V.setType(notFreezable, true).supportsFreeze()).toBe(false);
+    });
+
+    test('a composition takes its answer from the last value-producing validator', () => {
+      // KNOWN LIMITATION: V.check passes its input through, so it cannot claim support on its own -
+      // which makes `.next(V.check(...))` report false even though the upstream value was frozen.
+      expect(
+        V.object({ properties: { a: V.string() } })
+          .next(V.check(V.any()))
+          .supportsFreeze(),
+      ).toBe(false);
+    });
+  });
+
+  describe('the assertion escape hatches', () => {
+    test.each([
+      ['V.fn', () => V.fn((value: any) => String(value), true)],
+      ['V.map', () => V.map((value: any) => String(value), undefined, true)],
+      ['V.assertTrue', () => V.assertTrue(() => true, 'T', undefined, true)],
+      ['V.hasValue', () => V.hasValue('a', true)],
+      ['V.proxy', () => V.proxy(() => V.string(), true)],
+      ['IdentityValidator', () => new IdentityValidator(true)],
+    ])('%s can assert support', (_name, build) => expect(build().supportsFreeze()).toBe(true));
+
+    test('V.fn ignores a non-boolean assertion and keeps the safe default', () => {
+      // V.fn's second argument used to be an unused `type?: string`. A leftover string must not be
+      // read as a freeze assertion, so anything but a boolean falls back to `false`.
+      expect(V.fn((value: any) => value, 'NotInstanceOfDate' as unknown as boolean).supportsFreeze()).toBe(false);
+      expect(V.fn((value: any) => value, 1 as unknown as boolean).supportsFreeze()).toBe(false);
+      expect(V.fn((value: any) => value, {} as unknown as boolean).supportsFreeze()).toBe(false);
+      expect(V.fn((value: any) => value, undefined).supportsFreeze()).toBe(false);
+
+      // ...and a real boolean is still honoured.
+      expect(V.fn((value: any) => value, true).supportsFreeze()).toBe(true);
+      expect(V.fn((value: any) => value, false).supportsFreeze()).toBe(false);
+    });
+
+    test('a V.fn carrying a leftover type string is rejected by V.frozen', () => {
+      const legacy = V.fn((value: any) => ({ wrapped: value }), 'SomeType' as unknown as boolean);
+
+      expect(() => V.frozen(legacy)).toThrow();
+    });
+
+    test('an assertion is a promise the caller makes: V.frozen cannot verify it', async () => {
+      const lying = V.frozen(V.object({ properties: { a: V.fn((value: any) => ({ mutable: value }), true) } }));
+
+      const result: any = await lying.getValid({ a: 'x' });
+
+      expect(Object.isFrozen(result)).toBe(true);
+      expect(Object.isFrozen(result.a)).toBe(false);
+    });
   });
 });
