@@ -167,6 +167,115 @@ describe('MemoizeValidator', () => {
     });
   });
 
+  describe('resetCache', () => {
+    test('empties the cache, so a repeated input is validated again', async () => {
+      const { state, validator } = counting();
+      const memo = V.memoize(validator);
+
+      await memo.validate('x');
+      await memo.validate('x');
+      expect(state.calls).toBe(1);
+
+      memo.resetCache();
+
+      await memo.validate('x');
+      expect(state.calls).toBe(2);
+    });
+
+    test('the cache works again afterwards', async () => {
+      const { state, validator } = counting();
+      const memo = V.memoize(validator);
+
+      await memo.validate('x');
+      memo.resetCache();
+
+      const first = (await memo.validate('x')).getValue();
+      const second = (await memo.validate('x')).getValue();
+
+      expect(state.calls).toBe(2);
+      expect(second).toBe(first);
+    });
+
+    test('a result held from before the reset is not the one served after it', async () => {
+      const memo = V.memoize(V.fn((value: any) => ({ value })));
+
+      const before = (await memo.validate('x')).getValue();
+      memo.resetCache();
+      const after = (await memo.validate('x')).getValue();
+
+      expect(after).not.toBe(before);
+      expect(after).toEqual(before);
+    });
+
+    test('eviction still works after a reset', async () => {
+      // The eviction cursor is live when clear() runs, which permanently exhausts it, so a reset
+      // has to replace it or eviction would fall back to rebuilding one every time.
+      const { state, validator } = counting();
+      const memo = V.memoize(validator, { maxSize: 2 });
+
+      await memo.validate('a');
+      await memo.validate('b');
+      memo.resetCache();
+
+      await memo.validate('c');
+      await memo.validate('d');
+      await memo.validate('e'); // 'c' evicted
+      expect(state.calls).toBe(5);
+
+      await memo.validate('d'); // still cached
+      await memo.validate('e'); // still cached
+      expect(state.calls).toBe(5);
+
+      await memo.validate('c'); // evicted, so re-validated
+      expect(state.calls).toBe(6);
+    });
+
+    test('lru recency is tracked again after a reset', async () => {
+      const { state, validator } = counting();
+      const memo = V.memoize(validator, { maxSize: 2, evictionPolicy: 'lru' });
+
+      await memo.validate('a');
+      memo.resetCache();
+
+      await memo.validate('a');
+      await memo.validate('b');
+      await memo.validate('a'); // hit -> 'a' becomes most recent
+      expect(state.calls).toBe(3);
+
+      await memo.validate('c'); // evicts 'b'
+      await memo.validate('a'); // survived
+      expect(state.calls).toBe(4);
+    });
+
+    test('resetting an empty cache is a no-op', async () => {
+      const { state, validator } = counting();
+      const memo = V.memoize(validator);
+
+      memo.resetCache();
+      memo.resetCache();
+
+      expect((await memo.validate('x')).isSuccess()).toBe(true);
+      expect(state.calls).toBe(1);
+    });
+
+    test('leaves the rest of the configuration alone', async () => {
+      const { state, validator } = counting();
+      const memo = V.memoize(validator, { maxSize: 2, shouldCache: result => (result.value as string) !== 'skip' });
+
+      await memo.validate('skip');
+      await memo.validate('skip');
+      expect(state.calls).toBe(2);
+
+      memo.resetCache();
+
+      // shouldCache and maxSize still apply.
+      await memo.validate('skip');
+      await memo.validate('skip');
+      expect(state.calls).toBe(4);
+      expect((memo as any).cache.size).toBe(0);
+    });
+  });
+
   describe('options', () => {
     // Options can change what a validator produces, and they are not part of the cache key, so a
     // result cached under one set must not be served under another.

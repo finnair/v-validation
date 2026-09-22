@@ -878,6 +878,14 @@ validator used with any option at all has to say so. `ignoreUnknownProperties` a
 one. `warnLogger` is not compared, since it cannot change the result; note though that a cache hit
 skips it, so an ignored violation is logged only the first time a value is validated.
 
+`resetCache()` empties the cache. The usual reason is testing - a memoized validator is normally
+built once and shared, so a cache carried between cases makes them depend on each other - but it is
+also how results are discarded once their inputs are no longer the source of truth:
+
+```typescript
+afterEach(() => memoized.resetCache());
+```
+
 Pass a `shouldCache` predicate to keep outliers out of the cache, so that rare values do not evict
 common ones. It runs on a cache miss after successful validation, receiving the converted result and
 the original input; return `false` to pass the result through without caching it. For example, cache

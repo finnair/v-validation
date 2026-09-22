@@ -204,6 +204,21 @@ export class MemoizeValidator<Out = unknown, In = unknown, K = In> extends Valid
       failure([defaultViolations.async(path)]);
     }
   }
+
+  /**
+   * Empties the cache. Useful in tests, where a validator is usually built once and shared between
+   * cases, and for discarding results whose inputs are no longer the source of truth.
+   *
+   * The eviction cursor is replaced rather than left alone: a `Map` iterator that was live when
+   * `clear` ran is permanently exhausted, and would not see the entries added afterwards. The
+   * fallback in {@link evictOldest} would recover from that, but replacing the cursor here keeps
+   * its invariant - every live key sits at or after it - true at all times.
+   */
+  resetCache(): void {
+    this.cache.clear();
+    this.evictCursor.it = this.cache.keys();
+  }
+
   private validateOptions(options?: ValidatorOptions): void {
     if (options === this.options || (this.lenientOptionsEquals(options) && this.groupEquals(options))) {
       return;
