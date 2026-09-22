@@ -20,7 +20,9 @@ export interface ValidatorOptions {
 }
 
 export class ValidationContext {
-  constructor(public readonly options: ValidatorOptions) { }
+  constructor(public readonly options: ValidatorOptions) {
+    Object.freeze(this.options);
+  }
 
   /**
    * Path-scoped cycle detection. For each object currently being validated, tracks the paths at
@@ -506,6 +508,7 @@ export class Group {
       }
     }
     Object.freeze(this.allIncluded);
+    Object.freeze(this);
   }
 
   includes(groupOrName: GroupOrName): boolean {
@@ -949,18 +952,16 @@ export class Conditional<Out = unknown, In = unknown> {
   }
 }
 
-export class WhenGroupValidator<When = unknown, Otherwise = unknown, In = unknown> extends Validator<When | Otherwise, In> {
+export class WhenGroupValidator<When = unknown, Otherwise = unknown, In = unknown> extends CompositeValidator<When | Otherwise, In> {
   constructor(public readonly whenGroups: WhenGroup<When>[], public readonly otherwiseValidator?: Validator<Otherwise>) {
-    super();
+    // The otherwise branch produces the result whenever no group matches, so it has to support
+    // freezing too - `otherwiseSuccess()` hands the input straight back, for instance.
+    super(
+      false,
+      whenGroups.every(wg => wg.validator.supportsFreeze()) && (!otherwiseValidator || otherwiseValidator.supportsFreeze()),
+    );
     Object.freeze(this.whenGroups);
     Object.freeze(this);
-  }
-  /**
-   * WhenGroupValidator does not support freezing as the result of validation depends on context.
-   * @returns 
-   */
-  supportsFreeze(): boolean {
-    return false; 
   }
   validatePathV2(value: In, path: Path, ctx: ValidationContext, success: SuccessCallback<When | Otherwise>, failure: FailureCallback): void {
     const group = ctx.options?.group;

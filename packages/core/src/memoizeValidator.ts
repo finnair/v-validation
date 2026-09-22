@@ -1,5 +1,6 @@
 import { Path } from '@finnair/path';
-import { defaultViolations, FailureCallback, SuccessCallback, ValidationContext, Validator, violationsOf } from './validators.js';
+import { defaultViolations, FailureCallback, SuccessCallback, ValidationContext, Validator, ValidatorConfigurationError, ValidatorOptions, violationsOf } from './validators.js';
+import { default as deepEqual } from 'fast-deep-equal';
 
 export const DEFAULT_MEMOIZE_MAX_SIZE = 1000;
 
@@ -17,6 +18,20 @@ export const DEFAULT_MEMOIZE_MAX_SIZE = 1000;
 export type MemoizeEvictionPolicy = 'fifo' | 'lru';
 
 export interface MemoizeValidatorOptions<Out = unknown, In = unknown, K=In> {
+  /**
+   * The `ValidatorOptions` this cache is valid for. Options can change what a validator produces -
+   * a `group` selects different rules, `ignoreUnknownProperties` turns a violation into a passing
+   * value - and the cache key does not include them, so a result cached under one set of options
+   * must not be served under another.
+   *
+   * Validating with anything else throws a {@link ValidatorConfigurationError}, which propagates
+   * out of validation rather than being reported as a violation of the data. `warnLogger` is not
+   * compared, since it cannot change the result; note though that a cache hit skips it, so an
+   * ignored violation is logged only the first time a value is validated.
+   *
+   * Defaults to no options, which accepts only a validation that passes none either.
+   */
+  readonly options?: ValidatorOptions;
   /**
    * Maximum number of input -> result entries to retain. When the cache grows past this, one entry
    * is evicted in {@link evictionPolicy} order. Defaults to {@link DEFAULT_MEMOIZE_MAX_SIZE}.
@@ -104,12 +119,13 @@ export class MemoizeValidator<Out = unknown, In = unknown, K = In> extends Valid
   private readonly cacheKeyFn: (value: undefined | In) => K;
   /** True for `lru`; kept as a boolean so the hit path tests a flag rather than compares strings. */
   private readonly refreshOnHit: boolean;
-
+  private readonly options?: ValidatorOptions;
   constructor(
     readonly validator: Validator<Out, In>,
     options: MemoizeValidatorOptions<Out, In, K> = {},
   ) {
     super();
+    this.options = options.options;
     this.maxSize = options.maxSize ?? DEFAULT_MEMOIZE_MAX_SIZE;
     if (!Number.isInteger(this.maxSize) || this.maxSize < 1) {
       throw new Error(`maxSize must be an integer >= 1, got ${this.maxSize}`);
@@ -122,10 +138,12 @@ export class MemoizeValidator<Out = unknown, In = unknown, K = In> extends Valid
     this.shouldCache = options.shouldCache;
     this.cacheKeyFn = options.cacheKeyFn ?? ((input) => input as K);
     this.evictCursor = { it: this.cache.keys() };
+    Object.freeze(this.options);
     Object.freeze(this);
   }
 
   validatePathV2(value: In, path: Path, ctx: ValidationContext, success: SuccessCallback<Out>, failure: FailureCallback): void {
+    this.validateOptions(ctx.options);
     const cache = this.cache;
     const key = this.cacheKeyFn(value);
     // An `undefined` result is never cached, so a plain `get` distinguishes a hit from a miss.
@@ -185,6 +203,21 @@ export class MemoizeValidator<Out = unknown, In = unknown, K = In> extends Valid
       settled = true;
       failure([defaultViolations.async(path)]);
     }
+  }
+  private validateOptions(options?: ValidatorOptions): void {
+    if (options === this.options || (this.lenientOptionsEquals(options) && this.groupEquals(options))) {
+      return;
+    }
+    throw new ValidatorConfigurationError(`Unsupported validator options: ${JSON.stringify(options)}`);
+  }
+
+  private lenientOptionsEquals(options?: ValidatorOptions): boolean {
+    return (options?.ignoreUnknownEnumValues ?? false) === (this.options?.ignoreUnknownEnumValues ?? false) && 
+      (options?.ignoreUnknownProperties ?? false) === (this.options?.ignoreUnknownProperties ?? false);
+  }
+
+  private groupEquals(options?: ValidatorOptions): boolean {
+    return deepEqual(options?.group, this.options?.group);
   }
 
   /**

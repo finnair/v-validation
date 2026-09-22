@@ -1939,6 +1939,32 @@ describe('compositionOf', () => {
   test('invalid input', () => expectViolations('AbCd', validator, defaultViolations.number('')));
 });
 
+describe('group immutability', () => {
+  // A Group is shared by every validation that uses it, so it must not be mutable. Its
+  // `allIncluded` lookup was frozen from the start; the instance itself is frozen too.
+  const immutabilityGroups = new Groups();
+  const parent = immutabilityGroups.define('parent');
+  const child = immutabilityGroups.define('child', parent);
+
+  test('the instance and its lookup table are both frozen', () => {
+    expect(Object.isFrozen(child)).toBe(true);
+    expect(Object.isFrozen((child as any).allIncluded)).toBe(true);
+  });
+
+  test('no field can be written, added or redefined', () => {
+    expect(() => { (child as any).name = 'renamed'; }).toThrow(TypeError);
+    expect(() => { (child as any).extra = 1; }).toThrow(TypeError);
+    expect(() => { (child as any).allIncluded.parent = false; }).toThrow(TypeError);
+    expect(() => { (child as any).allIncluded.sneaky = true; }).toThrow(TypeError);
+  });
+
+  test('membership is unaffected by the freeze', () => {
+    expect(child.includes('child')).toBe(true);
+    expect(child.includes(parent)).toBe(true);
+    expect(parent.includes(child)).toBe(false);
+  });
+});
+
 describe('groups', () => {
   const groups = new Groups();
   const DEFAULT = groups.define('default');

@@ -1,5 +1,6 @@
 import { describe, test, expect } from 'vitest';
 import { V } from './V.js';
+import { Groups } from './validators.js';
 import { FreezableMap, FreezableSet, IdentityValidator, JsonMap, JsonSet, Validator, ValidatorConfigurationError } from './validators.js';
 
 describe('V.frozen', () => {
@@ -136,6 +137,22 @@ describe('V.frozen', () => {
     const result: any = await validator.getValid({ child: { v: 'x' } });
 
     expect(Object.isFrozen(result.child)).toBe(true);
+  });
+
+  test('the whenGroup otherwise branch cannot leak an unfrozen value', async () => {
+    const groups = new Groups();
+    const matching = groups.define('matching');
+    const other = groups.define('other');
+    const shape = V.object({ properties: { a: V.string() } });
+
+    // Freezable on the group branch, pass-through on the otherwise branch: rejected outright,
+    // because validating under any other group would return the raw input unfrozen.
+    expect(() => V.frozen(V.whenGroup(matching, shape).otherwise(V.any()))).toThrow();
+
+    // With both branches freezable, either path yields frozen output.
+    const validator = V.frozen(V.whenGroup(matching, shape).otherwise(shape));
+    expect(Object.isFrozen(await validator.getValid({ a: 'x' }, { group: matching }))).toBe(true);
+    expect(Object.isFrozen(await validator.getValid({ a: 'x' }, { group: other }))).toBe(true);
   });
 
   test('propagates through V.oneOf branches', async () => {
@@ -328,8 +345,9 @@ describe('supportsFreeze classification', () => {
       ['V.hasValue(...)', V.hasValue({ a: 1 })],
       ['V.date()', V.date()],
       ['V.proxy(...)', V.proxy(() => V.string())],
-      ['V.whenGroup(...)', V.whenGroup('g', V.string())],
+      // otherwiseSuccess() hands the input straight back, so the composite cannot support freezing.
       ['V.whenGroup(...).otherwiseSuccess()', V.whenGroup('g', V.string()).otherwiseSuccess()],
+      ['V.whenGroup(...).otherwise(V.any())', V.whenGroup('g', V.string()).otherwise(V.any())],
       // Used by otherwiseSuccess(); passes the input straight through, like V.any().
       ['new IdentityValidator()', new IdentityValidator()],
     ])('%s does not support freeze', (_name, validator) => expect(validator.supportsFreeze()).toBe(false));
@@ -362,6 +380,17 @@ describe('supportsFreeze classification', () => {
     test('V.allOf requires all branches', () => {
       expect(V.allOf(freezable, V.string()).supportsFreeze()).toBe(true);
       expect(V.allOf(freezable, notFreezable).supportsFreeze()).toBe(false);
+    });
+
+    test('V.whenGroup requires every group branch and the otherwise branch', () => {
+      expect(V.whenGroup('g', freezable).supportsFreeze()).toBe(true);
+      expect(V.whenGroup('g', notFreezable).supportsFreeze()).toBe(false);
+      expect(V.whenGroup('g', freezable).whenGroup('h', V.number()).supportsFreeze()).toBe(true);
+      expect(V.whenGroup('g', freezable).whenGroup('h', notFreezable).supportsFreeze()).toBe(false);
+      // The otherwise branch produces the result whenever no group matches.
+      expect(V.whenGroup('g', freezable).otherwise(V.number()).supportsFreeze()).toBe(true);
+      expect(V.whenGroup('g', freezable).otherwise(notFreezable).supportsFreeze()).toBe(false);
+      expect(V.whenGroup('g', freezable).otherwiseSuccess().supportsFreeze()).toBe(false);
     });
 
     test('V.if requires every conditional branch and the else branch', () => {

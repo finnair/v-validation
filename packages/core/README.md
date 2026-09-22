@@ -725,6 +725,13 @@ Options are passed to to `validate` function as optional second argument.
 
 \*) Note that this option has no effect in cases where additional properties are explicitly denied.
 
+Every option is declared `readonly`, and `validate`/`getValid` make that effective at runtime by
+freezing the options object they are given. So an options object can be built once and reused
+across validations, and a later write to it fails instead of silently changing how a validator
+behaves - which also keeps a [memoized](#memoization) validator's pinned options from drifting out
+from under its cache. Nothing reachable through the options stays mutable either: the only object an
+option can hold is a `Group`, which freezes both itself and its group membership.
+
 ```typescript
 (await V.object({}).validate({ additionalProperty: 'OK' }, { ignoreUnknownProperties: true })).isSuccess();
 // true
@@ -852,6 +859,25 @@ every validation, hit or miss, so keep it cheap.
 Note that the input of an object or array validator is `unknown`, so a key function usually
 annotates its parameter (`(value: any) => ...`) or the call states its types explicitly.
 
+A cache is only valid for the `ValidatorOptions` it was built under: a `group` selects different
+rules and `ignoreUnknownProperties` turns a violation into a passing value, and neither is part of
+the cache key. Declare the options the cache applies to, and validating with anything else throws a
+`ValidatorConfigurationError` rather than serving a result produced under different rules:
+
+```typescript
+const memoized = V.memoize(validator, { options: { group: Groups.GROUP_A } });
+
+await memoized.validate(value, { group: Groups.GROUP_A }); // fine
+await memoized.validate(value, { group: Groups.GROUP_B }); // throws ValidatorConfigurationError
+await memoized.validate(value); // throws - no options is not the same as GROUP_A
+```
+
+The default is no options, which accepts only a validation that passes none either - so a memoized
+validator used with any option at all has to say so. `ignoreUnknownProperties` and
+`ignoreUnknownEnumValues` compare leniently, treating an explicit `false` as equal to an omitted
+one. `warnLogger` is not compared, since it cannot change the result; note though that a cache hit
+skips it, so an ignored violation is logged only the first time a value is validated.
+
 Pass a `shouldCache` predicate to keep outliers out of the cache, so that rare values do not evict
 common ones. It runs on a cache miss after successful validation, receiving the converted result and
 the original input; return `false` to pass the result through without caching it. For example, cache
@@ -877,6 +903,8 @@ Three things to keep in mind:
   `V.optionalStrict(V.memoize(...))` - when `undefined` is an accepted input.
 - **A cached result is shared by every caller**, so mutating it corrupts every later read. Wrap the
   memoized validator in [`V.frozen`](#frozen) when the cached values are objects.
+- **A cache is tied to its `ValidatorOptions`.** Declare them with the `options` setting; validating
+  under any others throws a `ValidatorConfigurationError`.
 - **The wrapped validator must be a pure function of its cache key.** Neither the active `group` nor
   any other `ValidatorOptions` is part of the key, so a validator whose result depends on them
   should not be memoized.
@@ -966,6 +994,11 @@ V.frozen(V.object({ properties: { a: V.fn(value => String(value), true) } })); /
 
 `V.any()`, `V.unknown()` and `V.check()` are rejected for the same reason: they pass their input
 through unchanged, so they can hand out an object nobody has frozen.
+
+Composites derive their answer from their children, and that includes the branch taken when nothing
+else matches: `V.if(...)` needs its `else`, and `V.whenGroup(...)` needs its `otherwise` - so
+`V.whenGroup(g, V.object(...)).otherwiseSuccess()` is rejected, because validating under any other
+group would hand the raw input straight back.
 
 A `V.proxy` cannot answer the question without forcing its factory, which would defeat the point of
 deferring it, so its answer is asserted too - needed for any recursive schema you want to freeze:

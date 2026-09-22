@@ -3,6 +3,7 @@ import { Path } from '@finnair/path';
 import { V } from './V.js';
 import { defaultViolations, Validator } from './validators.js';
 import { DEFAULT_MEMOIZE_MAX_SIZE } from './memoizeValidator.js';
+import { Groups, ValidatorConfigurationError } from './validators.js';
 
 const ROOT = Path.ROOT;
 
@@ -163,6 +164,81 @@ describe('MemoizeValidator', () => {
 
       await memo.validate('v46');
       expect(state.calls).toBe(51);
+    });
+  });
+
+  describe('options', () => {
+    // Options can change what a validator produces, and they are not part of the cache key, so a
+    // result cached under one set must not be served under another.
+    const groups = new Groups();
+    const g1 = groups.define('g1');
+    const g2 = groups.define('g2');
+
+    test('accepts the options it was pinned to', async () => {
+      const memo = V.memoize(V.string(), { options: { group: g1 } });
+
+      expect((await memo.validate('x', { group: g1 })).isSuccess()).toBe(true);
+    });
+
+    test('rejects a different group', async () => {
+      const memo = V.memoize(V.string(), { options: { group: g1 } });
+
+      await expect(memo.validate('x', { group: g2 })).rejects.toThrow(ValidatorConfigurationError);
+      await expect(memo.validate('x')).rejects.toThrow(/Unsupported validator options/);
+    });
+
+    test('pinning nothing accepts only a validation that passes nothing', async () => {
+      const memo = V.memoize(V.string());
+
+      expect((await memo.validate('x')).isSuccess()).toBe(true);
+      await expect(memo.validate('x', { group: g1 })).rejects.toThrow(ValidatorConfigurationError);
+      await expect(memo.validate('x', { ignoreUnknownProperties: true })).rejects.toThrow(ValidatorConfigurationError);
+    });
+
+    test('compares the ignore flags leniently, so an explicit false equals an omitted one', async () => {
+      const memo = V.memoize(V.string(), {
+        options: { ignoreUnknownProperties: false, ignoreUnknownEnumValues: false },
+      });
+
+      expect((await memo.validate('x')).isSuccess()).toBe(true);
+      expect((await memo.validate('x', {})).isSuccess()).toBe(true);
+      await expect(memo.validate('x', { ignoreUnknownProperties: true })).rejects.toThrow(ValidatorConfigurationError);
+    });
+
+    test('accepts each pinned ignore flag when it matches', async () => {
+      const memo = V.memoize(V.string(), { options: { ignoreUnknownProperties: true, ignoreUnknownEnumValues: true } });
+
+      expect((await memo.validate('x', { ignoreUnknownProperties: true, ignoreUnknownEnumValues: true })).isSuccess()).toBe(true);
+      await expect(memo.validate('x', { ignoreUnknownProperties: true })).rejects.toThrow(ValidatorConfigurationError);
+    });
+
+    test('ignores warnLogger, which cannot change the result', async () => {
+      const memo = V.memoize(V.string(), { options: {} });
+
+      expect((await memo.validate('x', { warnLogger: () => {} })).isSuccess()).toBe(true);
+    });
+
+    test('the mismatch propagates from a nested position', async () => {
+      const parent = V.object({ properties: { a: V.memoize(V.string(), { options: { group: g1 } }) } });
+
+      await expect(parent.validate({ a: 'x' }, { group: g2 })).rejects.toThrow(ValidatorConfigurationError);
+    });
+
+    test('getValid reports it as the configuration error too, not a ValidationError', async () => {
+      const memo = V.memoize(V.string(), { options: { group: g1 } });
+
+      await expect(memo.getValid('x', { group: g2 })).rejects.toThrow(ValidatorConfigurationError);
+    });
+
+    test('nothing is cached under the wrong options', async () => {
+      const { state, validator } = counting();
+      const memo = V.memoize(validator, { options: { group: g1 } });
+
+      await expect(memo.validate('x', { group: g2 })).rejects.toThrow(ValidatorConfigurationError);
+      expect(state.calls).toBe(0);
+
+      expect((await memo.validate('x', { group: g1 })).isSuccess()).toBe(true);
+      expect(state.calls).toBe(1);
     });
   });
 
