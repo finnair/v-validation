@@ -154,7 +154,9 @@ export class MemoizeValidator<Out = unknown, In = unknown, K = In> extends Valid
   }
   
   validatePathV2(value: In, path: Path, ctx: ValidationContext, success: SuccessCallback<Out>, failure: FailureCallback): void {
-    this.validateOptions(ctx.options);
+    if (!this.supportsOptions(ctx.options)) {
+      return failure(violationsOf(new ValidatorConfigurationError(`Unsupported validator options: ${JSON.stringify(ctx.options)}`), path));
+    }
     const cache = this.cache;
     const key = this.cacheKeyFn(value);
     // An `undefined` result is never cached, so a plain `get` distinguishes a hit from a miss.
@@ -230,11 +232,8 @@ export class MemoizeValidator<Out = unknown, In = unknown, K = In> extends Valid
     this.evictCursor.it = this.cache.keys();
   }
 
-  private validateOptions(options?: ValidatorOptions): void {
-    if (this.options === undefined || options === this.options || (this.lenientOptionsEquals(options) && this.groupEquals(options))) {
-      return;
-    }
-    throw new ValidatorConfigurationError(`Unsupported validator options: ${JSON.stringify(options)}`);
+  private supportsOptions(options?: ValidatorOptions): boolean {
+    return this.options === undefined || options === this.options || (this.lenientOptionsEquals(options) && this.groupEquals(options));
   }
 
   private lenientOptionsEquals(options?: ValidatorOptions): boolean {

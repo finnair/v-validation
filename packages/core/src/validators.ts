@@ -256,7 +256,7 @@ export interface FailureCallback {
  * Finds a {@link ValidatorConfigurationError} reported as an `ErrorViolation`, so that
  * `validate`/`getValid` can re-raise it rather than presenting a schema bug as invalid data.
  */
-function configurationErrorOf(violations: Violation[]): undefined | ValidatorConfigurationError {
+export function configurationErrorOf(violations: Violation[]): undefined | ValidatorConfigurationError {
   for (let i = 0; i < violations.length; i++) {
     const violation = violations[i];
     if (violation instanceof ErrorViolation && violation.error instanceof ValidatorConfigurationError) {
@@ -948,7 +948,11 @@ export class OneOfValidator<Out = unknown> extends Validator<Out> {
             validateNext(index + 1);
           },
           (error) => {
-            results.push({ violations: violationsOf(error, path) });
+            const violations = violationsOf(error, path);
+            if (configurationErrorOf(violations)) {
+              return failure(violations);
+            }
+            results.push({ violations });
             validateNext(index + 1);
           }
         );
@@ -990,6 +994,7 @@ export class AnyOfValidator<Out = unknown, In = unknown> extends Validator<Out, 
 
   validatePathV2(value: In, path: Path, ctx: ValidationContext, success: SuccessCallback<Out>, failure: FailureCallback): void {
     let violations: Violation[] = [];
+    let configurationError: undefined | Violation[];
     const conflictingConversions: Set<any> = new Set();
     let foundMatch = false;
     let convertedValue: any;
@@ -997,7 +1002,11 @@ export class AnyOfValidator<Out = unknown, In = unknown> extends Validator<Out, 
 
     const reportResult = (result: undefined | Out, error: any) => {
       if (error) {
-        violations = violations.concat(violationsOf(error, path));
+        const errorViolations = violationsOf(error, path);
+        if (!configurationError && configurationErrorOf(errorViolations)) {
+          configurationError = errorViolations;
+        }
+        violations = violations.concat(errorViolations);
       } else if (!foundMatch) {
         convertedValue = result;
         foundMatch = true;
@@ -1006,8 +1015,10 @@ export class AnyOfValidator<Out = unknown, In = unknown> extends Validator<Out, 
         conflictingConversions.add(result);
       }
       if (--expectedResponses === 0) {
-        if (conflictingConversions.size > 0) {
-          failure([new Violation(path, 'ConflictingConversions', Array.from(conflictingConversions))]);
+        if (configurationError) {
+          failure(configurationError);
+        } else if (conflictingConversions.size > 0) {
+          failure(violationsOf(new ValidatorConfigurationError(`ConflictingConversions for anyOf(${path}): ${Array.from(conflictingConversions).join(', ')}`), path));
         } else if (foundMatch) {
           success(convertedValue);
         } else {
@@ -2034,7 +2045,7 @@ export class AllOfValidator<Out, In> extends CompositeValidator<Out, In> {
     let violations: Violation[] = [];
     let firstResult = true;
     let convertedValue: any;
-    const conflictingConversion = new Set<any>();
+    const conflictingConversions = new Set<any>();
     let expectedResponses = this.validators.length;
 
     const reportResult = (result: undefined | Out, error: any) => {
@@ -2044,12 +2055,12 @@ export class AllOfValidator<Out, In> extends CompositeValidator<Out, In> {
         convertedValue = result;
         firstResult = false;
       } else if (!deepEqual(result, convertedValue)) {
-        conflictingConversion.add(convertedValue);
-        conflictingConversion.add(result);
+        conflictingConversions.add(convertedValue);
+        conflictingConversions.add(result);
       }
       if (--expectedResponses === 0) {
-        if (conflictingConversion.size > 0) {
-          violations.push(new Violation(path, 'ConflictingConversions', Array.from(conflictingConversion)));
+        if (conflictingConversions.size > 0) {
+          return failure(violationsOf(new ValidatorConfigurationError(`ConflictingConversions for allOf(${path}): ${Array.from(conflictingConversions).join(', ')}`), path));
         }
         if (violations.length > 0) {
           failure(violations);

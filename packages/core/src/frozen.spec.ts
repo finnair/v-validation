@@ -142,6 +142,40 @@ describe('V.frozen', () => {
     ).rejects.toThrow(ValidatorConfigurationError);
   });
 
+  test('it propagates when reached from an async callback without a try/catch', async () => {
+    const bad = () => V.proxy(() => V.any(), true);
+    const asyncId = V.fn(async (value: any) => value);
+
+    await expect(V.object({ properties: { a: asyncId }, localProperties: { a: bad() } }).validate({ a: 'x' })).rejects.toThrow(
+      ValidatorConfigurationError,
+    );
+    await expect(V.object({ additionalProperties: { keys: asyncId, values: bad() } }).validate({ a: 'x' })).rejects.toThrow(
+      ValidatorConfigurationError,
+    );
+  });
+
+  test('it is not mistaken for a non-matching branch', async () => {
+    // Branching validators treat an ordinary failure as "try the next option"; a schema bug must
+    // escape even when another option would match.
+    const bad = () => V.proxy(() => V.any(), true);
+
+    await expect(V.oneOf(bad(), V.string()).validate('x')).rejects.toThrow(ValidatorConfigurationError);
+    await expect(V.anyOf(bad(), V.string()).validate('x')).rejects.toThrow(ValidatorConfigurationError);
+    await expect(
+      V.object({ additionalProperties: [{ keys: bad(), values: V.string() }, { keys: V.string(), values: V.string() }] }).validate({ a: 'x' }),
+    ).rejects.toThrow(ValidatorConfigurationError);
+  });
+
+  test('a throwing proxy factory is reported as an error violation, not thrown', async () => {
+    const failing = V.proxy(() => {
+      throw new Error('factory failed');
+    });
+
+    const result = await V.object({ properties: { a: failing } }).validate({ a: 'x' });
+
+    expect(result.getViolations()).toMatchObject([{ type: 'Error', message: 'factory failed' }]);
+  });
+
   test('a proxy asserting supportsFreeze over a freezable target validates normally', async () => {
     const validator = V.frozen(
       V.objectType()

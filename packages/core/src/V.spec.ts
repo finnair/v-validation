@@ -27,6 +27,7 @@ import {
   AnyOfValidator,
   AllOfValidator,
   SyncPromise,
+  ValidatorConfigurationError,
 } from './validators.js';
 import { ObjectValidator, VInheritableType, lenientUnknownPropertyValidator } from './objectValidator.js';
 import { V } from './V.js';
@@ -1622,7 +1623,18 @@ describe('anyOf', () => {
 
     test('valid value', () => expectValid('ABC', validator));
 
-    test('conflicting conversions', () => expectViolations('abc', validator, new Violation(ROOT, 'ConflictingConversions', ['abc', 'ABC'])));
+    test('conflicting conversions are a configuration error, not a violation', async () => {
+      await expect(validator.validate('abc')).rejects.toThrow(ValidatorConfigurationError);
+      await expect(validator.getValid('abc')).rejects.toThrow('ConflictingConversions for anyOf($): abc, ABC');
+    });
+
+    test('the error propagates from a nested position', async () => {
+      await expect(V.object({ properties: { a: validator } }).validate({ a: 'abc' })).rejects.toThrow('ConflictingConversions for anyOf($.a)');
+    });
+
+    test('the error is not swallowed by an enclosing oneOf', async () => {
+      await expect(V.oneOf(validator, V.string()).validate('abc')).rejects.toThrow(ValidatorConfigurationError);
+    });
   });
   
   describe('array context', () => {
@@ -1884,7 +1896,8 @@ describe('async validation', () => {
 
     test('results must match', async () => {
       const validator = V.allOf(V.string(), V.toInteger());
-      await expectViolations('123', validator, new Violation(ROOT, 'ConflictingConversions', ['123', 123]));
+      await expect(validator.validate('123')).rejects.toThrow(ValidatorConfigurationError);
+      await expect(validator.validate('123')).rejects.toThrow('ConflictingConversions for allOf($): 123, 123');
     });
 
     test('return original', async () => {
@@ -1892,12 +1905,9 @@ describe('async validation', () => {
     });
 
     test('conflicting conversions not allowed', async () => {
-      try {
-        await V.allOf(defer(V.toInteger(), 3), defer(V.toObject('value'), 1)).validate('123');
-        fail('expected an error');
-      } catch (e) {
-        // as expected
-      }
+      await expect(V.allOf(defer(V.toInteger(), 3), defer(V.toObject('value'), 1)).validate('123')).rejects.toThrow(
+        ValidatorConfigurationError,
+      );
     });
   });
 

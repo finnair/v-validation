@@ -2,6 +2,7 @@ import { Path } from "@finnair/path";
 import {
   AnyValidator,
   CompositionParameters,
+  configurationErrorOf,
   defaultViolations,
   FailureCallback,
   HasValueValidator,
@@ -326,7 +327,12 @@ class PropertiesValidator<LocalType = unknown, In = unknown> extends Validator<L
               (error) => reportFailure(key, error)
             );
           },
-          (keyError) => validateAdditionalProperty(key, propertyValue, propertyPath, index + 1, keySuccessCount, keyError)
+          (keyError) => {
+            if (configurationErrorOf(violationsOf(keyError, propertyPath))) {
+              return reportFailure(key, keyError);
+            }
+            validateAdditionalProperty(key, propertyValue, propertyPath, index + 1, keySuccessCount, keyError);
+          }
         );
       } else if (keySuccessCount === 0) {
         ctx.failure(defaultViolations.unknownProperty(propertyPath), propertyValue).then(

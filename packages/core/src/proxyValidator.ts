@@ -1,5 +1,5 @@
 import { Path } from '@finnair/path';
-import { FailureCallback, SuccessCallback, ValidationContext, Validator, ValidatorConfigurationError, ValidatorVisitor, ValidatorVisitorContext } from './validators.js';
+import { FailureCallback, SuccessCallback, ValidationContext, Validator, ValidatorConfigurationError, ValidatorVisitor, ValidatorVisitorContext, violationsOf } from './validators.js';
 
 export interface ProxyValidatorFactory<Out = unknown, In = unknown> {
   (): Validator<Out, In>;
@@ -50,7 +50,13 @@ export class ProxyValidator<Out = unknown, In = unknown> extends Validator<Out, 
   }
 
   validatePathV2(value: In, path: Path, ctx: ValidationContext, success: SuccessCallback<Out>, failure: FailureCallback): void {
-    return this.getValidator().validatePathV2(value, path, ctx, success, failure);
+    let validator: Validator<Out, In>;
+    try {
+      validator = this.getValidator();
+    } catch (error) {
+      return failure(violationsOf(error, path));
+    }
+    return validator.validatePathV2(value, path, ctx, success, failure);
   }
 
   private getValidator(): Validator<Out, In> {

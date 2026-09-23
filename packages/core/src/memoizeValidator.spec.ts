@@ -348,6 +348,20 @@ describe('MemoizeValidator', () => {
       await expect(parent.validate({ a: 'x' }, { group: g2 })).rejects.toThrow(ValidatorConfigurationError);
     });
 
+    test('the mismatch propagates when reached from an async callback', async () => {
+      // These positions call the memoized validator from another validator's async callback, with no
+      // try/catch around it: a thrown error there would be an unhandled rejection and a hang.
+      const memo = () => V.memoize(V.string(), { options: { group: g1 } });
+      const asyncId = V.fn(async (value: any) => value);
+
+      await expect(
+        V.object({ properties: { a: asyncId }, localProperties: { a: memo() } }).validate({ a: 'x' }, { group: g2 }),
+      ).rejects.toThrow(ValidatorConfigurationError);
+      await expect(
+        V.object({ additionalProperties: { keys: asyncId, values: memo() } }).validate({ a: 'x' }, { group: g2 }),
+      ).rejects.toThrow(ValidatorConfigurationError);
+    });
+
     test('getValid reports it as the configuration error too, not a ValidationError', async () => {
       const memo = V.memoize(V.string(), { options: { group: g1 } });
 

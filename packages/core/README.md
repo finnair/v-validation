@@ -1209,8 +1209,8 @@ Unless otherwise stated, all validators require non-null and non-undefined value
 | array                   | ...items: Validator[]                                            | [Array validator](#array)                                                                                                                 |
 | toArray                 | items: Validator                                                 | Converts undefined to an empty array and non-arrays to single-valued arrays.                                                              |
 | size                    | min: number, max: number                                         | Asserts that input's numeric `length` property is between min and max (both inclusive).                                                   |
-| allOf                   | ...validators: Validator[]                                       | Requires that all given validators match. All child validators must result in the same output.                                |
-| anyOf                   | ...validators: Validator[]                                       | Requires minimum one of given validators matches. All matching validators must result in the same output.  |
+| allOf                   | ...validators: Validator[]                                       | Requires that all given validators match. All child validators must result in the same output, otherwise throws `ValidatorConfigurationError`. |
+| anyOf                   | ...validators: Validator[]                                       | Requires minimum one of given validators matches. All matching validators must result in the same output, otherwise throws `ValidatorConfigurationError`. |
 | oneOf                   | ...validators: Validator[]                                       | Requires that exactly one of the given validators match.                                                                                  |
 | emptyToUndefined        |                                                                  | Converts null or empty string to undefined. Does not touch any other values.                                                              |
 | emptyToNull             |                                                                  | Converts undefined or empty string to null. Does not touch any other values.                                                              |
@@ -1257,3 +1257,10 @@ All `Violations` have following propertie in common:
 | Violation              | Cycle                 |                                 | The value being validated contains a reference cycle (self-referential data).       |
 | Violation              | Async                 |                                 | An asynchronous validator was wrapped in `V.memoize`, which supports only sync ones. |
 | DiscriminatorViolation | Discriminator         | expectedOneOf: string[]         | Invalid discriminator value: `expectedOneOf` is a list of known types.              |
+
+A schema bug is not a problem with the input, so it is not reported as a `Violation`: `validate()`
+rejects and `getValid()` throws a `ValidatorConfigurationError` instead. That happens when
+
+- `V.anyOf`/`V.allOf` validators produce conflicting conversions (`ConflictingConversions`),
+- a [memoized](#memoization) validator is used with other than its pinned `options`, or
+- a `V.proxy` asserts `supportsFreeze` but the proxied validator does not support it.
