@@ -1,5 +1,5 @@
 import { Path } from '@finnair/path';
-import { FailureCallback, SuccessCallback, ValidationContext, Validator, ValidatorConfigurationError } from './validators.js';
+import { FailureCallback, SuccessCallback, ValidationContext, Validator, ValidatorConfigurationError, ValidatorVisitor, ValidatorVisitorContext } from './validators.js';
 
 export interface ProxyValidatorFactory<Out = unknown, In = unknown> {
   (): Validator<Out, In>;
@@ -39,6 +39,14 @@ export class ProxyValidator<Out = unknown, In = unknown> extends Validator<Out, 
 
   supportsFreeze(): boolean {
     return this._supportsFreeze;
+  }
+
+  visit(visitor: ValidatorVisitor, path: Path = Path.ROOT, context?: ValidatorVisitorContext, stack?: Validator<any, any>[]): void {
+    if (visitor.accept(this, path, context)) {
+      // NOTE: We only visit the proxied validator if it has already been created.
+      // This avoids forcing the factory early, which could break self-references.
+      this._validator?.visit(visitor, path, new ValidatorVisitorContext('proxy'), stack);
+    }
   }
 
   validatePathV2(value: In, path: Path, ctx: ValidationContext, success: SuccessCallback<Out>, failure: FailureCallback): void {

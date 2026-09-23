@@ -122,7 +122,10 @@ The plain validators are rejected:
 
 ```typescript
 V.frozen(V.object({ properties: { at: Vluxon.dateTimeFromISO() } }));
-// Error: Wrapped validator does not support freeze
+// Error: The following validators do not support freeze:
+// $: ObjectValidator
+// $: PropertiesValidator
+// $.at: DateTimeValidator (property)
 ```
 
 ### Why a plain Luxon value cannot be frozen

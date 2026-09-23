@@ -97,7 +97,7 @@ export const V = {
   fn: <Out, In>(fn: ValidatorFn<Out, In>, supportsFreeze?: boolean) => new ValidatorFnWrapper<Out, In>(fn, supportsFreeze),
 
   /** @param supportsFreeze See {@link V.fn}. */
-  map: <Out, In>(fn: MappingFn<Out, In>, error?: any, supportsFreeze?: boolean) => new ValueMapper<Out, In>(fn, error, supportsFreeze),
+  map: <Out, In>(fn: MappingFn<Out, In>, supportsFreeze?: boolean) => new ValueMapper<Out, In>(fn, supportsFreeze),
 
   ignore: () => ignoreValidator,
 

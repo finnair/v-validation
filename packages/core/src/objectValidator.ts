@@ -13,6 +13,8 @@ import {
   SuccessCallback,
   ValidationContext,
   Validator,
+  ValidatorVisitor,
+  ValidatorVisitorContext,
   Violation,
   violationsOf,
 } from "./validators.js";
@@ -154,6 +156,17 @@ export class ObjectValidator<LocalType = unknown, InheritableType = LocalType, I
     return this.validator.supportsFreeze();
   }
 
+  visit(visitor: ValidatorVisitor, path: Path = Path.ROOT, context?: ValidatorVisitorContext, stack: Validator<any, any>[] = []) {
+    if (visitor.accept(this, path, context)) {
+      if (stack.includes(this)) {
+        return;
+      }
+      stack.push(this);
+      this.validator.visit(visitor, path, context, stack);
+      stack.pop();
+    }
+  }
+
   validatePathV2(value: In, path: Path, ctx: ValidationContext, success: SuccessCallback<LocalType>, failure: FailureCallback): void {
     const successFn = ctx.freeze
       ? (result: LocalType) => {
@@ -222,6 +235,22 @@ class PropertiesValidator<LocalType = unknown, In = unknown> extends Validator<L
   supportsFreeze(): boolean {
     return this._supportsFreeze;
   }
+
+  visit(visitor: ValidatorVisitor, path: Path = Path.ROOT, context?: ValidatorVisitorContext, stack: Validator<any, any>[] = []) {
+    if (visitor.accept(this, path, context)) {
+      Object.entries(this.properties).forEach(([key, validator]) => {
+        validator.visit(visitor, path.property(key), new ValidatorVisitorContext('property'), stack);
+      });
+      Object.entries(this.localProperties).forEach(([key, validator]) => {
+        validator.visit(visitor, path.property(key), new ValidatorVisitorContext('localProperty'), stack);
+      });
+      this.additionalProperties.forEach((entry) => {
+        entry.keyValidator.visit(visitor, path.property('*'), new ValidatorVisitorContext('additionalProperties: key'), stack);
+        entry.valueValidator.visit(visitor, path.property('*'), new ValidatorVisitorContext('additionalProperties: value'), stack);
+      });
+    }
+  }
+
   validatePathV2(value: In, path: Path, ctx: ValidationContext, success: SuccessCallback<LocalType>, failure: FailureCallback): void {
     if (value === null || value === undefined) {
       return failure([defaultViolations.notNull(path)]);

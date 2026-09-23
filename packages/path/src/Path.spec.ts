@@ -5,6 +5,7 @@ import { AnyProperty, AnyIndex } from './matchers.js';
 
 describe('path', () => {
   test('toJSON', () => expect(Path.property('s p a c e s').index(5).property('regular').toJSON()).toEqual('$["s p a c e s"][5].regular'));
+  test('toString', () => expect(String(Path.of('a', 1, 'b'))).toEqual('$.a[1].b'));
 
   test('Weird properties', () =>
     expect(Path.property('@foo').property('a5').property('http://xmlns.com/foaf/0.1/name').toJSON()).toEqual('$["@foo"].a5["http://xmlns.com/foaf/0.1/name"]'));

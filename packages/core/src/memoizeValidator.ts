@@ -1,5 +1,5 @@
 import { Path } from '@finnair/path';
-import { defaultViolations, FailureCallback, SuccessCallback, ValidationContext, Validator, ValidatorConfigurationError, ValidatorOptions, violationsOf } from './validators.js';
+import { defaultViolations, FailureCallback, SuccessCallback, ValidationContext, Validator, ValidatorConfigurationError, ValidatorOptions, ValidatorVisitor, ValidatorVisitorContext, violationsOf } from './validators.js';
 import { default as deepEqual } from 'fast-deep-equal';
 
 export const DEFAULT_MEMOIZE_MAX_SIZE = 1000;
@@ -21,15 +21,16 @@ export interface MemoizeValidatorOptions<Out = unknown, In = unknown, K=In> {
   /**
    * The `ValidatorOptions` this cache is valid for. Options can change what a validator produces -
    * a `group` selects different rules, `ignoreUnknownProperties` turns a violation into a passing
-   * value - and the cache key does not include them, so a result cached under one set of options
-   * must not be served under another.
+   * value - and the cache key does not include them. Pin them when the memoized validator depends
+   * on them, typically a cached `V.object`.
    *
-   * Validating with anything else throws a {@link ValidatorConfigurationError}, which propagates
-   * out of validation rather than being reported as a violation of the data. `warnLogger` is not
-   * compared, since it cannot change the result; note though that a cache hit skips it, so an
+   * When set, validating with anything else throws a {@link ValidatorConfigurationError}, which
+   * propagates out of validation rather than being reported as a violation of the data. `warnLogger`
+   * is not compared, since it cannot change the result; note though that a cache hit skips it, so an
    * ignored violation is logged only the first time a value is validated.
    *
-   * Defaults to no options, which accepts only a validation that passes none either.
+   * Defaults to `undefined`, which skips the check: fine for option-insensitive validators such as
+   * scalar parsers. Use `{}` to pin "no options".
    */
   readonly options?: ValidatorOptions;
   /**
@@ -97,7 +98,7 @@ export interface MemoizeValidatorOptions<Out = unknown, In = unknown, K=In> {
  * position. An optional `shouldCache` predicate can further exclude successful results from the
  * cache (e.g. outliers), so that rare values do not evict common ones. Memoization assumes the
  * wrapped validator is a pure function of its cache key - a validator whose result depends on the
- * active group or on `ValidatorOptions` should not be wrapped, since neither is part of the key.
+ * active group or on `ValidatorOptions` should pin them with `options`, since neither is part of the key.
  *
  * Only synchronous validators are supported. An asynchronous result settles after `validatePathV2`
  * returns, with no guarantee of when - or whether - the value becomes available, so it cannot be
@@ -142,6 +143,16 @@ export class MemoizeValidator<Out = unknown, In = unknown, K = In> extends Valid
     Object.freeze(this);
   }
 
+  supportsFreeze(): boolean {
+    return this.validator.supportsFreeze();
+  }
+
+  visit(visitor: ValidatorVisitor, path: Path = Path.ROOT, context?: ValidatorVisitorContext, stack?: Validator<any, any>[]): void {
+    if (visitor.accept(this, path, context)) {
+      this.validator.visit(visitor, path, context, stack);
+    }
+  }
+  
   validatePathV2(value: In, path: Path, ctx: ValidationContext, success: SuccessCallback<Out>, failure: FailureCallback): void {
     this.validateOptions(ctx.options);
     const cache = this.cache;
@@ -220,7 +231,7 @@ export class MemoizeValidator<Out = unknown, In = unknown, K = In> extends Valid
   }
 
   private validateOptions(options?: ValidatorOptions): void {
-    if (options === this.options || (this.lenientOptionsEquals(options) && this.groupEquals(options))) {
+    if (this.options === undefined || options === this.options || (this.lenientOptionsEquals(options) && this.groupEquals(options))) {
       return;
     }
     throw new ValidatorConfigurationError(`Unsupported validator options: ${JSON.stringify(options)}`);

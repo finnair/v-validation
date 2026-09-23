@@ -296,12 +296,27 @@ describe('MemoizeValidator', () => {
       await expect(memo.validate('x')).rejects.toThrow(/Unsupported validator options/);
     });
 
-    test('pinning nothing accepts only a validation that passes nothing', async () => {
+    test('pinning nothing accepts any options: the check is opt-in', async () => {
+      // Most memoized validators are option-insensitive - a Luxon parse cannot be affected by a
+      // group or by ignoreUnknownProperties - so requiring a declaration would be pure friction.
       const memo = V.memoize(V.string());
 
       expect((await memo.validate('x')).isSuccess()).toBe(true);
-      await expect(memo.validate('x', { group: g1 })).rejects.toThrow(ValidatorConfigurationError);
-      await expect(memo.validate('x', { ignoreUnknownProperties: true })).rejects.toThrow(ValidatorConfigurationError);
+      expect((await memo.validate('x', { group: g1 })).isSuccess()).toBe(true);
+      expect((await memo.validate('x', { ignoreUnknownProperties: true })).isSuccess()).toBe(true);
+    });
+
+    test('an unpinned cache serves the same entry regardless of options', async () => {
+      // The consequence of the check being opt-in: pin `options` when the memoized validator's
+      // result actually depends on them.
+      const { state, validator } = counting();
+      const memo = V.memoize(validator);
+
+      const first = (await memo.validate('x', { group: g1 })).getValue();
+      const second = (await memo.validate('x', { group: g2 })).getValue();
+
+      expect(state.calls).toBe(1);
+      expect(second).toBe(first);
     });
 
     test('compares the ignore flags leniently, so an explicit false equals an omitted one', async () => {

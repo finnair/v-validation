@@ -7,6 +7,8 @@ import {
   isString,
   Violation,
   TypeMismatch,
+  ValidatorVisitor,
+  ValidatorVisitorContext,
 } from './validators.js';
 import {
   ObjectValidator,
@@ -82,6 +84,18 @@ export class SchemaValidator extends Validator {
 
     Object.freeze(this.validators);
     Object.freeze(this);
+  }
+
+  supportsFreeze(): boolean {
+    return Object.values(this.validators).every(validator => validator.supportsFreeze());
+  }
+
+  visit(visitor: ValidatorVisitor, path: Path = Path.ROOT, context?: ValidatorVisitorContext, stack?: Validator<any, any>[]): void {
+    if (visitor.accept(this, path, context)) {
+      Object.entries(this.validators).forEach(([name, validator]) => {
+        validator.visit(visitor, path, new ValidatorVisitorContext(`schema: ${name}`), stack);
+      });
+    }
   }
 
   validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult> {

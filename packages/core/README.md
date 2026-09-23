@@ -235,7 +235,7 @@ const personValidator = V.object({
 Custom converters can be defined as a simple map functions.
 
 ```typescript
-const base64json = V.map(value => JSON.parse(new Buffer(value, 'base64').toString()), 'InvalidEncoding');
+const base64json = V.map(value => JSON.parse(new Buffer(value, 'base64').toString()));
 (await base64json.validate('eyAibWVzc2FnZSI6ICJIZWxsbyBXb3JsZCEiIH0=')).getValue();
 // { message: 'Hello World!' }
 
@@ -244,7 +244,8 @@ const base64json = V.map(value => JSON.parse(new Buffer(value, 'base64').toStrin
 //   {
 //     "path": "$",
 //     "type": "Error",
-//     "error": "InvalidEncoding"
+//     "error": {},
+//     "message": "Unexpected token m in JSON at position 2"
 //   }
 // ]
 ```
@@ -859,10 +860,15 @@ every validation, hit or miss, so keep it cheap.
 Note that the input of an object or array validator is `unknown`, so a key function usually
 annotates its parameter (`(value: any) => ...`) or the call states its types explicitly.
 
-A cache is only valid for the `ValidatorOptions` it was built under: a `group` selects different
-rules and `ignoreUnknownProperties` turns a violation into a passing value, and neither is part of
-the cache key. Declare the options the cache applies to, and validating with anything else throws a
-`ValidatorConfigurationError` rather than serving a result produced under different rules:
+A cache is valid only for the `ValidatorOptions` its results were produced under, since neither
+`group` nor `ignoreUnknownProperties`/`ignoreUnknownEnumValues` is part of the cache key. Most
+memoized validators do not care - parsing an ISO string into a Luxon `DateTime` produces the same
+result under any options - so by default the cache does not check them at all.
+
+When the memoized validator *does* depend on options - typically a `V.object` with group-specific
+rules or unknown properties - declare the options the cache applies to. Validating with anything
+else then throws a `ValidatorConfigurationError` rather than serving a result produced under
+different rules:
 
 ```typescript
 const memoized = V.memoize(validator, { options: { group: Groups.GROUP_A } });
@@ -872,11 +878,10 @@ await memoized.validate(value, { group: Groups.GROUP_B }); // throws ValidatorCo
 await memoized.validate(value); // throws - no options is not the same as GROUP_A
 ```
 
-The default is no options, which accepts only a validation that passes none either - so a memoized
-validator used with any option at all has to say so. `ignoreUnknownProperties` and
-`ignoreUnknownEnumValues` compare leniently, treating an explicit `false` as equal to an omitted
-one. `warnLogger` is not compared, since it cannot change the result; note though that a cache hit
-skips it, so an ignored violation is logged only the first time a value is validated.
+Pass `options: {}` to pin "no options". `ignoreUnknownProperties` and `ignoreUnknownEnumValues`
+compare leniently, treating an explicit `false` as equal to an omitted one. `warnLogger` is never
+compared, since it cannot change the result; note though that a cache hit skips it, so an ignored
+violation is logged only the first time a value is validated.
 
 `resetCache()` empties the cache. The usual reason is testing - a memoized validator is normally
 built once and shared, so a cache carried between cases makes them depend on each other - but it is
@@ -897,7 +902,7 @@ const recent = V.memoize(Vluxon.dateTime(), {
 });
 ```
 
-Three things to keep in mind:
+Things to keep in mind:
 
 - **Only synchronous validators are supported.** An asynchronous result settles after validation
   returns, with no guarantee of when - or whether - it arrives, so it cannot be cached or returned
@@ -911,8 +916,9 @@ Three things to keep in mind:
   `V.optionalStrict(V.memoize(...))` - when `undefined` is an accepted input.
 - **A cached result is shared by every caller**, so mutating it corrupts every later read. Wrap the
   memoized validator in [`V.frozen`](#frozen) when the cached values are objects.
-- **A cache is tied to its `ValidatorOptions`.** Declare them with the `options` setting; validating
-  under any others throws a `ValidatorConfigurationError`.
+- **Options are not part of the cache key.** If the memoized validator's result depends on
+  `ValidatorOptions`, pin them with the `options` setting; validating under any others then throws
+  a `ValidatorConfigurationError`.
 - **The wrapped validator must be a pure function of its cache key.** Neither the active `group` nor
   any other `ValidatorOptions` is part of the key, so a validator whose result depends on them
   should not be memoized.
@@ -988,9 +994,31 @@ Every validator declares whether it can produce frozen output, and `V.frozen` re
 schema that contains one which cannot:
 
 ```typescript
-V.frozen(V.object({ properties: { a: V.fn(value => ({ wrapped: value })) } }));
-// Error: Wrapped validator does not support freeze
+V.frozen(V.object({ properties: { a: V.fn(value => ({ wrapped: value })), b: V.array(V.any()) } }));
+// Error: The following validators do not support freeze:
+// $: ObjectValidator
+// $: PropertiesValidator
+// $.a: ValidatorFnWrapper (property)
+// $.b: ArrayValidator (property)
+// $.b["*"]: AnyValidator
 ```
+
+The report lists every validator that does not support freeze along with the schema path to it, so
+the offending leaves are the most specific entries - here `$.a` and `$.b["*"]`. `PropertiesValidator`
+is the internal step of an object validator that validates its properties. Only the last step
+of a `V.compositionOf`/`Validator.next` chain produces the output, so a non-final step is not
+reported on its own - nor are an object's properties when only its `next` fails. The same check is available as `assertFreezable(validator)`, which returns the
+validator or throws; it is built on `Validator.visit(visitor)`, which walks a schema with a
+`ValidatorVisitor` and can be used for other schema analysis too. Its `accept(validator, path, context)`
+receives the validator's role in its parent as a `ValidatorVisitorContext`: a `CompositeVisitorContext`
+(`type`, `current`, `count`) for a branch of `V.compositionOf`, `V.allOf`, `V.anyOf`, `V.oneOf` or
+`V.if`, a `GroupVisitorContext` (`group`, `undefined` for `otherwise`) for `V.whenGroup`, and a
+plain context such as `property` otherwise. Return `false` to skip a validator's children.
+
+_WARNING: the visitor API (`Validator.visit`, `ValidatorVisitor` and the `ValidatorVisitorContext`
+classes) is **internal and experimental**. It may change in any release, and changes to it -
+especially to the context types, which validators report which context and the structure of
+`assertFreezable`'s report - are **not** considered breaking changes. Use it at your own risk._
 
 The default is `false`, so anything that hands a value back from user code - `V.fn`, `V.map`,
 `V.assertTrue`, `V.hasValue` - is rejected until you assert otherwise. Assert it when the function
@@ -1138,10 +1166,10 @@ Unless otherwise stated, all validators require non-null and non-undefined value
 
 | V.                      | Arguments                                                        | Description                                                                                                                               |
 | ----------------------- | ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| fn                      | fn: ValidatorFn, type?: string                                   | Function reference as a validator. A short cut for extending Validator class.                                                             |
+| fn                      | fn: ValidatorFn, supportsFreeze?: boolean                        | Function reference as a validator. A short cut for extending Validator class.                                                             |
 | ignore                  |                                                                  | Converts any input value to undefined.                                                                                                    |
 | any                     |                                                                  | Accepts any value, including undefined and null.                                                                                          |
-| map                     | fn: MappingFn, error?: any                                       | Mapping function to convert a value. Catches and converts errors to Violations                                                            |
+| map                     | fn: MappingFn, supportsFreeze?: boolean                          | Mapping function to convert a value. Catches and converts errors to Violations                                                            |
 | compositionOf           | ...validators: Validator[]                                       | Runs given the validators one after another, chaining the result.                                                                         |
 | check                   | ...validators: Validator[]                                       | Runs all the validators as `compositionOf` and, if successful, returns the original value discarding any conversions.                     |
 | required                | ...validators: Validator[]                                       | A non-null and non-undefined valid `compositionOf` of validators.                                                                         |

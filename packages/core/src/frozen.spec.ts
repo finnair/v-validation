@@ -1,7 +1,22 @@
 import { describe, test, expect } from 'vitest';
 import { V } from './V.js';
-import { Groups } from './validators.js';
-import { FreezableMap, FreezableSet, IdentityValidator, JsonMap, JsonSet, Validator, ValidatorConfigurationError } from './validators.js';
+import { Path } from '@finnair/path';
+import {
+  assertFreezable,
+  CompositeType,
+  CompositeVisitorContext,
+  FreezableMap,
+  FreezableSet,
+  GroupVisitorContext,
+  Groups,
+  IdentityValidator,
+  JsonMap,
+  JsonSet,
+  Validator,
+  ValidatorConfigurationError,
+  ValidatorVisitor,
+  ValidatorVisitorContext,
+} from './validators.js';
 
 describe('V.frozen', () => {
   const model = V.objectType()
@@ -454,7 +469,7 @@ describe('supportsFreeze classification', () => {
   describe('the assertion escape hatches', () => {
     test.each([
       ['V.fn', () => V.fn((value: any) => String(value), true)],
-      ['V.map', () => V.map((value: any) => String(value), undefined, true)],
+      ['V.map', () => V.map((value: any) => String(value), true)],
       ['V.assertTrue', () => V.assertTrue(() => true, 'T', undefined, true)],
       ['V.hasValue', () => V.hasValue('a', true)],
       ['V.proxy', () => V.proxy(() => V.string(), true)],
@@ -474,6 +489,12 @@ describe('supportsFreeze classification', () => {
       expect(V.fn((value: any) => value, false).supportsFreeze()).toBe(false);
     });
 
+    test('V.map ignores a non-boolean assertion, such as a leftover error argument', () => {
+      // V.map's second argument used to be an unused `error?: any`.
+      expect(V.map((value: any) => value, 'InvalidEncoding' as unknown as boolean).supportsFreeze()).toBe(false);
+      expect(V.map((value: any) => value, true).supportsFreeze()).toBe(true);
+    });
+
     test('a V.fn carrying a leftover type string is rejected by V.frozen', () => {
       const legacy = V.fn((value: any) => ({ wrapped: value }), 'SomeType' as unknown as boolean);
 
@@ -487,6 +508,371 @@ describe('supportsFreeze classification', () => {
 
       expect(Object.isFrozen(result)).toBe(true);
       expect(Object.isFrozen(result.a)).toBe(false);
+    });
+  });
+});
+
+describe('assertFreezable reporting', () => {
+  // V.frozen rejects a schema that cannot be frozen; the report has to say which validator and
+  // where, because the offender is usually a leaf far from the V.frozen call.
+  const messageOf = (build: () => unknown): string => {
+    try {
+      build();
+      return '';
+    } catch (e) {
+      return (e as Error).message;
+    }
+  };
+
+  test('names the path and type of an offending property', () => {
+    const message = messageOf(() =>
+      V.frozen(
+        V.objectType()
+          .properties({
+            id: V.string(),
+            nested: V.objectType()
+              .properties({ leak: V.fn((value: any) => ({ value })) })
+              .build(),
+          })
+          .build(),
+      ),
+    );
+
+    expect(message).toContain('do not support freeze');
+    expect(message).toContain('$.nested.leak');
+    expect(message).toContain('ValidatorFnWrapper');
+  });
+
+  test('reports every offender, not just the first', () => {
+    const message = messageOf(() =>
+      V.frozen(
+        V.objectType()
+          .properties({ a: V.any(), b: V.array(V.unknown()), c: V.date() })
+          .build(),
+      ),
+    );
+
+    expect(message).toContain('$.a');
+    expect(message).toContain('$.b["*"]');
+    expect(message).toContain('$.c');
+  });
+
+  test('marks which branch of a composite is at fault', () => {
+    expect(messageOf(() => V.frozen(V.oneOf(V.string(), V.any())))).toContain('oneOf: 2/2');
+    expect(messageOf(() => V.frozen(V.if(() => true, V.string()).else(V.any())))).toContain('(else: 2/2)');
+    expect(messageOf(() => V.frozen(V.whenGroup('g', V.string()).otherwiseSuccess()))).toContain('(otherwise)');
+    expect(messageOf(() => V.frozen(V.object({ additionalProperties: { keys: V.string(), values: V.any() } })))).toContain('additionalProperties: value');
+  });
+
+  test('uses a wildcard path segment for array items and map entries', () => {
+    expect(messageOf(() => V.frozen(V.array(V.any())))).toContain('$["*"]');
+    expect(messageOf(() => V.frozen(V.toMapType(V.string(), V.any(), true)))).toContain('(value)');
+    expect(messageOf(() => V.frozen(V.toMapType(V.any(), V.string(), true)))).toContain('(key)');
+  });
+
+  test('tolerates a non-final composition step, which does not decide the output', () => {
+    // Only the last validator of a composition produces the result, so an intermediate one that
+    // cannot freeze is not itself a problem.
+    expect(messageOf(() => V.frozen(V.compositionOf(V.check(V.any()), V.object({ properties: { a: V.string() } }))))).toBe('');
+  });
+
+  test('blames only the final step of a failing composition', () => {
+    const message = messageOf(() => V.frozen(V.compositionOf(V.any(), V.fn((value: any) => ({ value })))));
+
+    expect(message).toContain('ValidatorFnWrapper (compositionOf: 2/2)');
+    expect(message).not.toContain('AnyValidator');
+  });
+
+  test('does not blame object properties when only the object\'s next step fails', () => {
+    expect(messageOf(() => V.frozen(V.object({ properties: { a: V.any() }, next: V.any() })))).toBe(
+      'The following validators do not support freeze:\n' +
+        '$: ObjectValidator\n' +
+        '$: CompositionValidator\n' +
+        '$: AnyValidator (compositionOf: 2/2)',
+    );
+  });
+
+  test('a label that merely reads like a composition step is not skipped', () => {
+    // A schema model name ends up in the context message; only a real CompositeVisitorContext counts.
+    const schema = V.schema(() => ({ discriminator: 'type', models: { 'compositionOf: 1/2': V.any() } }));
+
+    expect(messageOf(() => V.frozen(schema))).toContain('$: AnyValidator (schema: compositionOf: 1/2)');
+  });
+
+  test('descends into set values', () => {
+    const message = messageOf(() => V.frozen(V.setType(V.any(), true)));
+
+    expect(message).toContain('SetValidator');
+    expect(message).toContain('AnyValidator');
+  });
+
+  test('an unasserted proxy is reported without forcing its factory', () => {
+    let factoryCalls = 0;
+    const proxy = V.proxy(() => {
+      factoryCalls++;
+      return V.string();
+    });
+
+    expect(messageOf(() => V.frozen(V.object({ properties: { a: proxy } })))).toContain('$.a: ProxyValidator');
+    expect(factoryCalls).toBe(0);
+  });
+
+  test('terminates on a recursive schema whose proxy has already been resolved', async () => {
+    interface Tree {
+      name: string;
+      child?: Tree;
+    }
+    const tree: Validator<Tree> = V.objectType()
+      .properties({ name: V.string(), child: V.optionalStrict(V.proxy(() => tree)) })
+      .build();
+    await tree.getValid({ name: 'root', child: { name: 'leaf' } });
+
+    // The resolved proxy leads back to `tree`, which must not be walked a second time.
+    expect(messageOf(() => V.frozen(tree))).toContain('$.child: ProxyValidator');
+  });
+
+  test('returns the validator unchanged when everything supports freeze', () => {
+    const validator = V.object({ properties: { a: V.string() } });
+
+    expect(assertFreezable(validator)).toBe(validator);
+  });
+
+  test('visits a recursive schema without forcing the proxy factory', () => {
+    interface Tree {
+      name: string;
+      child?: Tree;
+    }
+    let factoryCalls = 0;
+    const tree: Validator<Tree> = V.objectType()
+      .properties({
+        name: V.string(),
+        child: V.optionalStrict(
+          V.proxy(() => {
+            factoryCalls++;
+            return tree;
+          }, true),
+        ),
+      })
+      .build();
+
+    V.frozen(tree);
+
+    // An asserted proxy answers from its own flag, so the assertion never descends through it.
+    expect(factoryCalls).toBe(0);
+  });
+});
+
+describe('ValidatorVisitor traversal', () => {
+  // assertFreezable stops descending as soon as a validator reports support, so the traversal
+  // itself is pinned separately with a visitor that always continues. Each entry records the path
+  // and the context label a composite hands to its children. No dedup: singletons like V.string()
+  // recur at several paths, and visit itself stops at cycles.
+  const walk = (validator: Validator<any, any>): string[] => {
+    const seen: string[] = [];
+    const visitor: ValidatorVisitor = {
+      accept(v, path, context) {
+        seen.push(`${path}: ${v.constructor.name}${context ? ` (${context})` : ''}`);
+        return true;
+      },
+    };
+    validator.visit(visitor);
+    return seen;
+  };
+
+  const contains = (entries: string[], needle: string) => entries.some(entry => entry.includes(needle));
+
+  test('a leaf reports itself and nothing else', () => {
+    expect(walk(V.string())).toEqual(['$: StringValidator']);
+  });
+
+  test('descends into every wrapper', () => {
+    const cases: Array<[string, Validator<any, any>, string]> = [
+      ['V.frozen', V.frozen(V.string()), 'FreezeValidator'],
+      ['V.check', V.check(V.string()), 'CheckValidator'],
+      ['V.compositionOf', V.compositionOf(V.string(), V.check(V.string())), 'compositionOf: 1/2'],
+      ['V.anyOf', V.anyOf(V.string(), V.number()), 'anyOf: 1/2'],
+      ['V.allOf', V.allOf(V.string(), V.string()), 'AllOfValidator'],
+      ['V.oneOf', V.oneOf(V.string(), V.number()), 'oneOf: 2/2'],
+      ['V.optional', V.optional(V.string()), 'OptionalValidator'],
+      ['V.nullable', V.nullable(V.string()), 'NullableValidator'],
+      ['V.required', V.required(V.string()), 'RequiredValidator'],
+      ['V.json', V.json(V.string()), 'JsonValidator'],
+      ['V.memoize', V.memoize(V.string()), 'MemoizeValidator'],
+      ['V.if/else', V.if(() => true, V.string()).else(V.number()), '(else: 2/2)'],
+      ['V.whenGroup', V.whenGroup('g', V.string()).otherwise(V.number()), '(otherwise)'],
+      ['V.array', V.array(V.string()), '$["*"]'],
+      ['V.mapType', V.mapType(V.string(), V.string(), true), '(value)'],
+      ['V.setType', V.setType(V.string(), true), 'StringValidator'],
+      ['V.string().notEmpty()', V.string().notEmpty(), 'NextStringValidator'],
+      ['V.number().min(1)', V.number().min(1), 'NextNumberValidator'],
+    ];
+
+    for (const [label, validator, expected] of cases) {
+      const entries = walk(validator);
+      expect(contains(entries, expected), `${label} -> ${entries.join(' | ')}`).toBe(true);
+      // Every wrapper must reach its wrapped leaf, not just report itself.
+      expect(entries.length, `${label} visited only itself`).toBeGreaterThan(1);
+    }
+  });
+
+  test('object properties, local properties and additional properties are all labelled', () => {
+    const entries = walk(
+      V.object({
+        properties: { a: V.string() },
+        localProperties: { b: V.string() },
+        additionalProperties: { keys: V.string(), values: V.number() },
+      }),
+    );
+
+    expect(contains(entries, '$.a: StringValidator (property)')).toBe(true);
+    expect(contains(entries, '$.b: StringValidator (localProperty)')).toBe(true);
+    expect(contains(entries, 'additionalProperties: key')).toBe(true);
+    expect(contains(entries, 'additionalProperties: value')).toBe(true);
+    expect(contains(entries, '$: PropertiesValidator')).toBe(true);
+  });
+
+  test('labels every branch of an if / else if / else chain', () => {
+    const entries = walk(V.if(() => true, V.string()).elseIf(() => true, V.number()).else(V.boolean()));
+
+    expect(entries).toEqual([
+      '$: IfValidator',
+      '$: StringValidator (if: 1/3)',
+      '$: NumberValidator (else if: 2/3)',
+      '$: BooleanValidator (else: 3/3)',
+    ]);
+  });
+
+  test('an if chain without else counts only its conditionals', () => {
+    expect(walk(V.if(() => true, V.string()).elseIf(() => true, V.number()))).toEqual([
+      '$: IfValidator',
+      '$: StringValidator (if: 1/2)',
+      '$: NumberValidator (else if: 2/2)',
+    ]);
+  });
+
+  test('contexts are structured, not just labels', () => {
+    const contexts = (validator: Validator<any, any>) => {
+      const collected: ValidatorVisitorContext[] = [];
+      validator.visit({
+        accept(_v, _path, context) {
+          if (context) {
+            collected.push(context);
+          }
+          return true;
+        },
+      });
+      return collected;
+    };
+
+    const [first, second] = contexts(V.compositionOf(V.string(), V.number()));
+    expect(first).toBeInstanceOf(CompositeVisitorContext);
+    expect(first).toMatchObject({ type: CompositeType.compositionOf, current: 1, count: 2 });
+    expect(second).toMatchObject({ type: CompositeType.compositionOf, current: 2, count: 2 });
+
+    const [group, otherwise] = contexts(V.whenGroup('g', V.string()).otherwise(V.number()));
+    expect(group).toBeInstanceOf(GroupVisitorContext);
+    expect(group).toMatchObject({ group: 'g', message: 'group: g' });
+    expect(otherwise).toMatchObject({ group: undefined, message: 'otherwise' });
+
+    const [property] = contexts(V.object({ properties: { a: V.string() } }));
+    expect(property).not.toBeInstanceOf(CompositeVisitorContext);
+    expect(property.message).toBe('property');
+  });
+
+  test('a schema visits each of its named validators', () => {
+    const schema = V.schema(() => ({
+      discriminator: 'type',
+      models: { Root: { properties: { value: V.any() } } },
+    }));
+
+    const entries = walk(schema);
+
+    expect(contains(entries, 'SchemaValidator')).toBe(true);
+    expect(contains(entries, 'Root')).toBe(true);
+  });
+
+  test('returning false from accept stops the descent', () => {
+    const seen: string[] = [];
+    const validator = V.object({ properties: { a: V.string() } });
+
+    validator.visit(
+      {
+        accept(v, path) {
+          seen.push(`${path}: ${v.constructor.name}`);
+          return false;
+        },
+      },
+      Path.ROOT,
+    );
+
+    expect(seen).toEqual(['$: ObjectValidator']);
+  });
+
+  test('a proxy descends only once its factory has run', async () => {
+    const proxy = V.proxy(() => V.string());
+
+    expect(walk(proxy)).toEqual(['$: ProxyValidator']);
+
+    await proxy.validate('x');
+
+    expect(walk(proxy)).toEqual(['$: ProxyValidator', '$: StringValidator (proxy)']);
+  });
+
+  describe('cycles', () => {
+    // A proxy only descends once resolved, so each recursive schema is validated once first. The
+    // re-entered container is still accepted - that is where the cycle closes - but not descended.
+    test('an object stops at its own re-entry', async () => {
+      const tree: Validator<any> = V.object({ properties: { child: V.optionalStrict(V.proxy(() => tree)) } });
+      await tree.validate({ child: {} });
+
+      expect(walk(tree)).toEqual([
+        '$: ObjectValidator',
+        '$: PropertiesValidator',
+        '$.child: OptionalUndefinedValidator (property)',
+        '$.child: ProxyValidator',
+        '$.child: ObjectValidator (proxy)',
+      ]);
+    });
+
+    test('an array stops at its own re-entry', async () => {
+      const nested: Validator<any> = V.array(V.proxy(() => nested));
+      await nested.validate([[]]);
+
+      expect(walk(nested)).toEqual(['$: ArrayValidator', '$["*"]: ProxyValidator', '$["*"]: ArrayValidator (proxy)']);
+    });
+
+    test('a map stops at its own re-entry', async () => {
+      const nested: Validator<any> = V.mapType(V.string(), V.proxy(() => nested), false);
+      await nested.validate(new Map([['a', new Map()]]));
+
+      expect(walk(nested)).toEqual([
+        '$: MapValidator',
+        '$["*"]: StringValidator (key)',
+        '$["*"]: ProxyValidator (value)',
+        '$["*"]: MapValidator (proxy)',
+      ]);
+    });
+
+    test('a set stops at its own re-entry', async () => {
+      const nested: Validator<any> = V.setType(V.proxy(() => nested), false);
+      await nested.validate(new Set([new Set()]));
+
+      expect(walk(nested)).toEqual(['$: SetValidator', '$["*"]: ProxyValidator', '$["*"]: SetValidator (proxy)']);
+    });
+
+    test('a validator shared by siblings is not a cycle and is visited at each path', () => {
+      const leaf = V.object({ properties: { x: V.string() } });
+
+      const entries = walk(V.object({ properties: { a: leaf, b: leaf } }));
+
+      expect(contains(entries, '$.a.x: StringValidator')).toBe(true);
+      expect(contains(entries, '$.b.x: StringValidator')).toBe(true);
+    });
+
+    test('assertFreezable reports a shared offender at every path', () => {
+      const leak = V.fn((value: any) => ({ value }));
+
+      expect(() => V.frozen(V.object({ properties: { a: leak, b: leak } }))).toThrow(/\$\.a: ValidatorFnWrapper[\s\S]*\$\.b: ValidatorFnWrapper/);
     });
   });
 });

@@ -102,6 +102,10 @@ export class Path {
     }
   }
 
+  toString(): string {
+    return this.toJSON();
+  }
+
   toJSON(): string {
     return this.path.reduce((pathString: string, component: PathComponent) => pathString + Path.componentToString(component), '$');
   }
