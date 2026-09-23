@@ -231,11 +231,11 @@ export const V = {
 
   enum: <Out extends Record<string, string | number>>(enumType: Out, name: string) => new EnumValidator<Out>(enumType, name),
 
-  /** @param supportsFreeze See {@link V.fn}; an assertion passes its input through unchanged. */
+  /** @param supportsFreeze See {@link V.fn}; needed only on its own, since an assertion preserves a frozen input in a chain. */
   assertTrue: <In>(fn: AssertTrue<In>, type: string = 'AssertTrue', path?: Path, supportsFreeze?: boolean) =>
     new AssertTrueValidator<In>(fn, type, path, supportsFreeze),
 
-  /** @param supportsFreeze See {@link V.fn}; needed only when `expectedValue` is an object. */
+  /** @param supportsFreeze See {@link V.fn}; needed only on its own with an object `expectedValue`. */
   hasValue: <InOut>(expectedValue: InOut, supportsFreeze?: boolean) => new HasValueValidator<InOut>(expectedValue, supportsFreeze),
 
   json: <Out, T1, T2, T3, T4, T5>(...validators: CompositionParameters<Out, string, T1, T2, T3, T4, T5>) =>

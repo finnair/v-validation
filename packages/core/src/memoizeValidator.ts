@@ -147,6 +147,10 @@ export class MemoizeValidator<Out = unknown, In = unknown, K = In> extends Valid
     return this.validator.supportsFreeze();
   }
 
+  preservesFreeze(): boolean {
+    return this.validator.preservesFreeze();
+  }
+
   visit(visitor: ValidatorVisitor, path: Path = Path.ROOT, context?: ValidatorVisitorContext, stack?: Validator<any, any>[]): void {
     if (visitor.accept(this, path, context)) {
       this.validator.visit(visitor, path, context, stack);

@@ -1005,15 +1005,17 @@ V.frozen(V.object({ properties: { a: V.fn(value => ({ wrapped: value })), b: V.a
 
 The report lists every validator that does not support freeze along with the schema path to it, so
 the offending leaves are the most specific entries - here `$.a` and `$.b["*"]`. `PropertiesValidator`
-is the internal step of an object validator that validates its properties. Only the last step
-of a `V.compositionOf`/`Validator.next` chain produces the output, so a non-final step is not
-reported on its own - nor are an object's properties when only its `next` fails. The same check is available as `assertFreezable(validator)`, which returns the
+is the internal step of an object validator that validates its properties. In a
+`V.compositionOf`/`Validator.next` chain only the step that decides the output is reported: the last
+step that does not [preserve freeze](#preserves-freeze), or every step if they all merely pass their
+input through. The same check is available as `assertFreezable(validator)`, which returns the
 validator or throws; it is built on `Validator.visit(visitor)`, which walks a schema with a
 `ValidatorVisitor` and can be used for other schema analysis too. Its `accept(validator, path, context)`
 receives the validator's role in its parent as a `ValidatorVisitorContext`: a `CompositeVisitorContext`
 (`type`, `current`, `count`) for a branch of `V.compositionOf`, `V.allOf`, `V.anyOf`, `V.oneOf` or
-`V.if`, a `GroupVisitorContext` (`group`, `undefined` for `otherwise`) for `V.whenGroup`, and a
-plain context such as `property` otherwise. Return `false` to skip a validator's children.
+`V.if` - a `CompositionVisitorContext`, which also has the chain's `steps`, for a composition - a
+`GroupVisitorContext` (`group`, `undefined` for `otherwise`) for `V.whenGroup`, and a plain context
+such as `property` otherwise. Return `false` to skip a validator's children.
 
 _WARNING: the visitor API (`Validator.visit`, `ValidatorVisitor` and the `ValidatorVisitorContext`
 classes) is **internal and experimental**. It may change in any release, and changes to it -
@@ -1028,8 +1030,25 @@ returns a primitive, or a value it has frozen itself:
 V.frozen(V.object({ properties: { a: V.fn(value => String(value), true) } })); // accepted
 ```
 
-`V.any()`, `V.unknown()` and `V.check()` are rejected for the same reason: they pass their input
-through unchanged, so they can hand out an object nobody has frozen.
+<a name="preserves-freeze"></a>Validators that pass their input through unchanged - `V.any()`,
+`V.unknown()`, `V.check()`, `V.notNull()`, `V.notEmpty()`, `V.size()`, `V.assertTrue()`,
+`V.hasValue()` - are rejected on their own, as a property, or as an array item or map entry,
+because there their input is the raw data and they would hand out an object nobody has frozen.
+They do *preserve* freeze though: given a frozen input, their output is frozen. So in a chain they
+are accepted after a step that freezes, and a chain supports freeze when some step does and every
+later step preserves it:
+
+```typescript
+V.frozen(V.notEmpty()); // rejected - returns the raw input
+V.frozen(V.object({ properties: { tags: V.notEmpty() } })); // rejected - same, one level down
+V.frozen(V.object({ properties: { tags: V.array(V.string()).next(V.notEmpty()) } })); // accepted
+V.frozen(V.object({ properties: { a: V.string() } }).next(V.assertTrue(isConsistent))); // accepted
+```
+
+`V.anyOf`, `V.oneOf`, `V.allOf`, `V.if`, `V.whenGroup` and the `V.optional`/`V.nullable`/
+`V.required`/`V.memoize` wrappers preserve freeze when all their children do. A custom validator
+that passes its input through can say so by overriding `preservesFreeze()` to return `true`; the
+default is its `supportsFreeze()`.
 
 Composites derive their answer from their children, and that includes the branch taken when nothing
 else matches: `V.if(...)` needs its `else`, and `V.whenGroup(...)` needs its `otherwise` - so
@@ -1047,8 +1066,8 @@ V.frozen(tree); // accepted
 ```
 
 The assertion is checked against the proxied validator once the factory runs, so a wrong one fails
-on first validation instead of leaking. It surfaces as an `Error` violation carrying the message -
-a schema configuration problem reported on the data path.
+on first validation instead of leaking. It is a schema bug, not invalid data, so `validate()` rejects
+and `getValid()` throws a `ValidatorConfigurationError`.
 
 So the guarantee is: **every plain object, array, `Map` and `Set` in the output is frozen, and every
 validator that produces a value has been reviewed.** It is not a promise that nothing reachable from

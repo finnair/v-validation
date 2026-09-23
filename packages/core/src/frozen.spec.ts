@@ -5,6 +5,7 @@ import {
   assertFreezable,
   CompositeType,
   CompositeVisitorContext,
+  CompositionVisitorContext,
   FreezableMap,
   FreezableSet,
   GroupVisitorContext,
@@ -373,8 +374,8 @@ describe('supportsFreeze classification', () => {
       ['V.toBoolean()', V.toBoolean()],
       ['V.jsonBigInt()', V.jsonBigInt()],
       ['V.uuid()', V.uuid()],
-      ['V.size(1, 2)', V.size(1, 2)],
       ['V.string()', V.string()],
+      ['V.string().size(1, 2)', V.string().size(1, 2)],
       ['V.number()', V.number()],
       ['V.object(...)', V.object({ properties: { a: V.string() } })],
       ['V.array(V.string())', V.array(V.string())],
@@ -399,7 +400,65 @@ describe('supportsFreeze classification', () => {
       ['V.whenGroup(...).otherwise(V.any())', V.whenGroup('g', V.string()).otherwise(V.any())],
       // Used by otherwiseSuccess(); passes the input straight through, like V.any().
       ['new IdentityValidator()', new IdentityValidator()],
+      // Pass the input through too: an array or object input comes out unfrozen.
+      ['V.notEmpty()', V.notEmpty()],
+      ['V.size(1, 2)', V.size(1, 2)],
+      ['V.notNull()', V.notNull()],
     ])('%s does not support freeze', (_name, validator) => expect(validator.supportsFreeze()).toBe(false));
+  });
+
+  describe('preservesFreeze', () => {
+    test.each([
+      ['V.any()', V.any()],
+      ['V.unknown()', V.unknown()],
+      ['V.check(V.any())', V.check(V.any())],
+      ['V.assertTrue(...)', V.assertTrue(() => true)],
+      ['V.hasValue(...)', V.hasValue({ a: 1 })],
+      ['V.notNull()', V.notNull()],
+      ['V.notEmpty()', V.notEmpty()],
+      ['V.size(1, 2)', V.size(1, 2)],
+      ['new IdentityValidator()', new IdentityValidator()],
+      ['V.string()', V.string()],
+      ['V.object(...)', V.object({ properties: { a: V.string() } })],
+    ])('%s passes a frozen input on frozen', (_name, validator) => expect(validator.preservesFreeze()).toBe(true));
+
+    test.each([
+      ['V.fn(...)', V.fn((value: any) => value)],
+      ['V.map(...)', V.map((value: any) => value)],
+      ['V.date()', V.date()],
+      ['V.proxy(() => V.notEmpty())', V.proxy(() => V.notEmpty())],
+      ['V.array(V.notEmpty())', V.array(V.notEmpty())],
+    ])('%s can produce a new unfrozen value', (_name, validator) => expect(validator.preservesFreeze()).toBe(false));
+
+    test('branches and wrappers preserve when every child does', () => {
+      const preserving = V.notEmpty();
+      const producing = V.fn((value: any) => value);
+
+      for (const [label, build] of [
+        ['V.anyOf', (v: Validator<any, any>) => V.anyOf(v, V.string())],
+        ['V.oneOf', (v: Validator<any, any>) => V.oneOf(v, V.string())],
+        ['V.allOf', (v: Validator<any, any>) => V.allOf(v, V.string())],
+        ['V.if', (v: Validator<any, any>) => V.if(() => true, v).else(V.string())],
+        ['V.whenGroup', (v: Validator<any, any>) => V.whenGroup('g', v).otherwiseSuccess()],
+        ['V.optional', (v: Validator<any, any>) => V.optional(v)],
+        ['V.optionalStrict', (v: Validator<any, any>) => V.optionalStrict(v)],
+        ['V.nullable', (v: Validator<any, any>) => V.nullable(v)],
+        ['V.required', (v: Validator<any, any>) => V.required(v)],
+        ['V.memoize', (v: Validator<any, any>) => V.memoize(v)],
+      ] as const) {
+        expect(build(preserving).preservesFreeze(), label).toBe(true);
+        expect(build(preserving).supportsFreeze(), label).toBe(false);
+        expect(build(producing).preservesFreeze(), label).toBe(false);
+      }
+    });
+
+    test('containers do not trust a merely preserving child, whose input is raw data', () => {
+      expect(V.object({ properties: { a: V.notEmpty() } }).supportsFreeze()).toBe(false);
+      expect(V.array(V.size(1, 2)).supportsFreeze()).toBe(false);
+      expect(V.toMapType(V.string(), V.check(V.any()), true).supportsFreeze()).toBe(false);
+      expect(V.setType(V.notEmpty(), true).supportsFreeze()).toBe(false);
+      expect(V.json(V.notEmpty()).supportsFreeze()).toBe(false);
+    });
   });
 
   describe('composites derive their answer from their children', () => {
@@ -489,15 +548,35 @@ describe('supportsFreeze classification', () => {
       expect(V.setType(notFreezable, true).supportsFreeze()).toBe(false);
     });
 
-    test('a composition takes its answer from the last value-producing validator', () => {
-      // KNOWN LIMITATION: V.check passes its input through, so it cannot claim support on its own -
-      // which makes `.next(V.check(...))` report false even though the upstream value was frozen.
-      expect(
-        V.object({ properties: { a: V.string() } })
-          .next(V.check(V.any()))
-          .supportsFreeze(),
-      ).toBe(false);
+    test('a composition supports freeze if a step does and every later step preserves it', () => {
+      const array = V.array(V.string());
+      const producing = V.fn((value: any) => value);
+
+      expect(V.object({ properties: { a: V.string() } }).next(V.check(V.any())).supportsFreeze()).toBe(true);
+      expect(array.next(V.size(1, 3), V.notEmpty()).supportsFreeze()).toBe(true);
+      expect(array.next(V.compositionOf(V.notEmpty(), V.size(1, 3))).supportsFreeze()).toBe(true);
+      expect(array.next(V.anyOf(V.notEmpty(), V.size(1, 3))).supportsFreeze()).toBe(true);
+      expect(producing.next(V.string()).supportsFreeze()).toBe(true);
+
+      // Nothing freezes the raw input...
+      expect(V.compositionOf(V.notEmpty(), V.size(1, 3)).supportsFreeze()).toBe(false);
+      // ...or a later step replaces the frozen value.
+      expect(array.next(producing).supportsFreeze()).toBe(false);
+      expect(array.next(producing, V.notEmpty()).supportsFreeze()).toBe(false);
     });
+
+    test('a composition preserves freeze when every step does', () => {
+      expect(V.compositionOf(V.notEmpty(), V.size(1, 3)).preservesFreeze()).toBe(true);
+      expect(V.compositionOf(V.notEmpty(), V.fn((value: any) => value)).preservesFreeze()).toBe(false);
+    });
+  });
+
+  test('V.frozen rejects a lone pass-through validator, which would return the raw input', async () => {
+    expect(() => V.frozen(V.notEmpty())).toThrow(/NotEmptyValidator/);
+    expect(() => V.frozen(V.size(1, 3))).toThrow(/SizeValidator/);
+
+    const output = await V.frozen(V.array(V.string()).next(V.size(1, 3))).getValid(['a']);
+    expect(Object.isFrozen(output)).toBe(true);
   });
 
   describe('the assertion escape hatches', () => {
@@ -617,13 +696,34 @@ describe('assertFreezable reporting', () => {
     expect(message).not.toContain('AnyValidator');
   });
 
-  test('does not blame object properties when only the object\'s next step fails', () => {
+  test('does not blame object properties when a later step replaces the object', () => {
+    expect(messageOf(() => V.frozen(V.object({ properties: { a: V.any() }, next: V.fn((value: any) => ({ ...value })) })))).toBe(
+      'The following validators do not support freeze:\n' +
+        '$: ObjectValidator\n' +
+        '$: CompositionValidator\n' +
+        '$: ValidatorFnWrapper (compositionOf: 2/2)',
+    );
+  });
+
+  test('blames the value-producing step rather than pass-through steps after it', () => {
     expect(messageOf(() => V.frozen(V.object({ properties: { a: V.any() }, next: V.any() })))).toBe(
       'The following validators do not support freeze:\n' +
         '$: ObjectValidator\n' +
         '$: CompositionValidator\n' +
-        '$: AnyValidator (compositionOf: 2/2)',
+        '$: PropertiesValidator (compositionOf: 1/2)\n' +
+        '$.a: AnyValidator (property)',
     );
+  });
+
+  test('blames every step when all of them only pass the raw input through', () => {
+    const message = messageOf(() => V.frozen(V.compositionOf(V.notEmpty(), V.size(1, 3))));
+
+    expect(message).toContain('$: NotEmptyValidator (compositionOf: 1/2)');
+    expect(message).toContain('$: SizeValidator (compositionOf: 2/2)');
+  });
+
+  test('blames a pass-through validator used as a property', () => {
+    expect(messageOf(() => V.frozen(V.object({ properties: { a: V.notEmpty() } })))).toContain('$.a: NotEmptyValidator (property)');
   });
 
   test('a label that merely reads like a composition step is not skipped', () => {
@@ -799,9 +899,16 @@ describe('ValidatorVisitor traversal', () => {
     };
 
     const [first, second] = contexts(V.compositionOf(V.string(), V.number()));
-    expect(first).toBeInstanceOf(CompositeVisitorContext);
+    expect(first).toBeInstanceOf(CompositionVisitorContext);
     expect(first).toMatchObject({ type: CompositeType.compositionOf, current: 1, count: 2 });
     expect(second).toMatchObject({ type: CompositeType.compositionOf, current: 2, count: 2 });
+    expect((first as CompositionVisitorContext).steps).toEqual([V.string(), V.number()]);
+
+    const [firstString, nextString] = contexts(V.string().notEmpty());
+    expect(firstString).toBeInstanceOf(CompositionVisitorContext);
+    expect((nextString as CompositionVisitorContext).steps).toHaveLength(2);
+    const [, nextNumber] = contexts(V.number().min(1));
+    expect(nextNumber).toMatchObject({ type: CompositeType.compositionOf, current: 2, count: 2 });
 
     const [group, otherwise] = contexts(V.whenGroup('g', V.string()).otherwise(V.number()));
     expect(group).toBeInstanceOf(GroupVisitorContext);
