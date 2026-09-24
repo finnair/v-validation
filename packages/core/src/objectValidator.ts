@@ -16,6 +16,7 @@ import {
   Validator,
   ValidatorVisitor,
   ValidatorVisitorContext,
+  ValidatorType,
   Violation,
   violationsOf,
 } from "./validators.js";
@@ -288,7 +289,7 @@ class PropertiesValidator<LocalType = unknown, In = unknown> extends Validator<L
 
     const reportSuccess = (key: string, propertyValue: unknown) => {
       if (propertyValue !== undefined) {
-        convertedObject[key] = propertyValue;
+        setOwnProperty(convertedObject, key, propertyValue);
       } else {
         delete convertedObject[key];
       }
@@ -339,13 +340,15 @@ class PropertiesValidator<LocalType = unknown, In = unknown> extends Validator<L
           }
         );
       } else if (keySuccessCount === 0) {
-        ctx.failure(defaultViolations.unknownProperty(propertyPath), propertyValue).then(
+        ctx.unknownProperty(propertyValue, propertyPath,
           (result) => reportSuccess(key, result),
           (error) => {
-            if (index === 1 && keyError) {
+            const violations = violationsOf(error, propertyPath);
+            // A plain rejection is better explained by why the key did not match; a handler's own violations are kept.
+            if (index === 1 && keyError && violations.length === 1 && violations[0].type === ValidatorType.UnknownProperty) {
               reportFailure(key, keyError);
             } else {
-              reportFailure(key, error);
+              reportFailure(key, violations);
             }
           }
         );
@@ -355,7 +358,7 @@ class PropertiesValidator<LocalType = unknown, In = unknown> extends Validator<L
     };
 
     const validateKey = (key: string) => {
-      convertedObject[key] = undefined;
+      setOwnProperty(convertedObject, key, undefined);
       const valuePath = path.property(key);
       const propertyValue = anyValue[key];
       try {
@@ -384,6 +387,15 @@ class PropertiesValidator<LocalType = unknown, In = unknown> extends Validator<L
   }
 }
 
+
+/** Plain assignment of `__proto__` would replace the object's prototype instead of adding a property. */
+function setOwnProperty(object: any, key: string, value: unknown) {
+  if (key === '__proto__') {
+    Object.defineProperty(object, key, { value, writable: true, enumerable: true, configurable: true });
+  } else {
+    object[key] = value;
+  }
+}
 
 function pick(properties: Properties, fn: (key: keyof any) => boolean): Properties {
   return Object.entries(properties).reduce((current: Properties, [key, validator]) => {
@@ -475,8 +487,7 @@ function getMapEntryValidators(additionalProperties?: boolean | MapEntryModel | 
 
 /**
  * Value validator for additional properties. When `denied` it always rejects; otherwise it reports
- * an `UnknownProperty` violation, which `ctx.failure` resolves to the value when
- * `ignoreUnknownProperties` is set and rejects otherwise.
+ * an unknown property through `ctx.unknownProperty`, which applies `ignoreUnknownProperties`.
  */
 class UnknownPropertyValidator extends Validator<any> {
   constructor(private readonly denied: boolean) {
@@ -488,7 +499,7 @@ class UnknownPropertyValidator extends Validator<any> {
     if (this.denied) {
       failure([defaultViolations.unknownPropertyDenied(path)]);
     } else {
-      ctx.failure(defaultViolations.unknownProperty(path), value).then(success, failure);
+      ctx.unknownProperty(value, path, success, failure);
     }
   }
 }

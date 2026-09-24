@@ -4,6 +4,11 @@ import { default as deepEqual } from 'fast-deep-equal';
 
 export const DEFAULT_MEMOIZE_MAX_SIZE = 1000;
 
+/** A validator in the options may be self-referencing, so it is printed by name. */
+function optionsReplacer(_key: string, value: unknown) {
+  return value instanceof Validator ? value.constructor.name : value;
+}
+
 /**
  * Order in which entries are evicted once the cache is full.
  *
@@ -30,7 +35,8 @@ export interface MemoizeValidatorOptions<Out = unknown, In = unknown, K=In> {
    * ignored violation is logged only the first time a value is validated.
    *
    * Defaults to `undefined`, which skips the check: fine for option-insensitive validators such as
-   * scalar parsers. Use `{}` to pin "no options".
+   * scalar parsers. Use `{}` to pin "no options". An `ignoreUnknownProperties` validator is compared
+   * by identity, so pin the same instance that validation uses.
    */
   readonly options?: ValidatorOptions;
 
@@ -168,7 +174,7 @@ export class MemoizeValidator<Out = unknown, In = unknown, K = In> extends Valid
   
   validatePathV2(value: In, path: Path, ctx: ValidationContext, success: SuccessCallback<Out>, failure: FailureCallback): void {
     if (!this.supportsOptions(ctx.options)) {
-      return failure(violationsOf(new ValidatorConfigurationError(`Unsupported validator options: ${JSON.stringify(ctx.options)}`), path));
+      return failure(violationsOf(new ValidatorConfigurationError(`Unsupported validator options: ${JSON.stringify(ctx.options, optionsReplacer)}`), path));
     }
     const cache = ctx.freeze ? this.frozenCache : this.cache;
     const key = this.cacheKeyFn(value);

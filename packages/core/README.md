@@ -717,12 +717,12 @@ V.setType(values, false); // Validator<Set<string>>
 `V` supports contextual validation options which can be used to guide validation.
 Options are passed to to `validate` function as optional second argument.
 
-| Option                            | Description                                |
-| --------------------------------- | ------------------------------------------ |
-| ignoreUnknownProperties?: boolean | Unknown properties allowed by default\*    |
-| ignoreUnknownEnumValues?: boolean | Unknown enum values allowed by default     |
-| warnLogger?: WarnLogger           | A reporter function for ignored Violations |
-| group?: Group                     | A group used to activate validation rules  |
+| Option                                        | Description                                |
+| --------------------------------------------- | ------------------------------------------ |
+| ignoreUnknownProperties?: boolean \| Validator | Unknown properties allowed by default\*    |
+| ignoreUnknownEnumValues?: boolean             | Unknown enum values allowed by default     |
+| warnLogger?: WarnLogger                       | A reporter function for ignored Violations |
+| group?: Group                                 | A group used to activate validation rules  |
 
 \*) Note that this option has no effect in cases where additional properties are explicitly denied.
 
@@ -730,8 +730,9 @@ Every option is declared `readonly`, and `validate`/`getValid` make that effecti
 freezing the options object they are given. So an options object can be built once and reused
 across validations, and a later write to it fails instead of silently changing how a validator
 behaves - which also keeps a [memoized](#memoization) validator's pinned options from drifting out
-from under its cache. Nothing reachable through the options stays mutable either: the only object an
-option can hold is a `Group`, which freezes both itself and its group membership.
+from under its cache. Nothing reachable through the options stays mutable either: the only objects an
+option can hold are a `Group`, which freezes both itself and its group membership, and a validator,
+which the built-in ones freeze too.
 
 ```typescript
 (await V.object({}).validate({ additionalProperty: 'OK' }, { ignoreUnknownProperties: true })).isSuccess();
@@ -740,6 +741,25 @@ option can hold is a `Group`, which freezes both itself and its group membership
 (await V.object({ additionalProperties: false }).validate({ additionalProperty: 'Not OK' }, { ignoreUnknownProperties: true })).isSuccess();
 // false
 ```
+
+`ignoreUnknownProperties: true` passes the values of unknown properties through as they are. Pass a
+validator instead to set boundaries for them: each unknown property value is validated and converted
+by it, and its violations are reported at the property's path. `warnLogger` is called only for a
+value the validator accepts. For example, to allow any JSON value but nothing else:
+
+```typescript
+const options = { ignoreUnknownProperties: V.jsonValue() };
+
+(await V.object({}).validate({ added: { nested: [1, 'a'] } }, options)).isSuccess();
+// true, and `added` is a clone of the input
+
+(await V.object({}).validate({ added: new Date() }, options)).isSuccess();
+// false: TypeMismatch at $.added
+```
+
+Under [`V.frozen`](#frozen) the validator's output is frozen like everything else, so the validator
+must support freeze; otherwise validation fails with a `ValidatorConfigurationError`. `V.fn` and
+`V.map` throwing an `UnknownProperty` violation are not affected: the value is passed through as is.
 
 ### Deduplicating `warnLogger` with `dedupWarnLogger`
 
@@ -916,7 +936,7 @@ Things to keep in mind:
   `V.optionalStrict(V.memoize(...))` - when `undefined` is an accepted input.
 - **A cached result is shared by every caller**, so mutating it corrupts every later read. Wrap the
   memoized validator in [`V.frozen`](#frozen) when the cached values are objects. Values of unknown
-  properties allowed by `ignoreUnknownProperties` are not frozen even then.
+  properties allowed by `ignoreUnknownProperties: true` are not frozen even then.
 - **Frozen and mutable results are kept apart.** `V.frozen(V.memoize(x))` and `V.memoize(V.frozen(x))`
   give the same frozen output, but the first one leaves the memoized validator usable outside
   `V.frozen` too. When `x` converts differently in the two contexts - an object, array, `Map` or
@@ -1093,10 +1113,11 @@ _NOTE: freezing is shallow per value, and only object, array, `Map` and `Set` va
 their output. A `Date`, a Luxon `DateTime` or any other class instance reached by a validated value
 keeps its mutable internal state._
 
-_NOTE: unknown properties accepted with `ignoreUnknownProperties` are copied as is. The object
+_NOTE: unknown properties accepted with `ignoreUnknownProperties: true` are copied as is. The object
 holding them is frozen, but their values are not validated, converted or frozen - nothing is known
 about them, including whether they are mutable. Allowing unknown properties is a risk the caller
-takes on; with [`V.memoize`](#memoization) such values are also shared by every caller._
+takes on; with [`V.memoize`](#memoization) such values are also shared by every caller. Pass a
+validator as `ignoreUnknownProperties` to have them validated and frozen too._
 
 _NOTE: for Luxon, the wrapper validators (`Vluxon.dateTime`, `dateTimeUtc`, `localDate`, ...) support
 freezing, because `LuxonDateTime` freezes itself - which also blocks reassigning its `dateTime`
@@ -1259,6 +1280,7 @@ Unless otherwise stated, all validators require non-null and non-undefined value
 | if...elseif...else      | fn: AssertTrue, ...validators: Validator[]                       | Configures validators (`compositionOf`) to be executed for cases where if/elseif AssertTrue fn returns true.                              |
 | whenGroup...otherwise   | group: GroupOrName, ...validators: Validator[]                   | Defines validation rules (`compositionOf`) to be executed for given `ValidatorOptions.group`.                                             |
 | json                    | ...validators: Validator[]                                       | Parse JSON input and validate it against given validators.                                                                                |
+| jsonValue               | ...allow: JsonValueType[]                                        | Accepts and clones a JSON value (`string`, `boolean`, `number`, `null`, `array`, `object`) whose root is one of `allow`; nested values may be any JSON value. All types when `allow` is empty. Returns a shared instance per combination. |
 | memoize                 | validator: Validator, options?: MemoizeValidatorOptions          | Caches a wrapped validator's successful results in a bounded cache (`maxSize`, `evictionPolicy`, `shouldCache`, `cacheKeyFn`). See [Memoization](#memoization). |
 | proxy                   | factory: () => Validator                                         | Defers validator construction to a factory, for e.g. self-reference. See [V.proxy](#proxy).  |
 | frozen                  | validator: Validator                                             | A view of `validator` whose subtree produces frozen output. See [Immutable Output](#frozen). |

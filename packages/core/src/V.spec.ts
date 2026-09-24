@@ -605,6 +605,56 @@ describe('objects', () => {
         const result = await V.objectType().allowAdditionalProperties(false).build().validate(object, { ignoreUnknownProperties: true });
         expect(result).toEqual(new ValidationResult([defaultViolations.unknownPropertyDenied(property('unknownProperty'))]));
       });
+
+      describe('as a validator', () => {
+        const toUpper = V.string().nextMap(value => value.toUpperCase());
+        const violationsOf = async (value: any, validator: Validator) =>
+          (await validator.validate(value, { ignoreUnknownProperties: toUpper })).getViolations();
+
+        test('validates and converts unknown property values', () =>
+          expectValid({ a: 'x' }, V.object({}), { a: 'X' }, { ignoreUnknownProperties: toUpper }));
+
+        test('reports violations of the unknown property value at its path', async () =>
+          expect(await violationsOf({ a: 1 }, V.object({}))).toEqual([defaultViolations.string(1, property('a'))]));
+
+        test('leaves known properties alone', () =>
+          expectValid({ known: 1, a: 'x' }, V.object({ properties: { known: V.number() } }), { known: 1, a: 'X' }, { ignoreUnknownProperties: toUpper }));
+
+        test('logs a warning only for an accepted value', async () => {
+          const warnings: Violation[] = [];
+          const warnLogger = (violation: Violation) => warnings.push(violation);
+          await V.object({}).validate({ a: 'x', b: 1 }, { ignoreUnknownProperties: toUpper, warnLogger });
+          expect(warnings).toEqual([defaultViolations.unknownProperty(property('a'))]);
+        });
+
+        test('keeps a violation of the value over the key mismatch', async () => {
+          const allowX = V.object({ additionalProperties: { keys: V.pattern(/^x-/), values: V.string() } });
+          expect(await violationsOf({ y: 1 }, allowX)).toEqual([defaultViolations.string(1, property('y'))]);
+        });
+
+        test('applies to lenientUnknownPropertyValidator', () =>
+          expectValid('x', lenientUnknownPropertyValidator, 'X', { ignoreUnknownProperties: toUpper }));
+
+        test('does not apply to explicitly denied additional properties', async () =>
+          expect(await violationsOf({ a: 'x' }, V.object({ additionalProperties: false }))).toEqual([
+            defaultViolations.unknownPropertyDenied(property('a')),
+          ]));
+
+        test('freezes the converted value under V.frozen', async () => {
+          const output: any = await V.frozen(V.object({})).getValid({ a: { b: 1 } }, { ignoreUnknownProperties: V.object({ properties: { b: V.number() } }) });
+          expect(output).toEqual({ a: { b: 1 } });
+          expect(Object.isFrozen(output.a)).toBe(true);
+        });
+
+        test('under V.frozen a validator that does not support freeze is a configuration error', async () => {
+          await expect(V.frozen(V.object({})).validate({ a: 'x' }, { ignoreUnknownProperties: V.any() })).rejects.toThrow(ValidatorConfigurationError);
+        });
+
+        test('V.fn throwing UnknownProperty passes the value through as is', async () => {
+          const violation = defaultViolations.unknownProperty(Path.of('foo'));
+          expect(await V.fn(() => { throw violation; }).getValid('test', { ignoreUnknownProperties: toUpper })).toBe('test');
+        });
+      });
     });
 
     describe('lenientUnknownPropertyValidator', () => {

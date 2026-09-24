@@ -62,6 +62,7 @@ import {ObjectModel, ObjectValidator, ObjectNormalizer } from './objectValidator
 import { ObjectValidatorBuilder } from './objectValidatorBuilder.js';
 import { MemoizeValidator, MemoizeValidatorOptions } from './memoizeValidator.js';
 import { ProxyValidator, ProxyValidatorFactory } from './proxyValidator.js';
+import { jsonValue } from './jsonValue.js';
 
 interface AllOfParameters {
   <In, Out1, Out2>(v1: Validator<Out1, In>, v2: Validator<Out2, In>): Validator<Out1 & Out2, In>;
@@ -240,6 +241,9 @@ export const V = {
 
   json: <Out, T1, T2, T3, T4, T5>(...validators: CompositionParameters<Out, string, T1, T2, T3, T4, T5>) =>
     new JsonValidator(maybeCompositionOf(...validators)),
+
+  /** Accepts and clones a JSON value whose root is one of `allow`, or any JSON value when omitted. */
+  jsonValue,
 
   /**
    * Defers validator construction to a factory, allowing a validator to reference itself - e.g. a

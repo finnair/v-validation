@@ -4,6 +4,7 @@ import { V } from './V.js';
 import { defaultViolations, Validator } from './validators.js';
 import { DEFAULT_MEMOIZE_MAX_SIZE } from './memoizeValidator.js';
 import { Groups, ValidatorConfigurationError } from './validators.js';
+import { JsonValueValidator } from './jsonValue.js';
 
 const ROOT = Path.ROOT;
 
@@ -334,6 +335,17 @@ describe('MemoizeValidator', () => {
 
       expect((await memo.validate('x', { ignoreUnknownProperties: true, ignoreUnknownEnumValues: true })).isSuccess()).toBe(true);
       await expect(memo.validate('x', { ignoreUnknownProperties: true })).rejects.toThrow(ValidatorConfigurationError);
+    });
+
+    test('compares an ignoreUnknownProperties validator by identity', async () => {
+      const handler = new JsonValueValidator();
+      const memo = V.memoize(V.string(), { options: { ignoreUnknownProperties: handler } });
+
+      expect((await memo.validate('x', { ignoreUnknownProperties: handler })).isSuccess()).toBe(true);
+      // JsonValueValidator references itself, so the error message must not stringify it.
+      await expect(memo.validate('x', { ignoreUnknownProperties: new JsonValueValidator() })).rejects.toThrow(
+        /Unsupported validator options: {"ignoreUnknownProperties":"JsonValueValidator"}/,
+      );
     });
 
     test('ignores warnLogger, which cannot change the result', async () => {

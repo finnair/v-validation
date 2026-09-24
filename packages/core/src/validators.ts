@@ -14,7 +14,8 @@ export interface MappingFn<Out = unknown, In = unknown> {
 
 export interface ValidatorOptions {
   readonly group?: Group;
-  readonly ignoreUnknownProperties?: boolean;
+  /** Allow unknown properties: `true` passes their values through as is, a validator validates and converts them. */
+  readonly ignoreUnknownProperties?: boolean | Validator<unknown, unknown>;
   readonly ignoreUnknownEnumValues?: boolean;
   readonly warnLogger?: WarnLogger;
 }
@@ -128,10 +129,35 @@ export class ValidationContext {
     });
   }
 
-  protected ignoreViolation(violation: Violation) {
+  /**
+   * Reports an unknown property, whose value is `value` at `path`. When ignored, the value is passed
+   * through as is, or through the `ignoreUnknownProperties` validator if one is given.
+   */
+  unknownProperty(value: unknown, path: Path, success: SuccessCallback<any>, failure: FailureCallback): void {
+    const violation = defaultViolations.unknownProperty(path);
+    if (!this.ignoreViolation(violation)) {
+      return failure([violation]);
+    }
+    const accept = (result: unknown) => {
+      if (this.options.warnLogger) {
+        this.options.warnLogger(violation, this.options);
+      }
+      success(result);
+    };
+    const handler = this.options.ignoreUnknownProperties;
+    if (!(handler instanceof Validator)) {
+      return accept(value);
+    }
+    if (this.freeze && !handler.supportsFreeze()) {
+      return failure(violationsOf(new ValidatorConfigurationError(`ignoreUnknownProperties validator does not support freeze: ${handler.constructor.name}`), path));
+    }
+    handler.validatePathV2(value, path, this, accept, failure);
+  }
+
+  protected ignoreViolation(violation: Violation): boolean {
     return (
-      (this.options.ignoreUnknownEnumValues && violation.type === ValidatorType.EnumMismatch) ||
-      (this.options.ignoreUnknownProperties && violation.type === ValidatorType.UnknownProperty)
+      (!!this.options.ignoreUnknownEnumValues && violation.type === ValidatorType.EnumMismatch) ||
+      (!!this.options.ignoreUnknownProperties && violation.type === ValidatorType.UnknownProperty)
     );
   }
 }
@@ -844,11 +870,15 @@ export class ArrayValidator<Out = unknown> extends Validator<Out[]> {
     if (value.length === 0) {
       return successFn(convertedArray);
     }
+    if (ctx.enterValidation(value, path)) {
+      return failure([defaultViolations.cycle(path)]);
+    }
     let expectedResponses = value.length;
     let violations: Violation[] = [];
 
     const reportResult = () => {
       if (--expectedResponses === 0) {
+        ctx.leaveValidation(value, path);
         if (violations.length > 0) {
           failure(violations);
         } else {
