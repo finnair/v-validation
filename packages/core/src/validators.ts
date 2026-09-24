@@ -447,6 +447,16 @@ export abstract class Validator<Out = unknown, In = unknown> {
     return this.supportsFreeze();
   }
 
+  /**
+   * Whether the output can differ between a freezing and a non-freezing context (`ctx.freeze`), as
+   * for object, array, `Map` and `Set` validators and anything containing one. `V.memoize` keeps
+   * separate caches for the two contexts only when this is `true`. Override it in a custom
+   * validator that consults `ctx.freeze`, directly or by running another validator with `ctx`.
+   */
+  dependsOnFreezeContext(): boolean {
+    return false;
+  }
+
   next<NextOut = unknown, T1 = unknown, T2 = unknown, T3 = unknown, T4 = unknown>(...validators: NextCompositionParameters<NextOut, Out, T1, T2, T3, T4>) {
     return maybeCompositionOf(this, ...validators);
   }
@@ -800,6 +810,10 @@ export class ArrayValidator<Out = unknown> extends Validator<Out[]> {
     return this.itemsValidator.supportsFreeze();
   }
 
+  dependsOnFreezeContext(): boolean {
+    return true;
+  }
+
   visit(visitor: ValidatorVisitor, path: Path = Path.ROOT, context?: ValidatorVisitorContext, stack: Validator<any, any>[] = []): void {
     if (visitor.accept(this, path, context)) {
       if (stack.includes(this)) {
@@ -905,7 +919,12 @@ export class CheckValidator<In> extends Validator<In, In> {
 }
 
 export abstract class CompositeValidator<Out = unknown, In = unknown> extends Validator<Out, In> {
-  constructor(private readonly _skipUndefined: boolean, private readonly _supportsFreeze: boolean, private readonly _preservesFreeze: boolean) {
+  constructor(
+    private readonly _skipUndefined: boolean,
+    private readonly _supportsFreeze: boolean,
+    private readonly _preservesFreeze: boolean,
+    private readonly _dependsOnFreezeContext: boolean,
+  ) {
     super();
   }
 
@@ -920,12 +939,21 @@ export abstract class CompositeValidator<Out = unknown, In = unknown> extends Va
   preservesFreeze(): boolean {
     return this._preservesFreeze;
   }
+
+  dependsOnFreezeContext(): boolean {
+    return this._dependsOnFreezeContext;
+  }
 }
 
 export class CompositionValidator<Out = unknown, In = any> extends CompositeValidator<Out, In> {
   public readonly validators: Validator[];
   constructor(validators: Validator[]) {
-    super(validators.every((v) => v.skipUndefined()), compositionSupportsFreeze(validators), validators.every((v) => v.preservesFreeze()));
+    super(
+      validators.every((v) => v.skipUndefined()),
+      compositionSupportsFreeze(validators),
+      validators.every((v) => v.preservesFreeze()),
+      validators.some((v) => v.dependsOnFreezeContext()),
+    );
     this.validators = ([] as Validator[]).concat(validators);
     Object.freeze(this.validators);
     Object.freeze(this);
@@ -962,10 +990,12 @@ export class CompositionValidator<Out = unknown, In = any> extends CompositeVali
 export class OneOfValidator<Out = unknown> extends Validator<Out> {
   private readonly _supportsFreeze: boolean;
   private readonly _preservesFreeze: boolean;
+  private readonly _dependsOnFreezeContext: boolean;
   constructor(public readonly validators: [Validator<Out>, ...Validator<Out>[]]) {
     super();
     this._supportsFreeze = validators.every((v) => v.supportsFreeze());
     this._preservesFreeze = validators.every((v) => v.preservesFreeze());
+    this._dependsOnFreezeContext = validators.some((v) => v.dependsOnFreezeContext());
     // NOTE: This doesn't skipUndefined because a child validator may allow undefined even if it's not configured to skipUndefined
     Object.freeze(this.validators);
     Object.freeze(this);
@@ -977,6 +1007,10 @@ export class OneOfValidator<Out = unknown> extends Validator<Out> {
 
   preservesFreeze(): boolean {
     return this._preservesFreeze;
+  }
+
+  dependsOnFreezeContext(): boolean {
+    return this._dependsOnFreezeContext;
   }
 
   visit(visitor: ValidatorVisitor, path: Path = Path.ROOT, context?: ValidatorVisitorContext, stack?: Validator<any, any>[]): void {
@@ -1027,6 +1061,7 @@ export class OneOfValidator<Out = unknown> extends Validator<Out> {
 export class AnyOfValidator<Out = unknown, In = unknown> extends Validator<Out, In> {
   private readonly _supportsFreeze: boolean;
   private readonly _preservesFreeze: boolean;
+  private readonly _dependsOnFreezeContext: boolean;
   constructor(public readonly validators: Validator<Out>[]) {
     super();
     if (this.validators.length === 0) {
@@ -1034,6 +1069,7 @@ export class AnyOfValidator<Out = unknown, In = unknown> extends Validator<Out, 
     }
     this._supportsFreeze = this.validators.every((v) => v.supportsFreeze());
     this._preservesFreeze = this.validators.every((v) => v.preservesFreeze());
+    this._dependsOnFreezeContext = this.validators.some((v) => v.dependsOnFreezeContext());
     Object.freeze(this.validators);
     Object.freeze(this);
   }
@@ -1044,6 +1080,10 @@ export class AnyOfValidator<Out = unknown, In = unknown> extends Validator<Out, 
 
   preservesFreeze(): boolean {
     return this._preservesFreeze;
+  }
+
+  dependsOnFreezeContext(): boolean {
+    return this._dependsOnFreezeContext;
   }
 
   visit(visitor: ValidatorVisitor, path: Path = Path.ROOT, context?: ValidatorVisitorContext, stack?: Validator<any, any>[]): void {
@@ -1105,6 +1145,7 @@ export class AnyOfValidator<Out = unknown, In = unknown> extends Validator<Out, 
 export class IfValidator<If = unknown, In = unknown, Else = unknown> extends Validator<If | Else, In> {
   private readonly _supportsFreeze: boolean;
   private readonly _preservesFreeze: boolean;
+  private readonly _dependsOnFreezeContext: boolean;
   constructor(public readonly conditionals: Conditional<If, In>[], public readonly elseValidator?: Validator<Else, In>) {
     super();
     if (conditionals.length === 0) {
@@ -1112,6 +1153,8 @@ export class IfValidator<If = unknown, In = unknown, Else = unknown> extends Val
     }
     this._supportsFreeze = this.conditionals.every((c) => c.validator.supportsFreeze()) && (!this.elseValidator || this.elseValidator.supportsFreeze());
     this._preservesFreeze = this.conditionals.every((c) => c.validator.preservesFreeze()) && (!this.elseValidator || this.elseValidator.preservesFreeze());
+    this._dependsOnFreezeContext =
+      this.conditionals.some((c) => c.validator.dependsOnFreezeContext()) || !!this.elseValidator?.dependsOnFreezeContext();
     Object.freeze(this.conditionals);
     Object.freeze(this);
   }
@@ -1122,6 +1165,10 @@ export class IfValidator<If = unknown, In = unknown, Else = unknown> extends Val
 
   preservesFreeze(): boolean {
     return this._preservesFreeze;
+  }
+
+  dependsOnFreezeContext(): boolean {
+    return this._dependsOnFreezeContext;
   }
 
   visit(visitor: ValidatorVisitor, path: Path = Path.ROOT, context?: ValidatorVisitorContext, stack?: Validator<any, any>[]): void {
@@ -1185,6 +1232,7 @@ export class WhenGroupValidator<When = unknown, Otherwise = unknown, In = unknow
       false,
       whenGroups.every(wg => wg.validator.supportsFreeze()) && (!otherwiseValidator || otherwiseValidator.supportsFreeze()),
       whenGroups.every(wg => wg.validator.preservesFreeze()) && (!otherwiseValidator || otherwiseValidator.preservesFreeze()),
+      whenGroups.some(wg => wg.validator.dependsOnFreezeContext()) || !!otherwiseValidator?.dependsOnFreezeContext(),
     );
     Object.freeze(this.whenGroups);
     Object.freeze(this);
@@ -1277,6 +1325,10 @@ export class MapValidator<K = unknown, V = unknown, E extends boolean = true> ex
   
   supportsFreeze(): boolean {
     return this.keys.supportsFreeze() && this.values.supportsFreeze();
+  }
+
+  dependsOnFreezeContext(): boolean {
+    return true;
   }
 
   visit(visitor: ValidatorVisitor, path: Path = Path.ROOT, context?: ValidatorVisitorContext, stack: Validator<any, any>[] = []): void {
@@ -1443,6 +1495,10 @@ export class SetValidator<T = unknown, E extends boolean = true> extends Validat
 
   supportsFreeze(): boolean {
     return this.values.supportsFreeze();
+  }
+
+  dependsOnFreezeContext(): boolean {
+    return true;
   }
 
   visit(visitor: ValidatorVisitor, path: Path = Path.ROOT, context?: ValidatorVisitorContext, stack: Validator<any, any>[] = []): void {
@@ -2118,7 +2174,12 @@ export class HasValueValidator<InOut> extends Validator<InOut> {
  */
 export class AllOfValidator<Out, In> extends CompositeValidator<Out, In> {
   constructor(public readonly validators: [Validator<Out, In>, ...Validator<Out, In>[]]) {
-    super(validators.every(v => v.skipUndefined()), validators.every(v => v.supportsFreeze()), validators.every(v => v.preservesFreeze()));
+    super(
+      validators.every(v => v.skipUndefined()),
+      validators.every(v => v.supportsFreeze()),
+      validators.every(v => v.preservesFreeze()),
+      validators.some(v => v.dependsOnFreezeContext()),
+    );
     if (validators.length === 0) {
       throw new Error('At least one validator required');
     }
@@ -2272,6 +2333,10 @@ export class OptionalValidator<Out, In> extends Validator<null | undefined | Out
     return this.validator.preservesFreeze();
   }
 
+  dependsOnFreezeContext(): boolean {
+    return this.validator.dependsOnFreezeContext();
+  }
+
   visit(visitor: ValidatorVisitor, path: Path = Path.ROOT, context?: ValidatorVisitorContext, stack?: Validator<any, any>[]): void {
     if (visitor.accept(this, path, context)) {
       this.validator.visit(visitor, path, undefined, stack);
@@ -2298,6 +2363,10 @@ export class OptionalUndefinedValidator<Out, In> extends Validator<undefined | O
 
   preservesFreeze(): boolean {
     return this.validator.preservesFreeze();
+  }
+
+  dependsOnFreezeContext(): boolean {
+    return this.validator.dependsOnFreezeContext();
   }
 
   skipUndefined(): boolean {
@@ -2333,6 +2402,10 @@ export class NullableValidator<Out, In> extends Validator<null | Out, null | In>
     return this.validator.preservesFreeze();
   }
 
+  dependsOnFreezeContext(): boolean {
+    return this.validator.dependsOnFreezeContext();
+  }
+
   visit(visitor: ValidatorVisitor, path: Path = Path.ROOT, context?: ValidatorVisitorContext, stack?: Validator<any, any>[]): void {
     if (visitor.accept(this, path, context)) {
       this.validator.visit(visitor, path, undefined, stack);
@@ -2362,6 +2435,10 @@ export class RequiredValidator<Out, In> extends Validator<Out, In> {
 
   preservesFreeze(): boolean {
     return this.validator.preservesFreeze();
+  }
+
+  dependsOnFreezeContext(): boolean {
+    return this.validator.dependsOnFreezeContext();
   }
 
   visit(visitor: ValidatorVisitor, path: Path = Path.ROOT, context?: ValidatorVisitorContext, stack?: Validator<any, any>[]): void {
@@ -2459,6 +2536,10 @@ export class JsonValidator<Out> extends Validator<Out, string> {
 
   supportsFreeze(): boolean {
     return this.validator.supportsFreeze();
+  }
+
+  dependsOnFreezeContext(): boolean {
+    return this.validator.dependsOnFreezeContext();
   }
 
   visit(visitor: ValidatorVisitor, path: Path = Path.ROOT, context?: ValidatorVisitorContext, stack?: Validator<any, any>[]): void {

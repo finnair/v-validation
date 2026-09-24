@@ -738,7 +738,7 @@ describe('MemoizeValidator', () => {
 
     await memo.validate('a');
     await memo.validate('b');
-    (memo as any).evictCursor.it = new Map().keys();
+    (memo as any).cache.evictCursor.it = new Map().keys();
 
     await memo.validate('c');
 
@@ -747,6 +747,124 @@ describe('MemoizeValidator', () => {
     // 'a' was the oldest, so it is the one dropped.
     await memo.validate('c');
     expect(state.calls).toBe(3);
+  });
+
+  describe('frozen and mutable contexts', () => {
+    // An object validator freezes its output only under V.frozen, so the same input converts to a
+    // mutable object in one context and a frozen one in the other.
+    const countingObject = () => {
+      const state = { calls: 0 };
+      const validator = V.object({
+        properties: {
+          a: V.fn((value: any) => {
+            state.calls++;
+            return value;
+          }, true),
+        },
+      });
+      return { state, validator };
+    };
+
+    test('V.frozen never serves an entry cached by a mutable caller', async () => {
+      const memo = V.memoize(countingObject().validator);
+      const input = { a: 'x' };
+
+      const mutable = await memo.getValid(input);
+      const frozen = await V.frozen(memo).getValid(input);
+
+      expect(Object.isFrozen(mutable)).toBe(false);
+      expect(Object.isFrozen(frozen)).toBe(true);
+    });
+
+    test('a mutable caller never gets an entry cached under V.frozen', async () => {
+      const memo = V.memoize(countingObject().validator);
+      const input = { a: 'x' };
+
+      const frozen = await V.frozen(memo).getValid(input);
+      const mutable = await memo.getValid(input);
+
+      expect(Object.isFrozen(frozen)).toBe(true);
+      expect(Object.isFrozen(mutable)).toBe(false);
+    });
+
+    test('each context hits its own cache', async () => {
+      const { state, validator } = countingObject();
+      const memo = V.memoize(validator);
+      const frozenMemo = V.frozen(memo);
+      const input = { a: 'x' };
+
+      const mutable = await memo.getValid(input);
+      const frozen = await frozenMemo.getValid(input);
+
+      expect(await memo.getValid(input)).toBe(mutable);
+      expect(await frozenMemo.getValid(input)).toBe(frozen);
+      expect(state.calls).toBe(2);
+    });
+
+    test('a validator whose output does not depend on the context shares one cache', async () => {
+      // Like the Luxon wrappers: the result freezes itself, so it is the same in either context.
+      const state = { calls: 0 };
+      const memo = V.memoize(
+        V.fn((value: any) => {
+          state.calls++;
+          return Object.freeze({ value });
+        }, true),
+      );
+
+      const mutable = await memo.getValid('x');
+      const frozen = await V.frozen(memo).getValid('x');
+
+      expect(frozen).toBe(mutable);
+      expect(state.calls).toBe(1);
+    });
+
+    test('V.memoize(V.frozen(x)) shares one cache: its output is frozen in either context', async () => {
+      const { state, validator } = countingObject();
+      const memo = V.memoize(V.frozen(validator));
+      const input = { a: 'x' };
+
+      const outside = await memo.getValid(input);
+      const inside = await V.frozen(memo).getValid(input);
+
+      expect(inside).toBe(outside);
+      expect(Object.isFrozen(outside)).toBe(true);
+      expect(state.calls).toBe(1);
+    });
+
+    test('resetCache empties both caches', async () => {
+      const { state, validator } = countingObject();
+      const memo = V.memoize(validator);
+      const input = { a: 'x' };
+      await memo.getValid(input);
+      await V.frozen(memo).getValid(input);
+
+      memo.resetCache();
+      await memo.getValid(input);
+      await V.frozen(memo).getValid(input);
+
+      expect(state.calls).toBe(4);
+    });
+
+    test('maxSize applies to each cache separately', async () => {
+      const { state, validator } = countingObject();
+      const memo = V.memoize(validator, { maxSize: 1 });
+      const frozenMemo = V.frozen(memo);
+      const x = { a: 'x' };
+      const y = { a: 'y' };
+
+      await memo.getValid(x);
+      await frozenMemo.getValid(x);
+      await memo.getValid(x);
+      await frozenMemo.getValid(x);
+      expect(state.calls).toBe(2);
+
+      // Evicts the frozen x only; the mutable entry is untouched.
+      await frozenMemo.getValid(y);
+      await memo.getValid(x);
+      expect(state.calls).toBe(3);
+      await frozenMemo.getValid(x);
+      expect(state.calls).toBe(4);
+    });
   });
 
   test('delegates skipUndefined to the wrapped validator', () => {

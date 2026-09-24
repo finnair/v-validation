@@ -571,6 +571,48 @@ describe('supportsFreeze classification', () => {
     });
   });
 
+  describe('dependsOnFreezeContext', () => {
+    const object = () => V.object({ properties: { a: V.string() } });
+
+    test.each([
+      ['V.object(...)', object()],
+      ['V.array(...)', V.array(V.string())],
+      ['V.toMapType(...)', V.toMapType(V.string(), V.string(), true)],
+      ['V.setType(...)', V.setType(V.string(), true)],
+      ['V.schema(...)', V.schema(() => ({ discriminator: 'type', models: { A: {} } }))],
+      ['schema.of(...)', V.schema(() => ({ discriminator: 'type', models: { A: {} } })).of('A')],
+      ['V.proxy(...)', V.proxy(() => V.string())],
+      ['object with a next V.map', V.object({ properties: { a: V.string() }, next: V.map((value: any) => value, true) })],
+      ['V.compositionOf(V.map, V.object)', V.compositionOf(V.map((value: any) => value), object())],
+      ['V.optional(object)', V.optional(object())],
+      ['V.optionalStrict(object)', V.optionalStrict(object())],
+      ['V.nullable(object)', V.nullable(object())],
+      ['V.required(object)', V.required(object())],
+      ['V.json(object)', V.json(object())],
+      ['V.memoize(object)', V.memoize(object())],
+      ['V.anyOf(string, object)', V.anyOf(V.string(), object())],
+      ['V.oneOf(string, object)', V.oneOf(V.string(), object())],
+      ['V.allOf(object, object)', V.allOf(object(), object())],
+      ['V.if(...).else(object)', V.if(() => true, V.string()).else(object())],
+      ['V.whenGroup(g, object)', V.whenGroup('g', object())],
+      ['V.whenGroup(g, string).otherwise(object)', V.whenGroup('g', V.string()).otherwise(object())],
+    ])('%s depends on the freeze context', (_name, validator) => expect(validator.dependsOnFreezeContext()).toBe(true));
+
+    test.each([
+      ['V.string()', V.string()],
+      ['V.number().min(1)', V.number().min(1)],
+      ['V.fn(...)', V.fn((value: any) => value)],
+      ['V.map(...)', V.map((value: any) => value, true)],
+      ['V.frozen(object)', V.frozen(object())],
+      ['V.memoize(V.frozen(object))', V.memoize(V.frozen(object()))],
+      ['V.check(object)', V.check(object())],
+      ['V.optional(V.string())', V.optional(V.string())],
+      ['V.anyOf(string, number)', V.anyOf(V.string(), V.number())],
+      ['V.if(...) without else', V.if(() => true, V.string())],
+      ['V.whenGroup(g, string)', V.whenGroup('g', V.string())],
+    ])('%s does not', (_name, validator) => expect(validator.dependsOnFreezeContext()).toBe(false));
+  });
+
   test('V.frozen rejects a lone pass-through validator, which would return the raw input', async () => {
     expect(() => V.frozen(V.notEmpty())).toThrow(/NotEmptyValidator/);
     expect(() => V.frozen(V.size(1, 3))).toThrow(/SizeValidator/);

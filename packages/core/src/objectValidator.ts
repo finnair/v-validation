@@ -157,6 +157,10 @@ export class ObjectValidator<LocalType = unknown, InheritableType = LocalType, I
     return this.validator.supportsFreeze();
   }
 
+  dependsOnFreezeContext(): boolean {
+    return true;
+  }
+
   visit(visitor: ValidatorVisitor, path: Path = Path.ROOT, context?: ValidatorVisitorContext, stack: Validator<any, any>[] = []) {
     if (visitor.accept(this, path, context)) {
       if (stack.includes(this)) {

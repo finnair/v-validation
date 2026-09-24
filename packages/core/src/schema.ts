@@ -53,6 +53,9 @@ export class ModelRef extends Validator {
     super();
     Object.freeze(this);
   }
+  dependsOnFreezeContext(): boolean {
+    return true;
+  }
   validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult> {
     return this.schema.validateClass(value, path, ctx, this.name);
   }
@@ -88,6 +91,10 @@ export class SchemaValidator extends Validator {
 
   supportsFreeze(): boolean {
     return Object.values(this.validators).every(validator => validator.supportsFreeze());
+  }
+
+  dependsOnFreezeContext(): boolean {
+    return true;
   }
 
   visit(visitor: ValidatorVisitor, path: Path = Path.ROOT, context?: ValidatorVisitorContext, stack?: Validator<any, any>[]): void {

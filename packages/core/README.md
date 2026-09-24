@@ -916,6 +916,14 @@ Things to keep in mind:
   `V.optionalStrict(V.memoize(...))` - when `undefined` is an accepted input.
 - **A cached result is shared by every caller**, so mutating it corrupts every later read. Wrap the
   memoized validator in [`V.frozen`](#frozen) when the cached values are objects.
+- **Frozen and mutable results are kept apart.** `V.frozen(V.memoize(x))` and `V.memoize(V.frozen(x))`
+  give the same frozen output, but the first one leaves the memoized validator usable outside
+  `V.frozen` too. When `x` converts differently in the two contexts - an object, array, `Map` or
+  `Set` validator, or anything containing one - the memoized validator keeps a separate cache for
+  each, so `V.frozen` never serves a mutable entry and a mutable caller never gets a frozen one.
+  `maxSize` applies to each cache and `resetCache()` empties both. A scalar validator, such as a
+  Luxon wrapper that freezes itself, returns the same value in either context and keeps a single
+  cache.
 - **Options are not part of the cache key.** If the memoized validator's result depends on
   `ValidatorOptions`, pin them with the `options` setting; validating under any others then throws
   a `ValidatorConfigurationError`.
@@ -1049,6 +1057,12 @@ V.frozen(V.object({ properties: { a: V.string() } }).next(V.assertTrue(isConsist
 `V.required`/`V.memoize` wrappers preserve freeze when all their children do. A custom validator
 that passes its input through can say so by overriding `preservesFreeze()` to return `true`; the
 default is its `supportsFreeze()`.
+
+A custom validator that freezes its own output based on `ctx.freeze`, or runs another validator
+with `ctx`, should also override `dependsOnFreezeContext()` to return `true`, so that
+[`V.memoize`](#memoization) caches its frozen and mutable results separately. Everything else,
+including `V.fn` and `V.map` used as an object's `next`, is covered by the built-in validators
+around it.
 
 Composites derive their answer from their children, and that includes the branch taken when nothing
 else matches: `V.if(...)` needs its `else`, and `V.whenGroup(...)` needs its `otherwise` - so

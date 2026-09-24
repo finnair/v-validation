@@ -41,6 +41,11 @@ export class ProxyValidator<Out = unknown, In = unknown> extends Validator<Out, 
     return this._supportsFreeze;
   }
 
+  /** Cannot be known without forcing the factory, so assumed - proxies usually defer an object schema. */
+  dependsOnFreezeContext(): boolean {
+    return true;
+  }
+
   visit(visitor: ValidatorVisitor, path: Path = Path.ROOT, context?: ValidatorVisitorContext, stack?: Validator<any, any>[]): void {
     if (visitor.accept(this, path, context)) {
       // NOTE: We only visit the proxied validator if it has already been created.

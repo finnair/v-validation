@@ -33,9 +33,11 @@ export interface MemoizeValidatorOptions<Out = unknown, In = unknown, K=In> {
    * scalar parsers. Use `{}` to pin "no options".
    */
   readonly options?: ValidatorOptions;
+
   /**
    * Maximum number of input -> result entries to retain. When the cache grows past this, one entry
-   * is evicted in {@link evictionPolicy} order. Defaults to {@link DEFAULT_MEMOIZE_MAX_SIZE}.
+   * is evicted in {@link evictionPolicy} order. Defaults to {@link DEFAULT_MEMOIZE_MAX_SIZE}. When
+   * frozen and mutable results are cached separately, the limit applies to each.
    */
   readonly maxSize?: number;
 
@@ -103,18 +105,17 @@ export interface MemoizeValidatorOptions<Out = unknown, In = unknown, K=In> {
  * Only synchronous validators are supported. An asynchronous result settles after `validatePathV2`
  * returns, with no guarantee of when - or whether - the value becomes available, so it cannot be
  * cached or returned meaningfully. Wrapping an async validator fails with an `Async` violation.
+ *
+ * When the wrapped validator's output depends on whether it runs under `V.frozen`
+ * ({@link Validator.dependsOnFreezeContext}), frozen and mutable results are cached separately, so
+ * `V.frozen(V.memoize(x))` never serves a mutable entry and a mutable caller never gets a frozen one.
+ * Otherwise - scalars, self-freezing values such as the Luxon wrappers, `V.memoize(V.frozen(x))` -
+ * both contexts share one cache.
  */
 export class MemoizeValidator<Out = unknown, In = unknown, K = In> extends Validator<Out, In> {
-  private readonly cache = new Map<K, Out>();
-  /**
-   * Cursor over the cache's keys, used to find the eviction victim. `Map` iterators are live and
-   * advance in insertion order, so reusing one cursor visits each key at most once instead of
-   * re-scanning the table from the front on every eviction - `keys().next()` has to skip the
-   * entries deleted by earlier evictions, which makes a fresh iterator per eviction cost
-   * O(deleted) and the eviction path degrade with `maxSize`. Held in a mutable box because the
-   * instance itself is frozen.
-   */
-  private readonly evictCursor: { it: Iterator<K> };
+  private readonly cache = new MemoizeCache<K, Out>();
+  /** The cache used under `V.frozen`: the same map as `cache` unless the output depends on it. */
+  private readonly frozenCache: MemoizeCache<K, Out>;
   readonly maxSize: number;
   private readonly shouldCache?: (result: Out, value: In) => boolean;
   private readonly cacheKeyFn: (value: undefined | In) => K;
@@ -138,7 +139,11 @@ export class MemoizeValidator<Out = unknown, In = unknown, K = In> extends Valid
     this.refreshOnHit = evictionPolicy === 'lru';
     this.shouldCache = options.shouldCache;
     this.cacheKeyFn = options.cacheKeyFn ?? ((input) => input as K);
-    this.evictCursor = { it: this.cache.keys() };
+    if (validator.dependsOnFreezeContext()) {
+      this.frozenCache = new MemoizeCache<K, Out>();
+    } else {
+      this.frozenCache = this.cache;
+    }
     Object.freeze(this.options);
     Object.freeze(this);
   }
@@ -151,6 +156,10 @@ export class MemoizeValidator<Out = unknown, In = unknown, K = In> extends Valid
     return this.validator.preservesFreeze();
   }
 
+  dependsOnFreezeContext(): boolean {
+    return this.validator.dependsOnFreezeContext();
+  }
+
   visit(visitor: ValidatorVisitor, path: Path = Path.ROOT, context?: ValidatorVisitorContext, stack?: Validator<any, any>[]): void {
     if (visitor.accept(this, path, context)) {
       this.validator.visit(visitor, path, context, stack);
@@ -161,7 +170,7 @@ export class MemoizeValidator<Out = unknown, In = unknown, K = In> extends Valid
     if (!this.supportsOptions(ctx.options)) {
       return failure(violationsOf(new ValidatorConfigurationError(`Unsupported validator options: ${JSON.stringify(ctx.options)}`), path));
     }
-    const cache = this.cache;
+    const cache = ctx.freeze ? this.frozenCache : this.cache;
     const key = this.cacheKeyFn(value);
     // An `undefined` result is never cached, so a plain `get` distinguishes a hit from a miss.
     const cached = cache.get(key);
@@ -190,7 +199,7 @@ export class MemoizeValidator<Out = unknown, In = unknown, K = In> extends Valid
           if (result !== undefined && (this.shouldCache === undefined || this.shouldCache(result, value))) {
             cache.set(key, result);
             if (cache.size > this.maxSize) {
-              this.evictOldest();
+              cache.evictOldest();
             }
           }
           success(result);
@@ -233,7 +242,9 @@ export class MemoizeValidator<Out = unknown, In = unknown, K = In> extends Valid
    */
   resetCache(): void {
     this.cache.clear();
-    this.evictCursor.it = this.cache.keys();
+    if (this.frozenCache !== this.cache) {
+      this.frozenCache.clear();
+    }
   }
 
   private supportsOptions(options?: ValidatorOptions): boolean {
@@ -249,6 +260,48 @@ export class MemoizeValidator<Out = unknown, In = unknown, K = In> extends Valid
     return deepEqual(options?.group, this.options?.group);
   }
 
+  skipUndefined(): boolean {
+    return this.validator.skipUndefined();
+  }
+}
+
+class MemoizeCache<K, V> {
+  private readonly cache = new Map<K, V>();
+  /**
+   * Cursor over the cache's keys, used to find the eviction victim. `Map` iterators are live and
+   * advance in insertion order, so reusing one cursor visits each key at most once instead of
+   * re-scanning the table from the front on every eviction - `keys().next()` has to skip the
+   * entries deleted by earlier evictions, which makes a fresh iterator per eviction cost
+   * O(deleted) and the eviction path degrade with `maxSize`. Held in a mutable box because the
+   * instance itself is frozen.
+   */
+  private readonly evictCursor = { it: this.cache.keys() };
+
+  constructor() {
+    Object.freeze(this);
+  }
+
+  get size(): number {
+    return this.cache.size;
+  }
+
+  get(key: K): V | undefined {
+    return this.cache.get(key);
+  }
+
+  set(key: K, value: V): void {
+    this.cache.set(key, value);
+  }
+
+  delete(key: K): void {
+    this.cache.delete(key);
+  }
+
+  clear(): void {
+    this.cache.clear();
+    this.evictCursor.it = this.cache.keys();
+  }
+
   /**
    * Removes the oldest entry, which is the cursor's next key: entries are appended at the back, an
    * `lru` hit re-inserts its key there, and each eviction removes the key the cursor just returned,
@@ -256,17 +309,12 @@ export class MemoizeValidator<Out = unknown, In = unknown, K = In> extends Valid
    * the cursor yields a key; it is only ever exhausted if that invariant is broken, and a fresh one
    * then restarts from the oldest key.
    */
-  private evictOldest(): void {
-    const cursor = this.evictCursor;
-    let next = cursor.it.next();
+  evictOldest(): void {
+    let next = this.evictCursor.it.next();
     if (next.done) {
-      cursor.it = this.cache.keys();
-      next = cursor.it.next();
+      this.evictCursor.it = this.cache.keys();
+      next = this.evictCursor.it.next();
     }
     this.cache.delete(next.value as K);
-  }
-
-  skipUndefined(): boolean {
-    return this.validator.skipUndefined();
   }
 }
