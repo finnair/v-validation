@@ -915,7 +915,8 @@ Things to keep in mind:
   simply re-validated; wrap the memoized validator rather than the other way round -
   `V.optionalStrict(V.memoize(...))` - when `undefined` is an accepted input.
 - **A cached result is shared by every caller**, so mutating it corrupts every later read. Wrap the
-  memoized validator in [`V.frozen`](#frozen) when the cached values are objects.
+  memoized validator in [`V.frozen`](#frozen) when the cached values are objects. Values of unknown
+  properties allowed by `ignoreUnknownProperties` are not frozen even then.
 - **Frozen and mutable results are kept apart.** `V.frozen(V.memoize(x))` and `V.memoize(V.frozen(x))`
   give the same frozen output, but the first one leaves the memoized validator usable outside
   `V.frozen` too. When `x` converts differently in the two contexts - an object, array, `Map` or
@@ -1091,6 +1092,11 @@ the result can change, and the assertions are exactly that - promises the caller
 _NOTE: freezing is shallow per value, and only object, array, `Map` and `Set` validators freeze
 their output. A `Date`, a Luxon `DateTime` or any other class instance reached by a validated value
 keeps its mutable internal state._
+
+_NOTE: unknown properties accepted with `ignoreUnknownProperties` are copied as is. The object
+holding them is frozen, but their values are not validated, converted or frozen - nothing is known
+about them, including whether they are mutable. Allowing unknown properties is a risk the caller
+takes on; with [`V.memoize`](#memoization) such values are also shared by every caller._
 
 _NOTE: for Luxon, the wrapper validators (`Vluxon.dateTime`, `dateTimeUtc`, `localDate`, ...) support
 freezing, because `LuxonDateTime` freezes itself - which also blocks reassigning its `dateTime`
