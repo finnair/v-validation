@@ -986,6 +986,68 @@ describe('objects', () => {
     test('123', () => expectValid(123, V.toObject('value'), { value: 123 }));
 
     test('object', () => expectValid({}, V.toObject('value')));
+
+    test('__proto__ property', async () => {
+      const result: any = await V.toObject('__proto__').getValid(123);
+      expect(Object.getPrototypeOf(result)).toBe(Object.prototype);
+      expect(JSON.stringify(result)).toEqual('{"__proto__":123}');
+    });
+  });
+
+  describe('__proto__ and inherited properties', () => {
+    const protoJson = '{"__proto__":{"name":"value"}}';
+    const protoModel = () => ({ ['__proto__']: V.object({ properties: { name: V.string() } }) });
+
+    const expectOwnProto = (result: any) => {
+      expect(Object.getPrototypeOf(result)).toBe(Object.prototype);
+      expect(JSON.stringify(result)).toEqual(protoJson);
+    };
+
+    test('declared __proto__ property', async () => expectOwnProto(await V.object({ properties: protoModel() }).getValid(JSON.parse(protoJson))));
+
+    test('declared local __proto__ property', async () => expectOwnProto(await V.object({ localProperties: protoModel() }).getValid(JSON.parse(protoJson))));
+
+    test('declared __proto__ property with builder', async () =>
+      expectOwnProto(await V.objectType().properties(protoModel()).build().getValid(JSON.parse(protoJson))));
+
+    test('declared __proto__ property with builder localProperties', async () =>
+      expectOwnProto(await V.objectType().localProperties(protoModel()).build().getValid(JSON.parse(protoJson))));
+
+    test('__proto__ property inherited from parent', async () => {
+      const parent = V.object({ properties: protoModel() });
+      expectOwnProto(await V.object({ extends: parent }).getValid(JSON.parse(protoJson)));
+    });
+
+    test('__proto__ property added by child', async () => {
+      const parent = V.object({ properties: { name: V.optional(V.string()) } });
+      expectOwnProto(await V.object({ extends: parent, properties: protoModel() }).getValid(JSON.parse(protoJson)));
+    });
+
+    test('pick __proto__ property', async () => expectOwnProto(await V.object({ properties: protoModel() }).pick('__proto__').getValid(JSON.parse(protoJson))));
+
+    test('omit keeps __proto__ property', async () =>
+      expectOwnProto(await V.object({ properties: { ...protoModel(), other: V.string() } }).omit('other').getValid(JSON.parse(protoJson))));
+
+    test('missing __proto__ does not validate the prototype', () =>
+      expectViolations({}, V.object({ properties: protoModel() }), defaultViolations.notNull(Path.property('__proto__'))));
+
+    test('optional missing __proto__', async () => {
+      const result = await V.object({ properties: { ['__proto__']: V.optional(V.any()) } }).getValid({});
+      expect(Object.keys(result)).toEqual([]);
+    });
+
+    test('additional __proto__ property', async () => expectOwnProto(await V.object({ additionalProperties: true }).getValid(JSON.parse(protoJson))));
+
+    test('inherited property is validated', () => expectValid(Object.create({ name: 'value' }), V.object({ properties: { name: V.string() } }), { name: 'value' }));
+
+    test('class getter is validated', () => {
+      class Foo {
+        get name() {
+          return 'value';
+        }
+      }
+      return expectValid(new Foo(), V.object({ properties: { name: V.string() } }), { name: 'value' });
+    });
   });
 
   describe('derived validators', () => {

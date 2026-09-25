@@ -82,6 +82,21 @@ describe('path', () => {
     test('get index of string', () => expect(Path.of(0).get('string')).toBeUndefined());
 
     test('get index of nested string', () => expect(Path.of('child', 'name', 0).get({ child: { name: 'string' } })).toBeUndefined());
+
+    test('get inherited __proto__ returns undefined', () => expect(Path.of('__proto__').get({})).toBeUndefined());
+
+    test('get through inherited __proto__ returns undefined', () => expect(Path.of('__proto__', 'hasOwnProperty').get({})).toBeUndefined());
+
+    test('get own __proto__ property', () => expect(Path.of('__proto__', 'name').get(JSON.parse('{"__proto__":{"name":"value"}}'))).toEqual('value'));
+
+    test('get inherited getter', () => {
+      class Foo {
+        get name() {
+          return 'value';
+        }
+      }
+      expect(Path.of('child', 'name').get({ child: new Foo() })).toEqual('value');
+    });
   });
 
   describe('set', () => {
@@ -105,6 +120,38 @@ describe('path', () => {
 
     test('does not create undefined intermediate', () => {
       expect('nested' in Path.of('nested', 'value').set({}, undefined)).toBe(false);
+    });
+
+    test('sets index of existing array', () => {
+      const arr = [1, 2];
+      Path.of(1).set(arr, 3);
+      expect(arr).toEqual([1, 3]);
+    });
+
+    test('sets __proto__ as own property', () => {
+      const obj = Path.of('__proto__').set({}, { polluted: true });
+      expect(Object.getPrototypeOf(obj)).toBe(Object.prototype);
+      expect(Object.hasOwn(obj, '__proto__')).toBe(true);
+      expect(obj.polluted).toBeUndefined();
+      expect(JSON.stringify(obj)).toEqual('{"__proto__":{"polluted":true}}');
+    });
+
+    test('does not pollute Object.prototype via intermediate __proto__', () => {
+      try {
+        const obj = Path.of('__proto__', 'polluted').set({}, true);
+        expect(({} as any).polluted).toBeUndefined();
+        expect(Object.getPrototypeOf(obj)).toBe(Object.prototype);
+        expect(JSON.stringify(obj)).toEqual('{"__proto__":{"polluted":true}}');
+      } finally {
+        delete (Object.prototype as any).polluted;
+      }
+    });
+
+    test('sets nested value under existing own __proto__ property', () => {
+      const obj = Path.of('__proto__').set({}, { a: 1 });
+      Path.of('__proto__', 'b').set(obj, 2);
+      expect(JSON.stringify(obj)).toEqual('{"__proto__":{"a":1,"b":2}}');
+      expect(({} as any).b).toBeUndefined();
     });
   });
 

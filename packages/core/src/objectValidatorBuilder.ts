@@ -1,3 +1,4 @@
+import { setOwnProperty } from "@finnair/path";
 import { V } from "./V.js";
 import { Validator } from "./validators.js";
 import { MapEntryModel, ObjectValidator, PropertyModel, strictUnknownPropertyValidator } from "./objectValidator.js";
@@ -33,13 +34,13 @@ export class ObjectValidatorBuilder<Props, Next, LocalProps, LocalNext> {
   }
   properties<X>(properties: { [K in keyof X]: Validator<X[K]> }) {
     for (const key in properties) {
-      this._properties[key] = properties[key];
+      setOwnProperty(this._properties, key, properties[key]);
     }
     return this as ObjectValidatorBuilder<Props & UndefinedAsOptionalProperties<X>, Next, LocalProps, LocalNext>;
   }
   localProperties<X>(localProperties: { [K in keyof X]: Validator<X[K]> }) {
     for (const key in localProperties) {
-      this._localProperties[key] = localProperties[key];
+      setOwnProperty(this._localProperties, key, localProperties[key]);
     }
     return this as ObjectValidatorBuilder<Props, Next, LocalProps & UndefinedAsOptionalProperties<X>, LocalNext>;
   }

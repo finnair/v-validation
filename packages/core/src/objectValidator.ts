@@ -1,4 +1,4 @@
-import { Path } from "@finnair/path";
+import { Path, getProperty, setOwnProperty } from "@finnair/path";
 import {
   AnyValidator,
   CompositionParameters,
@@ -360,7 +360,7 @@ class PropertiesValidator<LocalType = unknown, In = unknown> extends Validator<L
     const validateKey = (key: string) => {
       setOwnProperty(convertedObject, key, undefined);
       const valuePath = path.property(key);
-      const propertyValue = anyValue[key];
+      const propertyValue = getProperty(anyValue, key);
       try {
         if (Object.hasOwn(this.properties, key)) {
           validateProperty(key, propertyValue, valuePath);
@@ -387,20 +387,10 @@ class PropertiesValidator<LocalType = unknown, In = unknown> extends Validator<L
   }
 }
 
-
-/** Plain assignment of `__proto__` would replace the object's prototype instead of adding a property. */
-function setOwnProperty(object: any, key: string, value: unknown) {
-  if (key === '__proto__') {
-    Object.defineProperty(object, key, { value, writable: true, enumerable: true, configurable: true });
-  } else {
-    object[key] = value;
-  }
-}
-
 function pick(properties: Properties, fn: (key: keyof any) => boolean): Properties {
   return Object.entries(properties).reduce((current: Properties, [key, validator]) => {
     if (fn(key)) {
-      current[key] = validator;
+      setOwnProperty(current, key, validator);
     }
     return current;
   }, {} as Properties);
@@ -412,7 +402,7 @@ export function mergeProperties(from: Properties, to: Properties): Properties {
       if (Object.hasOwn(to, key)) {
         to[key] = to[key].next(from[key]);
       } else {
-        to[key] = from[key];
+        setOwnProperty(to, key, from[key]);
       }
     }
   }
@@ -435,7 +425,7 @@ export class ObjectNormalizer<InOut> extends Validator<undefined | InOut | {}> {
     }
     if (typeof value !== 'object' || value === null) {
       const object: any = {};
-      object[this.property] = value;
+      setOwnProperty(object, this.property, value);
       return success(object);
     }
     return success(value);
@@ -458,9 +448,9 @@ function getPropertyValidators(properties?: PropertyModel): Properties {
   if (properties) {
     for (const name in properties) {
       if (isString(properties[name]) || isNumber(properties[name])) {
-        propertyValidators[name] = new HasValueValidator(properties[name]);
+        setOwnProperty(propertyValidators, name, new HasValueValidator(properties[name]));
       } else {
-        propertyValidators[name] = properties[name] as Validator;
+        setOwnProperty(propertyValidators, name, properties[name]);
       }
     }
   }

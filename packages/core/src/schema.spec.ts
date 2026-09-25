@@ -129,6 +129,36 @@ describe('schema', () => {
     test('new proxies cannot be created after constructor is finished', () =>
       expect(() => new SchemaValidator(schema => ({ discriminator: 'type', models: {} })).of('NewModel')).toThrow());
 
+    describe('inherited names are not models', () => {
+      const expected = ['Validator', 'Object', 'ObjectNormalizer', 'Array', 'Number'];
+      test.each(['__proto__', 'constructor', 'toString', 'hasOwnProperty'])('%s', type =>
+        expectViolations(JSON.parse(`{"type":"${type}"}`), schema, new DiscriminatorViolation(property('type'), type, expected)));
+
+      test('raw', () => expect(() => schema.raw('constructor')).toThrow('Validator not found: constructor'));
+
+      test('of', () => expect(() => new SchemaValidator(schema => ({ discriminator: 'type', models: { Foo: { properties: { ref: schema.of('toString') } } } }))).toThrow('Undefined named model: toString'));
+
+      test('extends', () => expect(() => new SchemaValidator(() => ({ discriminator: 'type', models: { Foo: { extends: 'constructor' } } }))).toThrow('Undefined model: constructor'));
+    });
+
+    describe('__proto__ as model name and discriminator', () => {
+      const protoSchema = new SchemaValidator(schema => ({
+        discriminator: '__proto__',
+        models: {
+          ['__proto__']: { properties: { ref: V.optional(schema.of('__proto__')) } },
+        },
+      }));
+
+      test('valid', async () => {
+        const json = '{"ref":{"__proto__":"__proto__"},"__proto__":"__proto__"}';
+        const result: any = await protoSchema.getValid(JSON.parse(json));
+        expect(Object.getPrototypeOf(result)).toBe(Object.prototype);
+        expect(JSON.stringify(result)).toEqual(json);
+      });
+
+      test('missing discriminator', () => expectViolations({}, protoSchema, new DiscriminatorViolation(property('__proto__'), undefined, ['__proto__'])));
+    });
+
     test('default property order', async () => {
       const value = (
         await schema.validate({

@@ -133,4 +133,21 @@ describe('jsonClone', () => {
   test('jsonClone of boolean is boolean', () => {
     expect(jsonClone(true)).toBe(true);
   });
+
+  test('own __proto__ property is cloned as own property', () => {
+    const json = '{"__proto__":{"polluted":true}}';
+    const clone: any = jsonClone(JSON.parse(json));
+    expect(Object.getPrototypeOf(clone)).toBe(Object.prototype);
+    expect(clone.polluted).toBeUndefined();
+    expect(JSON.stringify(clone)).toEqual(json);
+  });
+
+  test('__proto__ in array replacer is cloned as own property', () => {
+    const input = JSON.parse('{"__proto__":{"polluted":true}}');
+    const replacer = ['__proto__', 'polluted'];
+    const clone: any = jsonClone(input, replacer);
+    expect(Object.getPrototypeOf(clone)).toBe(Object.prototype);
+    expect(clone.polluted).toBeUndefined();
+    expect(JSON.stringify(clone)).toEqual(JSON.stringify(input, replacer));
+  });
 });
