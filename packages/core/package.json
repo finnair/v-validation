@@ -1,6 +1,6 @@
 {
   "name": "@finnair/v-validation",
-  "version": "12.2.0",
+  "version": "12.3.0",
   "private": false,
   "description": "V-validation core package",
   "main": "./dist/cjs/index.js",
@@ -47,7 +47,7 @@
     "uuid": ">=9"
   },
   "devDependencies": {
-    "@finnair/path": "^12.2.0",
+    "@finnair/path": "^12.3.0",
     "uuid": "11.1.1"
   },
   "engines": {

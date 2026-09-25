@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [12.3.0](https://github.com/finnair/v-validation/compare/v12.2.0...v12.3.0) (2026-09-25)
+
+### Features
+
+- **core:** V.frozen, safe V.memoize caching of objects, and V.jsonValue ([#156](https://github.com/finnair/v-validation/issues/156)) ([1ca7021](https://github.com/finnair/v-validation/commit/1ca70213e0baaf39bb4ad144d50cc913c24c669b))
+
 # [12.2.0](https://github.com/finnair/v-validation/compare/v12.1.1...v12.2.0) (2026-09-16)
 
 **Note:** Version bump only for package @finnair/v-validation-luxon
