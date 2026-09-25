@@ -1,6 +1,7 @@
 import { describe, test, expect } from 'vitest';
 import { Path } from '@finnair/path';
-import { ValidationContext } from './validators.js';
+import { Groups, ValidationContext, ValidatorOptions } from './validators.js';
+import { V } from './V.js';
 
 /**
  * Unit tests for ValidationContext's path-scoped cycle detection, driving enterValidation and
@@ -98,5 +99,112 @@ describe('ValidationContext cycle detection', () => {
 
   test('leaving an object that was never entered is a no-op', () => {
     expect(() => context().leaveValidation({}, left)).not.toThrow();
+  });
+});
+
+/**
+ * `ValidatorOptions` declares every field `readonly`, so mutating one was always a type error.
+ * `ValidationContext` freezes the object it is given, which makes that contract hold at runtime
+ * too - and keeps a memoized validator's pinned options from drifting out from under its cache.
+ */
+describe('ValidationContext option immutability', () => {
+  test('freezes the options object it is given', () => {
+    const options: ValidatorOptions = { ignoreUnknownProperties: true };
+
+    new ValidationContext(options);
+
+    expect(Object.isFrozen(options)).toBe(true);
+  });
+
+  test('keeps the same object, rather than freezing a copy', () => {
+    // A memoized validator compares `ctx.options` by identity as its fast path, so the context must
+    // expose the very object it was given.
+    const options: ValidatorOptions = {};
+
+    const ctx = new ValidationContext(options);
+
+    expect(ctx.options).toBe(options);
+  });
+
+  test('a declared-readonly field cannot be written at runtime either', () => {
+    const options = { ignoreUnknownProperties: true } as { ignoreUnknownProperties?: boolean };
+
+    new ValidationContext(options);
+
+    expect(() => {
+      options.ignoreUnknownProperties = false;
+    }).toThrow(TypeError);
+    expect(options.ignoreUnknownProperties).toBe(true);
+  });
+
+  test('accepts an already frozen options object', () => {
+    const options = Object.freeze<ValidatorOptions>({ ignoreUnknownEnumValues: true });
+
+    const ctx = new ValidationContext(options);
+
+    expect(ctx.options).toBe(options);
+    expect(ctx.options.ignoreUnknownEnumValues).toBe(true);
+  });
+
+  test('nothing reachable through the options is left mutable', () => {
+    // Object.freeze does not recurse, but it does not need to here: the only object an option can
+    // hold is a Group, which freezes itself. The other fields are booleans and a function.
+    const groups = new Groups();
+    const group = groups.define('group');
+    const options: ValidatorOptions = { group };
+
+    new ValidationContext(options);
+
+    expect(Object.isFrozen(options)).toBe(true);
+    expect(Object.isFrozen(options.group)).toBe(true);
+  });
+});
+
+describe('Validator entry points freeze the options they are given', () => {
+  test("validate() freezes the caller's options", async () => {
+    const options: ValidatorOptions = { ignoreUnknownProperties: true };
+
+    await V.string().validate('x', options);
+
+    expect(Object.isFrozen(options)).toBe(true);
+  });
+
+  test("getValid() freezes the caller's options", async () => {
+    const options: ValidatorOptions = { ignoreUnknownProperties: true };
+
+    await V.string().getValid('x', options);
+
+    expect(Object.isFrozen(options)).toBe(true);
+  });
+
+  test('a failed validation freezes them just the same', async () => {
+    const options: ValidatorOptions = { ignoreUnknownProperties: true };
+
+    expect((await V.string().validate(123 as any, options)).isSuccess()).toBe(false);
+
+    expect(Object.isFrozen(options)).toBe(true);
+  });
+
+  test('the same options object can be reused across validations', async () => {
+    const options: ValidatorOptions = { ignoreUnknownProperties: true };
+
+    expect((await V.string().validate('x', options)).isSuccess()).toBe(true);
+    expect((await V.string().validate('y', options)).isSuccess()).toBe(true);
+    expect(await V.string().getValid('z', options)).toBe('z');
+  });
+
+  test('omitting options is unaffected', async () => {
+    expect(await V.string().getValid('x')).toBe('x');
+    expect((await V.string().validate('x')).isSuccess()).toBe(true);
+  });
+
+  test('validateGroup() builds its own options object, leaving the caller nothing to be frozen', async () => {
+    const groups = new Groups();
+    const group = groups.define('group');
+
+    expect((await V.string().validateGroup('x', group)).isSuccess()).toBe(true);
+
+    // The group was already immutable before any validation - see the group immutability tests.
+    expect(group.includes('group')).toBe(true);
   });
 });

@@ -44,6 +44,7 @@ import {
   AnyOfValidator,
   OneOfValidator,
   EnumValidator,
+  FreezeValidator,
   HasValueValidator,
   JsonValidator,
   RequiredValidator,
@@ -61,6 +62,7 @@ import {ObjectModel, ObjectValidator, ObjectNormalizer } from './objectValidator
 import { ObjectValidatorBuilder } from './objectValidatorBuilder.js';
 import { MemoizeValidator, MemoizeValidatorOptions } from './memoizeValidator.js';
 import { ProxyValidator, ProxyValidatorFactory } from './proxyValidator.js';
+import { jsonValue } from './jsonValue.js';
 
 interface AllOfParameters {
   <In, Out1, Out2>(v1: Validator<Out1, In>, v2: Validator<Out2, In>): Validator<Out1 & Out2, In>;
@@ -88,9 +90,15 @@ const ignoreValidator = new IgnoreValidator(),
   dateValidator = new DateValidator(ValidatorType.Date);
 
 export const V = {
-  fn: <Out, In>(fn: ValidatorFn<Out, In>, type?: string) => new ValidatorFnWrapper<Out, In>(fn, type),
+  /**
+   * @param supportsFreeze Assert that `fn` cannot return a value that `V.frozen` would fail to
+   * freeze - it returns a primitive, or a value it has frozen itself. Defaults to `false`, which
+   * makes `V.frozen` reject a schema containing this validator.
+   */
+  fn: <Out, In>(fn: ValidatorFn<Out, In>, supportsFreeze?: boolean) => new ValidatorFnWrapper<Out, In>(fn, supportsFreeze),
 
-  map: <Out, In>(fn: MappingFn<Out, In>, error?: any) => new ValueMapper<Out, In>(fn, error),
+  /** @param supportsFreeze See {@link V.fn}. */
+  map: <Out, In>(fn: MappingFn<Out, In>, supportsFreeze?: boolean) => new ValueMapper<Out, In>(fn, supportsFreeze),
 
   ignore: () => ignoreValidator,
 
@@ -224,12 +232,18 @@ export const V = {
 
   enum: <Out extends Record<string, string | number>>(enumType: Out, name: string) => new EnumValidator<Out>(enumType, name),
 
-  assertTrue: <In>(fn: AssertTrue<In>, type: string = 'AssertTrue', path?: Path) => new AssertTrueValidator<In>(fn, type, path),
+  /** @param supportsFreeze See {@link V.fn}; needed only on its own, since an assertion preserves a frozen input in a chain. */
+  assertTrue: <In>(fn: AssertTrue<In>, type: string = 'AssertTrue', path?: Path, supportsFreeze?: boolean) =>
+    new AssertTrueValidator<In>(fn, type, path, supportsFreeze),
 
-  hasValue: <InOut>(expectedValue: InOut) => new HasValueValidator<InOut>(expectedValue),
+  /** @param supportsFreeze See {@link V.fn}; needed only on its own with an object `expectedValue`. */
+  hasValue: <InOut>(expectedValue: InOut, supportsFreeze?: boolean) => new HasValueValidator<InOut>(expectedValue, supportsFreeze),
 
   json: <Out, T1, T2, T3, T4, T5>(...validators: CompositionParameters<Out, string, T1, T2, T3, T4, T5>) =>
     new JsonValidator(maybeCompositionOf(...validators)),
+
+  /** Accepts and clones a JSON value whose root is one of `allow`, or any JSON value when omitted. */
+  jsonValue,
 
   /**
    * Defers validator construction to a factory, allowing a validator to reference itself - e.g. a
@@ -241,14 +255,20 @@ export const V = {
    * @param factory A function that produces a `Validator` instance when called.
    * @returns A `ProxyValidator` that delegates to the validator produced by the factory.
    */
-  proxy: <Out = unknown, In = unknown>(factory: ProxyValidatorFactory<Out, In>) => new ProxyValidator<Out, In>(factory),
+  proxy: <Out = unknown, In = unknown>(factory: ProxyValidatorFactory<Out, In>, supportsFreeze: boolean = false) => new ProxyValidator<Out, In>(factory, supportsFreeze),
 
   /**
-   * Wraps a validator so that successful results are memoized by input value in a bounded LRU cache.
+   * Wraps a validator so that successful results are memoized by cache key in a bounded cache.
    * A repeated input returns the earlier result directly - e.g. the same ISO string parses to one
    * shared `DateTime` instance. See {@link MemoizeValidator}.
    */
-  memoize: <Out, In>(validator: Validator<Out, In>, options?: MemoizeValidatorOptions<Out, In>) =>
-    new MemoizeValidator<Out, In>(validator, options),
+  /**
+   * A view of `validator` whose whole subtree produces frozen output. The schema itself is
+   * unchanged, so the same validator can still be used mutably elsewhere.
+   */
+  frozen: <Out, In>(validator: Validator<Out, In>) => new FreezeValidator<Out, In>(validator),
+
+  memoize: <Out, In, K = In>(validator: Validator<Out, In>, options?: MemoizeValidatorOptions<Out, In, K>) =>
+    new MemoizeValidator<Out, In, K>(validator, options),
 };
 Object.freeze(V);

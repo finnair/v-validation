@@ -3,6 +3,8 @@ import { Path } from '@finnair/path';
 import { V } from './V.js';
 import { defaultViolations, Validator } from './validators.js';
 import { DEFAULT_MEMOIZE_MAX_SIZE } from './memoizeValidator.js';
+import { Groups, ValidatorConfigurationError } from './validators.js';
+import { JsonValueValidator } from './jsonValue.js';
 
 const ROOT = Path.ROOT;
 
@@ -163,6 +165,372 @@ describe('MemoizeValidator', () => {
 
       await memo.validate('v46');
       expect(state.calls).toBe(51);
+    });
+  });
+
+  describe('resetCache', () => {
+    test('empties the cache, so a repeated input is validated again', async () => {
+      const { state, validator } = counting();
+      const memo = V.memoize(validator);
+
+      await memo.validate('x');
+      await memo.validate('x');
+      expect(state.calls).toBe(1);
+
+      memo.resetCache();
+
+      await memo.validate('x');
+      expect(state.calls).toBe(2);
+    });
+
+    test('the cache works again afterwards', async () => {
+      const { state, validator } = counting();
+      const memo = V.memoize(validator);
+
+      await memo.validate('x');
+      memo.resetCache();
+
+      const first = (await memo.validate('x')).getValue();
+      const second = (await memo.validate('x')).getValue();
+
+      expect(state.calls).toBe(2);
+      expect(second).toBe(first);
+    });
+
+    test('a result held from before the reset is not the one served after it', async () => {
+      const memo = V.memoize(V.fn((value: any) => ({ value })));
+
+      const before = (await memo.validate('x')).getValue();
+      memo.resetCache();
+      const after = (await memo.validate('x')).getValue();
+
+      expect(after).not.toBe(before);
+      expect(after).toEqual(before);
+    });
+
+    test('eviction still works after a reset', async () => {
+      // The eviction cursor is live when clear() runs, which permanently exhausts it, so a reset
+      // has to replace it or eviction would fall back to rebuilding one every time.
+      const { state, validator } = counting();
+      const memo = V.memoize(validator, { maxSize: 2 });
+
+      await memo.validate('a');
+      await memo.validate('b');
+      memo.resetCache();
+
+      await memo.validate('c');
+      await memo.validate('d');
+      await memo.validate('e'); // 'c' evicted
+      expect(state.calls).toBe(5);
+
+      await memo.validate('d'); // still cached
+      await memo.validate('e'); // still cached
+      expect(state.calls).toBe(5);
+
+      await memo.validate('c'); // evicted, so re-validated
+      expect(state.calls).toBe(6);
+    });
+
+    test('lru recency is tracked again after a reset', async () => {
+      const { state, validator } = counting();
+      const memo = V.memoize(validator, { maxSize: 2, evictionPolicy: 'lru' });
+
+      await memo.validate('a');
+      memo.resetCache();
+
+      await memo.validate('a');
+      await memo.validate('b');
+      await memo.validate('a'); // hit -> 'a' becomes most recent
+      expect(state.calls).toBe(3);
+
+      await memo.validate('c'); // evicts 'b'
+      await memo.validate('a'); // survived
+      expect(state.calls).toBe(4);
+    });
+
+    test('resetting an empty cache is a no-op', async () => {
+      const { state, validator } = counting();
+      const memo = V.memoize(validator);
+
+      memo.resetCache();
+      memo.resetCache();
+
+      expect((await memo.validate('x')).isSuccess()).toBe(true);
+      expect(state.calls).toBe(1);
+    });
+
+    test('leaves the rest of the configuration alone', async () => {
+      const { state, validator } = counting();
+      const memo = V.memoize(validator, { maxSize: 2, shouldCache: result => (result.value as string) !== 'skip' });
+
+      await memo.validate('skip');
+      await memo.validate('skip');
+      expect(state.calls).toBe(2);
+
+      memo.resetCache();
+
+      // shouldCache and maxSize still apply.
+      await memo.validate('skip');
+      await memo.validate('skip');
+      expect(state.calls).toBe(4);
+      expect((memo as any).cache.size).toBe(0);
+    });
+  });
+
+  describe('options', () => {
+    // Options can change what a validator produces, and they are not part of the cache key, so a
+    // result cached under one set must not be served under another.
+    const groups = new Groups();
+    const g1 = groups.define('g1');
+    const g2 = groups.define('g2');
+
+    test('accepts the options it was pinned to', async () => {
+      const memo = V.memoize(V.string(), { options: { group: g1 } });
+
+      expect((await memo.validate('x', { group: g1 })).isSuccess()).toBe(true);
+    });
+
+    test('rejects a different group', async () => {
+      const memo = V.memoize(V.string(), { options: { group: g1 } });
+
+      await expect(memo.validate('x', { group: g2 })).rejects.toThrow(ValidatorConfigurationError);
+      await expect(memo.validate('x')).rejects.toThrow(/Unsupported validator options/);
+    });
+
+    test('pinning nothing accepts any options: the check is opt-in', async () => {
+      // Most memoized validators are option-insensitive - a Luxon parse cannot be affected by a
+      // group or by ignoreUnknownProperties - so requiring a declaration would be pure friction.
+      const memo = V.memoize(V.string());
+
+      expect((await memo.validate('x')).isSuccess()).toBe(true);
+      expect((await memo.validate('x', { group: g1 })).isSuccess()).toBe(true);
+      expect((await memo.validate('x', { ignoreUnknownProperties: true })).isSuccess()).toBe(true);
+    });
+
+    test('an unpinned cache serves the same entry regardless of options', async () => {
+      // The consequence of the check being opt-in: pin `options` when the memoized validator's
+      // result actually depends on them.
+      const { state, validator } = counting();
+      const memo = V.memoize(validator);
+
+      const first = (await memo.validate('x', { group: g1 })).getValue();
+      const second = (await memo.validate('x', { group: g2 })).getValue();
+
+      expect(state.calls).toBe(1);
+      expect(second).toBe(first);
+    });
+
+    test('compares the ignore flags leniently, so an explicit false equals an omitted one', async () => {
+      const memo = V.memoize(V.string(), {
+        options: { ignoreUnknownProperties: false, ignoreUnknownEnumValues: false },
+      });
+
+      expect((await memo.validate('x')).isSuccess()).toBe(true);
+      expect((await memo.validate('x', {})).isSuccess()).toBe(true);
+      await expect(memo.validate('x', { ignoreUnknownProperties: true })).rejects.toThrow(ValidatorConfigurationError);
+    });
+
+    test('accepts each pinned ignore flag when it matches', async () => {
+      const memo = V.memoize(V.string(), { options: { ignoreUnknownProperties: true, ignoreUnknownEnumValues: true } });
+
+      expect((await memo.validate('x', { ignoreUnknownProperties: true, ignoreUnknownEnumValues: true })).isSuccess()).toBe(true);
+      await expect(memo.validate('x', { ignoreUnknownProperties: true })).rejects.toThrow(ValidatorConfigurationError);
+    });
+
+    test('compares an ignoreUnknownProperties validator by identity', async () => {
+      const handler = new JsonValueValidator();
+      const memo = V.memoize(V.string(), { options: { ignoreUnknownProperties: handler } });
+
+      expect((await memo.validate('x', { ignoreUnknownProperties: handler })).isSuccess()).toBe(true);
+      // JsonValueValidator references itself, so the error message must not stringify it.
+      await expect(memo.validate('x', { ignoreUnknownProperties: new JsonValueValidator() })).rejects.toThrow(
+        /Unsupported validator options: {"ignoreUnknownProperties":"JsonValueValidator"}/,
+      );
+    });
+
+    test('ignores warnLogger, which cannot change the result', async () => {
+      const memo = V.memoize(V.string(), { options: {} });
+
+      expect((await memo.validate('x', { warnLogger: () => {} })).isSuccess()).toBe(true);
+    });
+
+    test('the mismatch propagates from a nested position', async () => {
+      const parent = V.object({ properties: { a: V.memoize(V.string(), { options: { group: g1 } }) } });
+
+      await expect(parent.validate({ a: 'x' }, { group: g2 })).rejects.toThrow(ValidatorConfigurationError);
+    });
+
+    test('the mismatch propagates when reached from an async callback', async () => {
+      // These positions call the memoized validator from another validator's async callback, with no
+      // try/catch around it: a thrown error there would be an unhandled rejection and a hang.
+      const memo = () => V.memoize(V.string(), { options: { group: g1 } });
+      const asyncId = V.fn(async (value: any) => value);
+
+      await expect(
+        V.object({ properties: { a: asyncId }, localProperties: { a: memo() } }).validate({ a: 'x' }, { group: g2 }),
+      ).rejects.toThrow(ValidatorConfigurationError);
+      await expect(
+        V.object({ additionalProperties: { keys: asyncId, values: memo() } }).validate({ a: 'x' }, { group: g2 }),
+      ).rejects.toThrow(ValidatorConfigurationError);
+    });
+
+    test('getValid reports it as the configuration error too, not a ValidationError', async () => {
+      const memo = V.memoize(V.string(), { options: { group: g1 } });
+
+      await expect(memo.getValid('x', { group: g2 })).rejects.toThrow(ValidatorConfigurationError);
+    });
+
+    test('nothing is cached under the wrong options', async () => {
+      const { state, validator } = counting();
+      const memo = V.memoize(validator, { options: { group: g1 } });
+
+      await expect(memo.validate('x', { group: g2 })).rejects.toThrow(ValidatorConfigurationError);
+      expect(state.calls).toBe(0);
+
+      expect((await memo.validate('x', { group: g1 })).isSuccess()).toBe(true);
+      expect(state.calls).toBe(1);
+    });
+  });
+
+  describe('cacheKeyFn', () => {
+    test('defaults to keying by the input value itself', async () => {
+      const { state, validator } = counting();
+      const memo = V.memoize(validator);
+
+      await memo.validate('a');
+      await memo.validate('a');
+      await memo.validate('b');
+
+      expect(state.calls).toBe(2);
+    });
+
+    test('keys by a derived value, so distinct inputs sharing a key hit the cache', async () => {
+      const { state, validator } = counting();
+      // The motivating case: an object cached by id and version rather than by identity.
+      const memo = V.memoize(validator, { cacheKeyFn: (value: any) => `${value.id}:${value.version}` });
+
+      const first = (await memo.validate({ id: 'a', version: 1, payload: 'x' })).getValue();
+      // A different object, but the same id and version - served from cache.
+      const second = (await memo.validate({ id: 'a', version: 1, payload: 'y' })).getValue();
+
+      expect(state.calls).toBe(1);
+      expect(second).toBe(first);
+    });
+
+    test('a changed key misses, so a new version is re-validated', async () => {
+      const { state, validator } = counting();
+      const memo = V.memoize(validator, { cacheKeyFn: (value: any) => `${value.id}:${value.version}` });
+
+      await memo.validate({ id: 'a', version: 1 });
+      await memo.validate({ id: 'a', version: 2 });
+      await memo.validate({ id: 'b', version: 1 });
+      expect(state.calls).toBe(3);
+
+      await memo.validate({ id: 'a', version: 1 });
+      expect(state.calls).toBe(3);
+    });
+
+    test('a stale key returns the earlier result: the key must identify the payload', async () => {
+      // Documented consequence of keying by a derived value - two payloads sharing a key are the
+      // same as far as the cache is concerned, so a mutation without a version bump serves stale.
+      const memo = V.memoize(
+        V.fn((value: any) => ({ name: value.name })),
+        { cacheKeyFn: (value: any) => value.id },
+      );
+
+      expect((await memo.validate({ id: 1, name: 'original' })).getValue()).toEqual({ name: 'original' });
+      expect((await memo.validate({ id: 1, name: 'changed' })).getValue()).toEqual({ name: 'original' });
+    });
+
+    test('without a key function, distinct objects never hit - identity is the key', async () => {
+      const { state, validator } = counting();
+      const memo = V.memoize(validator);
+
+      await memo.validate({ id: 'a' });
+      await memo.validate({ id: 'a' });
+
+      expect(state.calls).toBe(2);
+    });
+
+    test('is called for hits as well as misses', async () => {
+      const keys: unknown[] = [];
+      const memo = V.memoize(
+        V.fn((value: any) => ({ value })),
+        {
+          cacheKeyFn: (value: any) => {
+            keys.push(value);
+            return value.id;
+          },
+        },
+      );
+
+      await memo.validate({ id: 'a' });
+      await memo.validate({ id: 'a' });
+
+      expect(keys).toHaveLength(2);
+    });
+
+    test('receives the raw input while shouldCache receives the converted result', async () => {
+      const seen: Array<[unknown, unknown]> = [];
+      const memo = V.memoize(
+        V.fn((value: any) => ({ converted: value.id })),
+        {
+          cacheKeyFn: (value: any) => value.id,
+          shouldCache: (result, value) => {
+            seen.push([result, value]);
+            return true;
+          },
+        },
+      );
+
+      const input = { id: 'a' };
+      const result = (await memo.validate(input)).getValue();
+
+      expect(seen).toEqual([[result, input]]);
+    });
+
+    test('eviction and lru recency use the derived key', async () => {
+      const { state, validator } = counting();
+      const memo = V.memoize(validator, {
+        maxSize: 2,
+        evictionPolicy: 'lru',
+        cacheKeyFn: (value: any) => value.id,
+      });
+
+      await memo.validate({ id: 'a' });
+      await memo.validate({ id: 'b' });
+      await memo.validate({ id: 'a' }); // hit by key -> 'a' becomes most recent
+      expect(state.calls).toBe(2);
+
+      await memo.validate({ id: 'c' }); // evicts 'b'
+      expect(state.calls).toBe(3);
+
+      await memo.validate({ id: 'a' }); // survived
+      expect(state.calls).toBe(3);
+
+      await memo.validate({ id: 'b' }); // evicted
+      expect(state.calls).toBe(4);
+    });
+
+    test('KNOWN LIMITATION: a key function returning a fresh object never hits', async () => {
+      // Map keys are compared by identity, so a derived key must be a primitive.
+      const { state, validator } = counting();
+      const memo = V.memoize(validator, { cacheKeyFn: (value: any) => ({ id: value.id }) as any });
+
+      await memo.validate({ id: 'a' });
+      await memo.validate({ id: 'a' });
+
+      expect(state.calls).toBe(2);
+    });
+
+    test('handles an undefined input', async () => {
+      const { state, validator } = counting();
+      const memo = V.memoize(validator, { cacheKeyFn: value => (value === undefined ? 'none' : (value as any).id) });
+
+      await memo.validate(undefined as any);
+      await memo.validate(undefined as any);
+
+      expect(state.calls).toBe(1);
     });
   });
 
@@ -382,7 +750,7 @@ describe('MemoizeValidator', () => {
 
     await memo.validate('a');
     await memo.validate('b');
-    (memo as any).evictCursor.it = new Map().keys();
+    (memo as any).cache.evictCursor.it = new Map().keys();
 
     await memo.validate('c');
 
@@ -391,6 +759,124 @@ describe('MemoizeValidator', () => {
     // 'a' was the oldest, so it is the one dropped.
     await memo.validate('c');
     expect(state.calls).toBe(3);
+  });
+
+  describe('frozen and mutable contexts', () => {
+    // An object validator freezes its output only under V.frozen, so the same input converts to a
+    // mutable object in one context and a frozen one in the other.
+    const countingObject = () => {
+      const state = { calls: 0 };
+      const validator = V.object({
+        properties: {
+          a: V.fn((value: any) => {
+            state.calls++;
+            return value;
+          }, true),
+        },
+      });
+      return { state, validator };
+    };
+
+    test('V.frozen never serves an entry cached by a mutable caller', async () => {
+      const memo = V.memoize(countingObject().validator);
+      const input = { a: 'x' };
+
+      const mutable = await memo.getValid(input);
+      const frozen = await V.frozen(memo).getValid(input);
+
+      expect(Object.isFrozen(mutable)).toBe(false);
+      expect(Object.isFrozen(frozen)).toBe(true);
+    });
+
+    test('a mutable caller never gets an entry cached under V.frozen', async () => {
+      const memo = V.memoize(countingObject().validator);
+      const input = { a: 'x' };
+
+      const frozen = await V.frozen(memo).getValid(input);
+      const mutable = await memo.getValid(input);
+
+      expect(Object.isFrozen(frozen)).toBe(true);
+      expect(Object.isFrozen(mutable)).toBe(false);
+    });
+
+    test('each context hits its own cache', async () => {
+      const { state, validator } = countingObject();
+      const memo = V.memoize(validator);
+      const frozenMemo = V.frozen(memo);
+      const input = { a: 'x' };
+
+      const mutable = await memo.getValid(input);
+      const frozen = await frozenMemo.getValid(input);
+
+      expect(await memo.getValid(input)).toBe(mutable);
+      expect(await frozenMemo.getValid(input)).toBe(frozen);
+      expect(state.calls).toBe(2);
+    });
+
+    test('a validator whose output does not depend on the context shares one cache', async () => {
+      // Like the Luxon wrappers: the result freezes itself, so it is the same in either context.
+      const state = { calls: 0 };
+      const memo = V.memoize(
+        V.fn((value: any) => {
+          state.calls++;
+          return Object.freeze({ value });
+        }, true),
+      );
+
+      const mutable = await memo.getValid('x');
+      const frozen = await V.frozen(memo).getValid('x');
+
+      expect(frozen).toBe(mutable);
+      expect(state.calls).toBe(1);
+    });
+
+    test('V.memoize(V.frozen(x)) shares one cache: its output is frozen in either context', async () => {
+      const { state, validator } = countingObject();
+      const memo = V.memoize(V.frozen(validator));
+      const input = { a: 'x' };
+
+      const outside = await memo.getValid(input);
+      const inside = await V.frozen(memo).getValid(input);
+
+      expect(inside).toBe(outside);
+      expect(Object.isFrozen(outside)).toBe(true);
+      expect(state.calls).toBe(1);
+    });
+
+    test('resetCache empties both caches', async () => {
+      const { state, validator } = countingObject();
+      const memo = V.memoize(validator);
+      const input = { a: 'x' };
+      await memo.getValid(input);
+      await V.frozen(memo).getValid(input);
+
+      memo.resetCache();
+      await memo.getValid(input);
+      await V.frozen(memo).getValid(input);
+
+      expect(state.calls).toBe(4);
+    });
+
+    test('maxSize applies to each cache separately', async () => {
+      const { state, validator } = countingObject();
+      const memo = V.memoize(validator, { maxSize: 1 });
+      const frozenMemo = V.frozen(memo);
+      const x = { a: 'x' };
+      const y = { a: 'y' };
+
+      await memo.getValid(x);
+      await frozenMemo.getValid(x);
+      await memo.getValid(x);
+      await frozenMemo.getValid(x);
+      expect(state.calls).toBe(2);
+
+      // Evicts the frozen x only; the mutable entry is untouched.
+      await frozenMemo.getValid(y);
+      await memo.getValid(x);
+      expect(state.calls).toBe(3);
+      await frozenMemo.getValid(x);
+      expect(state.calls).toBe(4);
+    });
   });
 
   test('delegates skipUndefined to the wrapped validator', () => {

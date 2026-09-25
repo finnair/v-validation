@@ -27,6 +27,7 @@ import {
   AnyOfValidator,
   AllOfValidator,
   SyncPromise,
+  ValidatorConfigurationError,
 } from './validators.js';
 import { ObjectValidator, VInheritableType, lenientUnknownPropertyValidator } from './objectValidator.js';
 import { V } from './V.js';
@@ -604,6 +605,56 @@ describe('objects', () => {
         const result = await V.objectType().allowAdditionalProperties(false).build().validate(object, { ignoreUnknownProperties: true });
         expect(result).toEqual(new ValidationResult([defaultViolations.unknownPropertyDenied(property('unknownProperty'))]));
       });
+
+      describe('as a validator', () => {
+        const toUpper = V.string().nextMap(value => value.toUpperCase());
+        const violationsOf = async (value: any, validator: Validator) =>
+          (await validator.validate(value, { ignoreUnknownProperties: toUpper })).getViolations();
+
+        test('validates and converts unknown property values', () =>
+          expectValid({ a: 'x' }, V.object({}), { a: 'X' }, { ignoreUnknownProperties: toUpper }));
+
+        test('reports violations of the unknown property value at its path', async () =>
+          expect(await violationsOf({ a: 1 }, V.object({}))).toEqual([defaultViolations.string(1, property('a'))]));
+
+        test('leaves known properties alone', () =>
+          expectValid({ known: 1, a: 'x' }, V.object({ properties: { known: V.number() } }), { known: 1, a: 'X' }, { ignoreUnknownProperties: toUpper }));
+
+        test('logs a warning only for an accepted value', async () => {
+          const warnings: Violation[] = [];
+          const warnLogger = (violation: Violation) => warnings.push(violation);
+          await V.object({}).validate({ a: 'x', b: 1 }, { ignoreUnknownProperties: toUpper, warnLogger });
+          expect(warnings).toEqual([defaultViolations.unknownProperty(property('a'))]);
+        });
+
+        test('keeps a violation of the value over the key mismatch', async () => {
+          const allowX = V.object({ additionalProperties: { keys: V.pattern(/^x-/), values: V.string() } });
+          expect(await violationsOf({ y: 1 }, allowX)).toEqual([defaultViolations.string(1, property('y'))]);
+        });
+
+        test('applies to lenientUnknownPropertyValidator', () =>
+          expectValid('x', lenientUnknownPropertyValidator, 'X', { ignoreUnknownProperties: toUpper }));
+
+        test('does not apply to explicitly denied additional properties', async () =>
+          expect(await violationsOf({ a: 'x' }, V.object({ additionalProperties: false }))).toEqual([
+            defaultViolations.unknownPropertyDenied(property('a')),
+          ]));
+
+        test('freezes the converted value under V.frozen', async () => {
+          const output: any = await V.frozen(V.object({})).getValid({ a: { b: 1 } }, { ignoreUnknownProperties: V.object({ properties: { b: V.number() } }) });
+          expect(output).toEqual({ a: { b: 1 } });
+          expect(Object.isFrozen(output.a)).toBe(true);
+        });
+
+        test('under V.frozen a validator that does not support freeze is a configuration error', async () => {
+          await expect(V.frozen(V.object({})).validate({ a: 'x' }, { ignoreUnknownProperties: V.any() })).rejects.toThrow(ValidatorConfigurationError);
+        });
+
+        test('V.fn throwing UnknownProperty passes the value through as is', async () => {
+          const violation = defaultViolations.unknownProperty(Path.of('foo'));
+          expect(await V.fn(() => { throw violation; }).getValid('test', { ignoreUnknownProperties: toUpper })).toBe('test');
+        });
+      });
     });
 
     describe('lenientUnknownPropertyValidator', () => {
@@ -935,6 +986,68 @@ describe('objects', () => {
     test('123', () => expectValid(123, V.toObject('value'), { value: 123 }));
 
     test('object', () => expectValid({}, V.toObject('value')));
+
+    test('__proto__ property', async () => {
+      const result: any = await V.toObject('__proto__').getValid(123);
+      expect(Object.getPrototypeOf(result)).toBe(Object.prototype);
+      expect(JSON.stringify(result)).toEqual('{"__proto__":123}');
+    });
+  });
+
+  describe('__proto__ and inherited properties', () => {
+    const protoJson = '{"__proto__":{"name":"value"}}';
+    const protoModel = () => ({ ['__proto__']: V.object({ properties: { name: V.string() } }) });
+
+    const expectOwnProto = (result: any) => {
+      expect(Object.getPrototypeOf(result)).toBe(Object.prototype);
+      expect(JSON.stringify(result)).toEqual(protoJson);
+    };
+
+    test('declared __proto__ property', async () => expectOwnProto(await V.object({ properties: protoModel() }).getValid(JSON.parse(protoJson))));
+
+    test('declared local __proto__ property', async () => expectOwnProto(await V.object({ localProperties: protoModel() }).getValid(JSON.parse(protoJson))));
+
+    test('declared __proto__ property with builder', async () =>
+      expectOwnProto(await V.objectType().properties(protoModel()).build().getValid(JSON.parse(protoJson))));
+
+    test('declared __proto__ property with builder localProperties', async () =>
+      expectOwnProto(await V.objectType().localProperties(protoModel()).build().getValid(JSON.parse(protoJson))));
+
+    test('__proto__ property inherited from parent', async () => {
+      const parent = V.object({ properties: protoModel() });
+      expectOwnProto(await V.object({ extends: parent }).getValid(JSON.parse(protoJson)));
+    });
+
+    test('__proto__ property added by child', async () => {
+      const parent = V.object({ properties: { name: V.optional(V.string()) } });
+      expectOwnProto(await V.object({ extends: parent, properties: protoModel() }).getValid(JSON.parse(protoJson)));
+    });
+
+    test('pick __proto__ property', async () => expectOwnProto(await V.object({ properties: protoModel() }).pick('__proto__').getValid(JSON.parse(protoJson))));
+
+    test('omit keeps __proto__ property', async () =>
+      expectOwnProto(await V.object({ properties: { ...protoModel(), other: V.string() } }).omit('other').getValid(JSON.parse(protoJson))));
+
+    test('missing __proto__ does not validate the prototype', () =>
+      expectViolations({}, V.object({ properties: protoModel() }), defaultViolations.notNull(Path.property('__proto__'))));
+
+    test('optional missing __proto__', async () => {
+      const result = await V.object({ properties: { ['__proto__']: V.optional(V.any()) } }).getValid({});
+      expect(Object.keys(result)).toEqual([]);
+    });
+
+    test('additional __proto__ property', async () => expectOwnProto(await V.object({ additionalProperties: true }).getValid(JSON.parse(protoJson))));
+
+    test('inherited property is validated', () => expectValid(Object.create({ name: 'value' }), V.object({ properties: { name: V.string() } }), { name: 'value' }));
+
+    test('class getter is validated', () => {
+      class Foo {
+        get name() {
+          return 'value';
+        }
+      }
+      return expectValid(new Foo(), V.object({ properties: { name: V.string() } }), { name: 'value' });
+    });
   });
 
   describe('derived validators', () => {
@@ -1432,7 +1545,7 @@ describe('Date', () => {
     }
     const validator = V.object({
       properties: {
-        date: V.date().next(V.fn(notInstanceOfDate, 'NotInstanceOfDate')),
+        date: V.date().next(V.fn(notInstanceOfDate)),
       },
     });
     const object = {
@@ -1622,7 +1735,18 @@ describe('anyOf', () => {
 
     test('valid value', () => expectValid('ABC', validator));
 
-    test('conflicting conversions', () => expectViolations('abc', validator, new Violation(ROOT, 'ConflictingConversions', ['abc', 'ABC'])));
+    test('conflicting conversions are a configuration error, not a violation', async () => {
+      await expect(validator.validate('abc')).rejects.toThrow(ValidatorConfigurationError);
+      await expect(validator.getValid('abc')).rejects.toThrow('ConflictingConversions for anyOf($): abc, ABC');
+    });
+
+    test('the error propagates from a nested position', async () => {
+      await expect(V.object({ properties: { a: validator } }).validate({ a: 'abc' })).rejects.toThrow('ConflictingConversions for anyOf($.a)');
+    });
+
+    test('the error is not swallowed by an enclosing oneOf', async () => {
+      await expect(V.oneOf(validator, V.string()).validate('abc')).rejects.toThrow(ValidatorConfigurationError);
+    });
   });
   
   describe('array context', () => {
@@ -1884,7 +2008,8 @@ describe('async validation', () => {
 
     test('results must match', async () => {
       const validator = V.allOf(V.string(), V.toInteger());
-      await expectViolations('123', validator, new Violation(ROOT, 'ConflictingConversions', ['123', 123]));
+      await expect(validator.validate('123')).rejects.toThrow(ValidatorConfigurationError);
+      await expect(validator.validate('123')).rejects.toThrow('ConflictingConversions for allOf($): 123, 123');
     });
 
     test('return original', async () => {
@@ -1892,12 +2017,9 @@ describe('async validation', () => {
     });
 
     test('conflicting conversions not allowed', async () => {
-      try {
-        await V.allOf(defer(V.toInteger(), 3), defer(V.toObject('value'), 1)).validate('123');
-        fail('expected an error');
-      } catch (e) {
-        // as expected
-      }
+      await expect(V.allOf(defer(V.toInteger(), 3), defer(V.toObject('value'), 1)).validate('123')).rejects.toThrow(
+        ValidatorConfigurationError,
+      );
     });
   });
 
@@ -1937,6 +2059,32 @@ describe('compositionOf', () => {
   test('valid input', () => expectValid('A12c', validator, 12));
 
   test('invalid input', () => expectViolations('AbCd', validator, defaultViolations.number('')));
+});
+
+describe('group immutability', () => {
+  // A Group is shared by every validation that uses it, so it must not be mutable. Its
+  // `allIncluded` lookup was frozen from the start; the instance itself is frozen too.
+  const immutabilityGroups = new Groups();
+  const parent = immutabilityGroups.define('parent');
+  const child = immutabilityGroups.define('child', parent);
+
+  test('the instance and its lookup table are both frozen', () => {
+    expect(Object.isFrozen(child)).toBe(true);
+    expect(Object.isFrozen((child as any).allIncluded)).toBe(true);
+  });
+
+  test('no field can be written, added or redefined', () => {
+    expect(() => { (child as any).name = 'renamed'; }).toThrow(TypeError);
+    expect(() => { (child as any).extra = 1; }).toThrow(TypeError);
+    expect(() => { (child as any).allIncluded.parent = false; }).toThrow(TypeError);
+    expect(() => { (child as any).allIncluded.sneaky = true; }).toThrow(TypeError);
+  });
+
+  test('membership is unaffected by the freeze', () => {
+    expect(child.includes('child')).toBe(true);
+    expect(child.includes(parent)).toBe(true);
+    expect(parent.includes(child)).toBe(false);
+  });
 });
 
 describe('groups', () => {

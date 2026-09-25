@@ -55,4 +55,16 @@ describe('V.memoize with Vluxon', () => {
     // A subsequent valid input for the same validator still works.
     expect((await memoized.validate('2026-09-11')).isSuccess()).toBe(true);
   });
+
+  test('shares one cache between frozen and mutable callers, since a wrapper freezes itself', async () => {
+    const memoized = V.memoize(Vluxon.localDate());
+
+    const mutable = await memoized.getValid('2026-09-11');
+    const frozen = await V.frozen(memoized).getValid('2026-09-11');
+    const nested = await V.frozen(V.object({ properties: { date: memoized } })).getValid({ date: '2026-09-11' });
+
+    expect(Vluxon.localDate().dependsOnFreezeContext()).toBe(false);
+    expect(frozen).toBe(mutable);
+    expect((nested as any).date).toBe(mutable);
+  });
 });

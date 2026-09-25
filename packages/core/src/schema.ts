@@ -7,6 +7,8 @@ import {
   isString,
   Violation,
   TypeMismatch,
+  ValidatorVisitor,
+  ValidatorVisitorContext,
 } from './validators.js';
 import {
   ObjectValidator,
@@ -14,7 +16,7 @@ import {
   MapEntryModel,
   ObjectModel,
 } from './objectValidator.js';
-import { Path } from '@finnair/path';
+import { Path, getProperty, setOwnProperty } from '@finnair/path';
 
 export interface DiscriminatorFn {
   (value: any): string;
@@ -51,6 +53,9 @@ export class ModelRef extends Validator {
     super();
     Object.freeze(this);
   }
+  dependsOnFreezeContext(): boolean {
+    return true;
+  }
   validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult> {
     return this.schema.validateClass(value, path, ctx, this.name);
   }
@@ -67,21 +72,38 @@ export class SchemaValidator extends Validator {
 
   private readonly proxies = new Map<string, Validator>();
 
-  private readonly validators: { [name: string]: Validator } = {};
+  // Null prototype so that inherited names like `constructor` or `__proto__` are not models
+  private readonly validators: { [name: string]: Validator } = Object.create(null);
 
   constructor(fn: (schema: SchemaValidator) => SchemaModel) {
     super();
     const schema = fn(this);
+    this.discriminator = schema.discriminator;
+    this.compileSchema(schema.models, new Set<string>());
     for (const name of this.proxies.keys()) {
-      if (!schema.models[name]) {
+      if (!this.validators[name]) {
         throw new Error('Undefined named model: ' + name);
       }
     }
-    this.discriminator = schema.discriminator;
-    this.compileSchema(schema.models, new Set<string>());
 
     Object.freeze(this.validators);
     Object.freeze(this);
+  }
+
+  supportsFreeze(): boolean {
+    return Object.values(this.validators).every(validator => validator.supportsFreeze());
+  }
+
+  dependsOnFreezeContext(): boolean {
+    return true;
+  }
+
+  visit(visitor: ValidatorVisitor, path: Path = Path.ROOT, context?: ValidatorVisitorContext, stack?: Validator<any, any>[]): void {
+    if (visitor.accept(this, path, context)) {
+      Object.entries(this.validators).forEach(([name, validator]) => {
+        validator.visit(visitor, path, new ValidatorVisitorContext(`schema: ${name}`), stack);
+      });
+    }
   }
 
   validatePath(value: any, path: Path, ctx: ValidationContext): PromiseLike<ValidationResult> {
@@ -96,7 +118,7 @@ export class SchemaValidator extends Validator {
     let type: string;
     let typePath: Path = path;
     if (isString(this.discriminator)) {
-      type = value[this.discriminator as string];
+      type = getProperty(value, this.discriminator as string) as string;
       typePath = path.property(this.discriminator as string);
     } else {
       type = (this.discriminator as DiscriminatorFn)(value);
@@ -163,15 +185,19 @@ export class SchemaValidator extends Validator {
     seen.add(name);
 
     let validator: Validator;
-    if (models[name] instanceof Validator) {
-      validator = models[name] as Validator;
+    const validatorOrModel = getProperty(models, name) as Validator | ClassModel;
+    if (typeof validatorOrModel !== 'object' || validatorOrModel === null) {
+      throw new Error(`Undefined model: ${name}`);
+    }
+    if (validatorOrModel instanceof Validator) {
+      validator = validatorOrModel;
     } else {
-      const classModel = models[name] as ClassModel;
+      const classModel = validatorOrModel;
       const localProperties = classModel.localProperties || {};
       if (isString(this.discriminator)) {
         const discriminatorProperty: string = this.discriminator as string;
-        if (!localProperties[discriminatorProperty]) {
-          localProperties[discriminatorProperty] = name;
+        if (!getProperty(localProperties, discriminatorProperty)) {
+          setOwnProperty(localProperties, discriminatorProperty, name);
         }
       }
       const model: ObjectModel = {

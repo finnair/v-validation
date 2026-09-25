@@ -90,3 +90,60 @@ DateTime instance which is public readonly fiedl. However there are a few conven
 | dateTimeFromMillis  | Unix timestamp (number)          | Plain Luxon DateTime from Unix timestamp in milliseconds. |
 | duration            | ISO 8601 Duration                | Luxon `Duration.fromISO` with pattern validation.         |
 | timeDuration        | ISO 8601 time string as Duration | Luxon `Duration.fromISOTime`.                             |
+
+## Immutable Output (`V.frozen`)
+
+[`V.frozen`](https://github.com/finnair/v-validation/tree/master/packages/core#frozen) requires every
+validator in a schema to declare that its output can be frozen, and the two families above answer
+differently:
+
+| Validators                                                                                                                                               | `supportsFreeze` | Why                                  |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- | ------------------------------------ |
+| `localDate`, `localTime`, `localDateTime`, `dateTime`, `dateTimeUtc`, `dateTimeMillis`, `dateTimeMillisUtc`                                              | `true`           | `LuxonDateTime` freezes itself       |
+| `dateTimeFromISO`, `dateTimeFromRFC2822`, `dateTimeFromHTTP`, `dateTimeFromSQL`, `dateTimeFromSeconds`, `dateTimeFromMillis`, `duration`, `timeDuration` | `false`          | a plain Luxon value cannot be frozen |
+
+So the wrapper types work inside a frozen schema, which is what makes it safe to share a memoized
+result between callers:
+
+```typescript
+const leg = V.objectType()
+  .properties({
+    id: V.string(),
+    version: V.number(),
+    date: Vluxon.localDate(),
+    std: Vluxon.dateTimeUtc(),
+  })
+  .build();
+
+const cached = V.memoize(V.frozen(leg), { cacheKeyFn: (value: any) => `${value.id}:${value.version}` });
+```
+
+The plain validators are rejected:
+
+```typescript
+V.frozen(V.object({ properties: { at: Vluxon.dateTimeFromISO() } }));
+// Error: The following validators do not support freeze:
+// $: ObjectValidator
+// $: PropertiesValidator
+// $.at: DateTimeValidator (property)
+```
+
+### Why a plain Luxon value cannot be frozen
+
+`Object.freeze` on a Luxon `DateTime` breaks it. Luxon caches week data on the instance the first
+time it is needed, so `weekYear`, `weekNumber`, `weekday`, the `localWeek*` fields, `toISOWeekDate()`
+and week format tokens (`kkkk`, `WW`) all throw on a frozen instance:
+
+```typescript
+const frozen = Object.freeze(DateTime.utc(2026, 9, 17));
+frozen.toISO(); // fine
+frozen.weekNumber; // TypeError: Cannot assign to read only property 'weekData'
+```
+
+Luxon's _API_ is immutable - every method returns a new instance - but its _instances_ are not, and
+the same applies to `Duration`. So these validators cannot promise what `V.frozen` asks for.
+
+_NOTE: a wrapper's `dateTime` property is a plain Luxon `DateTime`, so its internals stay mutable
+even inside a frozen schema. What the frozen wrapper does guarantee is that the property cannot be
+reassigned. Deep immutability of Luxon values is not something `V.frozen` can provide - see the
+[core caveats](https://github.com/finnair/v-validation/tree/master/packages/core#frozen)._

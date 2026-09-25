@@ -1,3 +1,5 @@
+import { setOwnProperty } from './properties.js';
+
 export type JsonReplacer = ((this: any, key: string, value: any) => any) | (number | string)[] | null;
 
 export type JsonValue = string | boolean | number | JsonValue[] | null | JsonObject;
@@ -28,7 +30,7 @@ function _jsonClone(key: string, holder: any, replacer?: JsonReplacer) {
           const keyValue = _jsonClone(nestedKey, value, replacer);
           // undefined is not included in the result
           if (keyValue !== undefined) {
-            clone[nestedKey] = keyValue;
+            setOwnProperty(clone, nestedKey, keyValue);
           }
         }
       } else {
@@ -36,7 +38,7 @@ function _jsonClone(key: string, holder: any, replacer?: JsonReplacer) {
           const keyValue = _jsonClone(nestedKey, value, replacer);
           // undefined is not included in the result
           if (keyValue !== undefined) {
-            clone[nestedKey] = keyValue;
+            setOwnProperty(clone, nestedKey, keyValue);
           }
         }
       }

@@ -1,7 +1,8 @@
-import { Path } from "@finnair/path";
+import { Path, getProperty, setOwnProperty } from "@finnair/path";
 import {
   AnyValidator,
   CompositionParameters,
+  configurationErrorOf,
   defaultViolations,
   FailureCallback,
   HasValueValidator,
@@ -13,6 +14,9 @@ import {
   SuccessCallback,
   ValidationContext,
   Validator,
+  ValidatorVisitor,
+  ValidatorVisitorContext,
+  ValidatorType,
   Violation,
   violationsOf,
 } from "./validators.js";
@@ -150,8 +154,33 @@ export class ObjectValidator<LocalType = unknown, InheritableType = LocalType, I
     Object.freeze(this);
   }
 
+  supportsFreeze(): boolean {
+    return this.validator.supportsFreeze();
+  }
+
+  dependsOnFreezeContext(): boolean {
+    return true;
+  }
+
+  visit(visitor: ValidatorVisitor, path: Path = Path.ROOT, context?: ValidatorVisitorContext, stack: Validator<any, any>[] = []) {
+    if (visitor.accept(this, path, context)) {
+      if (stack.includes(this)) {
+        return;
+      }
+      stack.push(this);
+      this.validator.visit(visitor, path, context, stack);
+      stack.pop();
+    }
+  }
+
   validatePathV2(value: In, path: Path, ctx: ValidationContext, success: SuccessCallback<LocalType>, failure: FailureCallback): void {
-    this.validator.validatePathV2(value, path, ctx, success, failure);
+    const successFn = ctx.freeze
+      ? (result: LocalType) => {
+          Object.freeze(result);
+          success(result);
+        }
+      : success;
+    this.validator.validatePathV2(value, path, ctx, successFn, failure);
   }
 
   omit<T, K extends keyof (any & (InheritableType | LocalType))>(...keys: K[]) {
@@ -172,6 +201,7 @@ export class ObjectValidator<LocalType = unknown, InheritableType = LocalType, I
 }
 
 class PropertiesValidator<LocalType = unknown, In = unknown> extends Validator<LocalType, In> {
+  private readonly _supportsFreeze: boolean;
   private readonly validationOrder: Set<string>;
   constructor(readonly properties: Properties, readonly localProperties: Properties, readonly additionalProperties: MapEntryValidator[], propertyOrder?: string[]) {
     super();
@@ -196,6 +226,10 @@ class PropertiesValidator<LocalType = unknown, In = unknown> extends Validator<L
       Object.entries(localProperties).forEach(registerMandatoryProperty);
     }
     this.validationOrder = validationOrder;
+    this._supportsFreeze = 
+      Object.values(this.properties).every(value => value.supportsFreeze())
+      && Object.values(this.localProperties).every(value => value.supportsFreeze())
+      && this.additionalProperties.every(value => value.keyValidator.supportsFreeze() && value.valueValidator.supportsFreeze());
 
     Object.freeze(this.properties);
     Object.freeze(this.localProperties);
@@ -203,6 +237,26 @@ class PropertiesValidator<LocalType = unknown, In = unknown> extends Validator<L
     Object.freeze(this.validationOrder);
     Object.freeze(this);
   }
+
+  supportsFreeze(): boolean {
+    return this._supportsFreeze;
+  }
+
+  visit(visitor: ValidatorVisitor, path: Path = Path.ROOT, context?: ValidatorVisitorContext, stack: Validator<any, any>[] = []) {
+    if (visitor.accept(this, path, context)) {
+      Object.entries(this.properties).forEach(([key, validator]) => {
+        validator.visit(visitor, path.property(key), new ValidatorVisitorContext('property'), stack);
+      });
+      Object.entries(this.localProperties).forEach(([key, validator]) => {
+        validator.visit(visitor, path.property(key), new ValidatorVisitorContext('localProperty'), stack);
+      });
+      this.additionalProperties.forEach((entry) => {
+        entry.keyValidator.visit(visitor, path.property('*'), new ValidatorVisitorContext('additionalProperties: key'), stack);
+        entry.valueValidator.visit(visitor, path.property('*'), new ValidatorVisitorContext('additionalProperties: value'), stack);
+      });
+    }
+  }
+
   validatePathV2(value: In, path: Path, ctx: ValidationContext, success: SuccessCallback<LocalType>, failure: FailureCallback): void {
     if (value === null || value === undefined) {
       return failure([defaultViolations.notNull(path)]);
@@ -235,7 +289,7 @@ class PropertiesValidator<LocalType = unknown, In = unknown> extends Validator<L
 
     const reportSuccess = (key: string, propertyValue: unknown) => {
       if (propertyValue !== undefined) {
-        convertedObject[key] = propertyValue;
+        setOwnProperty(convertedObject, key, propertyValue);
       } else {
         delete convertedObject[key];
       }
@@ -278,16 +332,23 @@ class PropertiesValidator<LocalType = unknown, In = unknown> extends Validator<L
               (error) => reportFailure(key, error)
             );
           },
-          (keyError) => validateAdditionalProperty(key, propertyValue, propertyPath, index + 1, keySuccessCount, keyError)
+          (keyError) => {
+            if (configurationErrorOf(violationsOf(keyError, propertyPath))) {
+              return reportFailure(key, keyError);
+            }
+            validateAdditionalProperty(key, propertyValue, propertyPath, index + 1, keySuccessCount, keyError);
+          }
         );
       } else if (keySuccessCount === 0) {
-        ctx.failure(defaultViolations.unknownProperty(propertyPath), propertyValue).then(
+        ctx.unknownProperty(propertyValue, propertyPath,
           (result) => reportSuccess(key, result),
           (error) => {
-            if (index === 1 && keyError) {
+            const violations = violationsOf(error, propertyPath);
+            // A plain rejection is better explained by why the key did not match; a handler's own violations are kept.
+            if (index === 1 && keyError && violations.length === 1 && violations[0].type === ValidatorType.UnknownProperty) {
               reportFailure(key, keyError);
             } else {
-              reportFailure(key, error);
+              reportFailure(key, violations);
             }
           }
         );
@@ -297,9 +358,9 @@ class PropertiesValidator<LocalType = unknown, In = unknown> extends Validator<L
     };
 
     const validateKey = (key: string) => {
-      convertedObject[key] = undefined;
+      setOwnProperty(convertedObject, key, undefined);
       const valuePath = path.property(key);
-      const propertyValue = anyValue[key];
+      const propertyValue = getProperty(anyValue, key);
       try {
         if (Object.hasOwn(this.properties, key)) {
           validateProperty(key, propertyValue, valuePath);
@@ -326,11 +387,10 @@ class PropertiesValidator<LocalType = unknown, In = unknown> extends Validator<L
   }
 }
 
-
 function pick(properties: Properties, fn: (key: keyof any) => boolean): Properties {
   return Object.entries(properties).reduce((current: Properties, [key, validator]) => {
     if (fn(key)) {
-      current[key] = validator;
+      setOwnProperty(current, key, validator);
     }
     return current;
   }, {} as Properties);
@@ -342,7 +402,7 @@ export function mergeProperties(from: Properties, to: Properties): Properties {
       if (Object.hasOwn(to, key)) {
         to[key] = to[key].next(from[key]);
       } else {
-        to[key] = from[key];
+        setOwnProperty(to, key, from[key]);
       }
     }
   }
@@ -365,7 +425,7 @@ export class ObjectNormalizer<InOut> extends Validator<undefined | InOut | {}> {
     }
     if (typeof value !== 'object' || value === null) {
       const object: any = {};
-      object[this.property] = value;
+      setOwnProperty(object, this.property, value);
       return success(object);
     }
     return success(value);
@@ -388,9 +448,9 @@ function getPropertyValidators(properties?: PropertyModel): Properties {
   if (properties) {
     for (const name in properties) {
       if (isString(properties[name]) || isNumber(properties[name])) {
-        propertyValidators[name] = new HasValueValidator(properties[name]);
+        setOwnProperty(propertyValidators, name, new HasValueValidator(properties[name]));
       } else {
-        propertyValidators[name] = properties[name] as Validator;
+        setOwnProperty(propertyValidators, name, properties[name]);
       }
     }
   }
@@ -417,8 +477,7 @@ function getMapEntryValidators(additionalProperties?: boolean | MapEntryModel | 
 
 /**
  * Value validator for additional properties. When `denied` it always rejects; otherwise it reports
- * an `UnknownProperty` violation, which `ctx.failure` resolves to the value when
- * `ignoreUnknownProperties` is set and rejects otherwise.
+ * an unknown property through `ctx.unknownProperty`, which applies `ignoreUnknownProperties`.
  */
 class UnknownPropertyValidator extends Validator<any> {
   constructor(private readonly denied: boolean) {
@@ -430,7 +489,7 @@ class UnknownPropertyValidator extends Validator<any> {
     if (this.denied) {
       failure([defaultViolations.unknownPropertyDenied(path)]);
     } else {
-      ctx.failure(defaultViolations.unknownProperty(path), value).then(success, failure);
+      ctx.unknownProperty(value, path, success, failure);
     }
   }
 }

@@ -7,3 +7,4 @@ export * from './objectValidatorBuilder.js';
 export * from './typing.js';
 export * from './schema.js';
 export * from './warnLogger.js';
+export * from './jsonValue.js';

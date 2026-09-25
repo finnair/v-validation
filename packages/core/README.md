@@ -235,7 +235,7 @@ const personValidator = V.object({
 Custom converters can be defined as a simple map functions.
 
 ```typescript
-const base64json = V.map(value => JSON.parse(new Buffer(value, 'base64').toString()), 'InvalidEncoding');
+const base64json = V.map(value => JSON.parse(new Buffer(value, 'base64').toString()));
 (await base64json.validate('eyAibWVzc2FnZSI6ICJIZWxsbyBXb3JsZCEiIH0=')).getValue();
 // { message: 'Hello World!' }
 
@@ -244,7 +244,8 @@ const base64json = V.map(value => JSON.parse(new Buffer(value, 'base64').toStrin
 //   {
 //     "path": "$",
 //     "type": "Error",
-//     "error": "InvalidEncoding"
+//     "error": {},
+//     "message": "Unexpected token m in JSON at position 2"
 //   }
 // ]
 ```
@@ -716,14 +717,22 @@ V.setType(values, false); // Validator<Set<string>>
 `V` supports contextual validation options which can be used to guide validation.
 Options are passed to to `validate` function as optional second argument.
 
-| Option                            | Description                                |
-| --------------------------------- | ------------------------------------------ |
-| ignoreUnknownProperties?: boolean | Unknown properties allowed by default\*    |
-| ignoreUnknownEnumValues?: boolean | Unknown enum values allowed by default     |
-| warnLogger?: WarnLogger           | A reporter function for ignored Violations |
-| group?: Group                     | A group used to activate validation rules  |
+| Option                                        | Description                                |
+| --------------------------------------------- | ------------------------------------------ |
+| ignoreUnknownProperties?: boolean \| Validator | Unknown properties allowed by default\*    |
+| ignoreUnknownEnumValues?: boolean             | Unknown enum values allowed by default     |
+| warnLogger?: WarnLogger                       | A reporter function for ignored Violations |
+| group?: Group                                 | A group used to activate validation rules  |
 
 \*) Note that this option has no effect in cases where additional properties are explicitly denied.
+
+Every option is declared `readonly`, and `validate`/`getValid` make that effective at runtime by
+freezing the options object they are given. So an options object can be built once and reused
+across validations, and a later write to it fails instead of silently changing how a validator
+behaves - which also keeps a [memoized](#memoization) validator's pinned options from drifting out
+from under its cache. Nothing reachable through the options stays mutable either: the only objects an
+option can hold are a `Group`, which freezes both itself and its group membership, and a validator,
+which the built-in ones freeze too.
 
 ```typescript
 (await V.object({}).validate({ additionalProperty: 'OK' }, { ignoreUnknownProperties: true })).isSuccess();
@@ -732,6 +741,25 @@ Options are passed to to `validate` function as optional second argument.
 (await V.object({ additionalProperties: false }).validate({ additionalProperty: 'Not OK' }, { ignoreUnknownProperties: true })).isSuccess();
 // false
 ```
+
+`ignoreUnknownProperties: true` passes the values of unknown properties through as they are. Pass a
+validator instead to set boundaries for them: each unknown property value is validated and converted
+by it, and its violations are reported at the property's path. `warnLogger` is called only for a
+value the validator accepts. For example, to allow any JSON value but nothing else:
+
+```typescript
+const options = { ignoreUnknownProperties: V.jsonValue() };
+
+(await V.object({}).validate({ added: { nested: [1, 'a'] } }, options)).isSuccess();
+// true, and `added` is a clone of the input
+
+(await V.object({}).validate({ added: new Date() }, options)).isSuccess();
+// false: TypeMismatch at $.added
+```
+
+Under [`V.frozen`](#frozen) the validator's output is frozen like everything else, so the validator
+must support freeze; otherwise validation fails with a `ValidatorConfigurationError`. `V.fn` and
+`V.map` throwing an `UnknownProperty` violation are not affected: the value is passed through as is.
 
 ### Deduplicating `warnLogger` with `dedupWarnLogger`
 
@@ -832,6 +860,57 @@ outweighs the bookkeeping:
 const date = V.memoize(Vluxon.localDate(), { maxSize: 1000, evictionPolicy: 'lru' });
 ```
 
+By default the cache is keyed by the input value itself, which means an *object* input is keyed by
+identity - an equal but distinct object always misses. Pass `cacheKeyFn` to key by something derived
+from the input instead, which is what makes caching objects worthwhile:
+
+```typescript
+const legById = V.memoize(V.frozen(leg), {
+  maxSize: 10000,
+  cacheKeyFn: (value: any) => `${value.id}:${value.version}`,
+});
+```
+
+The key must be a primitive - keys are compared the way `Map` compares them, so a freshly built
+object is a new key every time and never hits. It must also identify the payload completely: two
+inputs sharing a key are the same value as far as the cache is concerned, so a payload that changes
+without its key changing serves stale results for as long as it is cached. `cacheKeyFn` runs on
+every validation, hit or miss, so keep it cheap.
+
+Note that the input of an object or array validator is `unknown`, so a key function usually
+annotates its parameter (`(value: any) => ...`) or the call states its types explicitly.
+
+A cache is valid only for the `ValidatorOptions` its results were produced under, since neither
+`group` nor `ignoreUnknownProperties`/`ignoreUnknownEnumValues` is part of the cache key. Most
+memoized validators do not care - parsing an ISO string into a Luxon `DateTime` produces the same
+result under any options - so by default the cache does not check them at all.
+
+When the memoized validator *does* depend on options - typically a `V.object` with group-specific
+rules or unknown properties - declare the options the cache applies to. Validating with anything
+else then throws a `ValidatorConfigurationError` rather than serving a result produced under
+different rules:
+
+```typescript
+const memoized = V.memoize(validator, { options: { group: Groups.GROUP_A } });
+
+await memoized.validate(value, { group: Groups.GROUP_A }); // fine
+await memoized.validate(value, { group: Groups.GROUP_B }); // throws ValidatorConfigurationError
+await memoized.validate(value); // throws - no options is not the same as GROUP_A
+```
+
+Pass `options: {}` to pin "no options". `ignoreUnknownProperties` and `ignoreUnknownEnumValues`
+compare leniently, treating an explicit `false` as equal to an omitted one. `warnLogger` is never
+compared, since it cannot change the result; note though that a cache hit skips it, so an ignored
+violation is logged only the first time a value is validated.
+
+`resetCache()` empties the cache. The usual reason is testing - a memoized validator is normally
+built once and shared, so a cache carried between cases makes them depend on each other - but it is
+also how results are discarded once their inputs are no longer the source of truth:
+
+```typescript
+afterEach(() => memoized.resetCache());
+```
+
 Pass a `shouldCache` predicate to keep outliers out of the cache, so that rare values do not evict
 common ones. It runs on a cache miss after successful validation, receiving the converted result and
 the original input; return `false` to pass the result through without caching it. For example, cache
@@ -843,7 +922,7 @@ const recent = V.memoize(Vluxon.dateTime(), {
 });
 ```
 
-Three things to keep in mind:
+Things to keep in mind:
 
 - **Only synchronous validators are supported.** An asynchronous result settles after validation
   returns, with no guarantee of when - or whether - it arrives, so it cannot be cached or returned
@@ -855,9 +934,199 @@ Three things to keep in mind:
 - **An `undefined` result is not cached**, so that a cache hit is a single lookup. Such an input is
   simply re-validated; wrap the memoized validator rather than the other way round -
   `V.optionalStrict(V.memoize(...))` - when `undefined` is an accepted input.
-- **The wrapped validator must be a pure function of its input.** The cache key is the input value
-  alone, so a validator whose result depends on the active `group` or other `ValidatorOptions` should
-  not be memoized.
+- **A cached result is shared by every caller**, so mutating it corrupts every later read. Wrap the
+  memoized validator in [`V.frozen`](#frozen) when the cached values are objects. Values of unknown
+  properties allowed by `ignoreUnknownProperties: true` are not frozen even then.
+- **Frozen and mutable results are kept apart.** `V.frozen(V.memoize(x))` and `V.memoize(V.frozen(x))`
+  give the same frozen output, but the first one leaves the memoized validator usable outside
+  `V.frozen` too. When `x` converts differently in the two contexts - an object, array, `Map` or
+  `Set` validator, or anything containing one - the memoized validator keeps a separate cache for
+  each, so `V.frozen` never serves a mutable entry and a mutable caller never gets a frozen one.
+  `maxSize` applies to each cache and `resetCache()` empties both. A scalar validator, such as a
+  Luxon wrapper that freezes itself, returns the same value in either context and keeps a single
+  cache.
+- **Options are not part of the cache key.** If the memoized validator's result depends on
+  `ValidatorOptions`, pin them with the `options` setting; validating under any others then throws
+  a `ValidatorConfigurationError`.
+- **The wrapped validator must be a pure function of its cache key.** Neither the active `group` nor
+  any other `ValidatorOptions` is part of the key, so a validator whose result depends on them
+  should not be memoized.
+
+## <a name="frozen">Immutable Output</a>
+
+`V.frozen` wraps a validator so that everything its subtree converts is passed through
+`Object.freeze`. It is a *view* of a schema rather than a property of it, so the same validator can
+still be used mutably elsewhere:
+
+```typescript
+const leg = V.objectType()
+  .properties({
+    id: V.string(),
+    version: V.number(),
+    tags: V.array(V.string()),
+    times: V.toMapType(V.string(), Vluxon.dateTimeUtc(), true),
+  })
+  .build();
+
+// Mutable, for code that builds or patches a leg.
+const draft = await leg.getValid(input);
+draft.id = 'changed'; // fine
+
+// Read-only, for code that shares results.
+const readOnly = V.frozen(leg);
+const shared: any = await readOnly.getValid(input);
+shared.id = 'changed'; // TypeError
+shared.tags.push('x'); // TypeError
+shared.times.set('k', dt); // TypeError
+```
+
+This pairs with [memoization](#memoization): a memoized validator hands the *same* instance to every
+caller of a repeated input, so a single careless mutation corrupts every later read. Freezing the
+memoized subtree makes that sharing safe:
+
+```typescript
+const cached = V.memoize(V.frozen(leg), {
+  maxSize: 10000,
+  cacheKeyFn: leg => `${leg.id}:${leg.version}`,
+});
+```
+
+Freezing propagates through the context, so it reaches everything below the wrapper - nested
+objects, arrays and their items, values behind `V.optional`/`V.oneOf`/`V.compositionOf`, and
+recursive schemas built with [`V.proxy`](#proxy).
+
+### Maps and Sets
+
+`Object.freeze` cannot make a `Map` or `Set` read-only: it seals properties, while their contents
+live in an internal slot that `set`/`add`/`delete`/`clear` reach directly. `JsonMap` and `JsonSet`
+therefore extend `FreezableMap`/`FreezableSet`, which expose a `freeze()` that makes those methods
+throw. `V.frozen` calls it for you; you can also call it directly on a map or set you built:
+
+```typescript
+const rates = new FreezableMap([['EUR', 1]]).freeze();
+rates.set('USD', 2); // TypeError: Cannot set a frozen Map
+rates.get('EUR'); // 1 - reads are unaffected
+```
+
+`V.mapType`/`V.setType` with `jsonSafeMap`/`jsonSafeSet` set to `false` produce a plain `Map`/`Set`
+unless the output is being frozen, in which case they produce the freezable subclass instead. Either
+way the result is a `Map`/`Set`, so nothing changes for code that does not use `V.frozen`.
+
+_NOTE: a frozen `Map`/`Set` is a **guard against accidental mutation, not immutability**. The
+instance itself is frozen so the guard cannot be removed, but invoking the native method directly -
+`Map.prototype.set.call(frozenMap, key, value)` - still mutates it. `Object.freeze` on a plain
+object or array, by contrast, is enforced by the engine._
+
+### What V.frozen guarantees
+
+Every validator declares whether it can produce frozen output, and `V.frozen` refuses to wrap a
+schema that contains one which cannot:
+
+```typescript
+V.frozen(V.object({ properties: { a: V.fn(value => ({ wrapped: value })), b: V.array(V.any()) } }));
+// Error: The following validators do not support freeze:
+// $: ObjectValidator
+// $: PropertiesValidator
+// $.a: ValidatorFnWrapper (property)
+// $.b: ArrayValidator (property)
+// $.b["*"]: AnyValidator
+```
+
+The report lists every validator that does not support freeze along with the schema path to it, so
+the offending leaves are the most specific entries - here `$.a` and `$.b["*"]`. `PropertiesValidator`
+is the internal step of an object validator that validates its properties. In a
+`V.compositionOf`/`Validator.next` chain only the step that decides the output is reported: the last
+step that does not [preserve freeze](#preserves-freeze), or every step if they all merely pass their
+input through. The same check is available as `assertFreezable(validator)`, which returns the
+validator or throws; it is built on `Validator.visit(visitor)`, which walks a schema with a
+`ValidatorVisitor` and can be used for other schema analysis too. Its `accept(validator, path, context)`
+receives the validator's role in its parent as a `ValidatorVisitorContext`: a `CompositeVisitorContext`
+(`type`, `current`, `count`) for a branch of `V.compositionOf`, `V.allOf`, `V.anyOf`, `V.oneOf` or
+`V.if` - a `CompositionVisitorContext`, which also has the chain's `steps`, for a composition - a
+`GroupVisitorContext` (`group`, `undefined` for `otherwise`) for `V.whenGroup`, and a plain context
+such as `property` otherwise. Return `false` to skip a validator's children.
+
+_WARNING: the visitor API (`Validator.visit`, `ValidatorVisitor` and the `ValidatorVisitorContext`
+classes) is **internal and experimental**. It may change in any release, and changes to it -
+especially to the context types, which validators report which context and the structure of
+`assertFreezable`'s report - are **not** considered breaking changes. Use it at your own risk._
+
+The default is `false`, so anything that hands a value back from user code - `V.fn`, `V.map`,
+`V.assertTrue`, `V.hasValue` - is rejected until you assert otherwise. Assert it when the function
+returns a primitive, or a value it has frozen itself:
+
+```typescript
+V.frozen(V.object({ properties: { a: V.fn(value => String(value), true) } })); // accepted
+```
+
+<a name="preserves-freeze"></a>Validators that pass their input through unchanged - `V.any()`,
+`V.unknown()`, `V.check()`, `V.notNull()`, `V.notEmpty()`, `V.size()`, `V.assertTrue()`,
+`V.hasValue()` - are rejected on their own, as a property, or as an array item or map entry,
+because there their input is the raw data and they would hand out an object nobody has frozen.
+They do *preserve* freeze though: given a frozen input, their output is frozen. So in a chain they
+are accepted after a step that freezes, and a chain supports freeze when some step does and every
+later step preserves it:
+
+```typescript
+V.frozen(V.notEmpty()); // rejected - returns the raw input
+V.frozen(V.object({ properties: { tags: V.notEmpty() } })); // rejected - same, one level down
+V.frozen(V.object({ properties: { tags: V.array(V.string()).next(V.notEmpty()) } })); // accepted
+V.frozen(V.object({ properties: { a: V.string() } }).next(V.assertTrue(isConsistent))); // accepted
+```
+
+`V.anyOf`, `V.oneOf`, `V.allOf`, `V.if`, `V.whenGroup` and the `V.optional`/`V.nullable`/
+`V.required`/`V.memoize` wrappers preserve freeze when all their children do. A custom validator
+that passes its input through can say so by overriding `preservesFreeze()` to return `true`; the
+default is its `supportsFreeze()`.
+
+A custom validator that freezes its own output based on `ctx.freeze`, or runs another validator
+with `ctx`, should also override `dependsOnFreezeContext()` to return `true`, so that
+[`V.memoize`](#memoization) caches its frozen and mutable results separately. Everything else,
+including `V.fn` and `V.map` used as an object's `next`, is covered by the built-in validators
+around it.
+
+Composites derive their answer from their children, and that includes the branch taken when nothing
+else matches: `V.if(...)` needs its `else`, and `V.whenGroup(...)` needs its `otherwise` - so
+`V.whenGroup(g, V.object(...)).otherwiseSuccess()` is rejected, because validating under any other
+group would hand the raw input straight back.
+
+A `V.proxy` cannot answer the question without forcing its factory, which would defeat the point of
+deferring it, so its answer is asserted too - needed for any recursive schema you want to freeze:
+
+```typescript
+const tree: Validator<Tree> = V.objectType()
+  .properties({ name: V.string(), child: V.optionalStrict(V.proxy(() => tree, true)) })
+  .build();
+V.frozen(tree); // accepted
+```
+
+The assertion is checked against the proxied validator once the factory runs, so a wrong one fails
+on first validation instead of leaking. It is a schema bug, not invalid data, so `validate()` rejects
+and `getValid()` throws a `ValidatorConfigurationError`.
+
+So the guarantee is: **every plain object, array, `Map` and `Set` in the output is frozen, and every
+validator that produces a value has been reviewed.** It is not a promise that nothing reachable from
+the result can change, and the assertions are exactly that - promises the caller makes, which
+`V.frozen` cannot verify.
+
+_NOTE: freezing is shallow per value, and only object, array, `Map` and `Set` validators freeze
+their output. A `Date`, a Luxon `DateTime` or any other class instance reached by a validated value
+keeps its mutable internal state._
+
+_NOTE: unknown properties accepted with `ignoreUnknownProperties: true` are copied as is. The object
+holding them is frozen, but their values are not validated, converted or frozen - nothing is known
+about them, including whether they are mutable. Allowing unknown properties is a risk the caller
+takes on; with [`V.memoize`](#memoization) such values are also shared by every caller. Pass a
+validator as `ignoreUnknownProperties` to have them validated and frozen too._
+
+_NOTE: for Luxon, the wrapper validators (`Vluxon.dateTime`, `dateTimeUtc`, `localDate`, ...) support
+freezing, because `LuxonDateTime` freezes itself - which also blocks reassigning its `dateTime`
+property. The plain ones (`dateTimeFromISO`, `dateTimeFromRFC2822`, `dateTimeFromHTTP`,
+`dateTimeFromSQL`, `duration`, `timeDuration`) do not: a raw Luxon `DateTime` or `Duration` is not
+frozen, and cannot be. Luxon caches week data on the instance the first time `weekYear`,
+`weekNumber`, `weekday`, a `localWeek*` field or a week format token is read, so freezing one makes
+those accessors throw. Luxon's API is immutable - every method returns a new instance - but its
+instances are not._
 
 ## Custom Validators
 
@@ -957,10 +1226,10 @@ Unless otherwise stated, all validators require non-null and non-undefined value
 
 | V.                      | Arguments                                                        | Description                                                                                                                               |
 | ----------------------- | ---------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| fn                      | fn: ValidatorFn, type?: string                                   | Function reference as a validator. A short cut for extending Validator class.                                                             |
+| fn                      | fn: ValidatorFn, supportsFreeze?: boolean                        | Function reference as a validator. A short cut for extending Validator class.                                                             |
 | ignore                  |                                                                  | Converts any input value to undefined.                                                                                                    |
 | any                     |                                                                  | Accepts any value, including undefined and null.                                                                                          |
-| map                     | fn: MappingFn, error?: any                                       | Mapping function to convert a value. Catches and converts errors to Violations                                                            |
+| map                     | fn: MappingFn, supportsFreeze?: boolean                          | Mapping function to convert a value. Catches and converts errors to Violations                                                            |
 | compositionOf           | ...validators: Validator[]                                       | Runs given the validators one after another, chaining the result.                                                                         |
 | check                   | ...validators: Validator[]                                       | Runs all the validators as `compositionOf` and, if successful, returns the original value discarding any conversions.                     |
 | required                | ...validators: Validator[]                                       | A non-null and non-undefined valid `compositionOf` of validators.                                                                         |
@@ -1000,8 +1269,8 @@ Unless otherwise stated, all validators require non-null and non-undefined value
 | array                   | ...items: Validator[]                                            | [Array validator](#array)                                                                                                                 |
 | toArray                 | items: Validator                                                 | Converts undefined to an empty array and non-arrays to single-valued arrays.                                                              |
 | size                    | min: number, max: number                                         | Asserts that input's numeric `length` property is between min and max (both inclusive).                                                   |
-| allOf                   | ...validators: Validator[]                                       | Requires that all given validators match. All child validators must result in the same output.                                |
-| anyOf                   | ...validators: Validator[]                                       | Requires minimum one of given validators matches. All matching validators must result in the same output.  |
+| allOf                   | ...validators: Validator[]                                       | Requires that all given validators match. All child validators must result in the same output, otherwise throws `ValidatorConfigurationError`. |
+| anyOf                   | ...validators: Validator[]                                       | Requires minimum one of given validators matches. All matching validators must result in the same output, otherwise throws `ValidatorConfigurationError`. |
 | oneOf                   | ...validators: Validator[]                                       | Requires that exactly one of the given validators match.                                                                                  |
 | emptyToUndefined        |                                                                  | Converts null or empty string to undefined. Does not touch any other values.                                                              |
 | emptyToNull             |                                                                  | Converts undefined or empty string to null. Does not touch any other values.                                                              |
@@ -1011,8 +1280,10 @@ Unless otherwise stated, all validators require non-null and non-undefined value
 | if...elseif...else      | fn: AssertTrue, ...validators: Validator[]                       | Configures validators (`compositionOf`) to be executed for cases where if/elseif AssertTrue fn returns true.                              |
 | whenGroup...otherwise   | group: GroupOrName, ...validators: Validator[]                   | Defines validation rules (`compositionOf`) to be executed for given `ValidatorOptions.group`.                                             |
 | json                    | ...validators: Validator[]                                       | Parse JSON input and validate it against given validators.                                                                                |
-| memoize                 | validator: Validator, options?: MemoizeValidatorOptions          | Caches a wrapped validator's successful results by input value in a bounded cache (`maxSize`, `evictionPolicy`, `shouldCache`). See [Memoization](#memoization). |
+| jsonValue               | ...allow: JsonValueType[]                                        | Accepts and clones a JSON value (`string`, `boolean`, `number`, `null`, `array`, `object`) whose root is one of `allow`; nested values may be any JSON value. All types when `allow` is empty. Returns a shared instance per combination. |
+| memoize                 | validator: Validator, options?: MemoizeValidatorOptions          | Caches a wrapped validator's successful results in a bounded cache (`maxSize`, `evictionPolicy`, `shouldCache`, `cacheKeyFn`). See [Memoization](#memoization). |
 | proxy                   | factory: () => Validator                                         | Defers validator construction to a factory, for e.g. self-reference. See [V.proxy](#proxy).  |
+| frozen                  | validator: Validator                                             | A view of `validator` whose subtree produces frozen output. See [Immutable Output](#frozen). |
 
 ## Violations
 
@@ -1047,3 +1318,10 @@ All `Violations` have following propertie in common:
 | Violation              | Cycle                 |                                 | The value being validated contains a reference cycle (self-referential data).       |
 | Violation              | Async                 |                                 | An asynchronous validator was wrapped in `V.memoize`, which supports only sync ones. |
 | DiscriminatorViolation | Discriminator         | expectedOneOf: string[]         | Invalid discriminator value: `expectedOneOf` is a list of known types.              |
+
+A schema bug is not a problem with the input, so it is not reported as a `Violation`: `validate()`
+rejects and `getValid()` throws a `ValidatorConfigurationError` instead. That happens when
+
+- `V.anyOf`/`V.allOf` validators produce conflicting conversions (`ConflictingConversions`),
+- a [memoized](#memoization) validator is used with other than its pinned `options`, or
+- a `V.proxy` asserts `supportsFreeze` but the proxied validator does not support it.

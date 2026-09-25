@@ -1,3 +1,5 @@
+import { getProperty, setOwnProperty } from "./properties.js";
+
 export type PathComponent = number | string;
 
 const identifierPattern = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
@@ -102,6 +104,10 @@ export class Path {
     }
   }
 
+  toString(): string {
+    return this.toJSON();
+  }
+
   toJSON(): string {
     return this.path.reduce((pathString: string, component: PathComponent) => pathString + Path.componentToString(component), '$');
   }
@@ -140,11 +146,10 @@ export class Path {
     let current = root;
     let index = 0;
     for (; index < this.path.length - 1 && typeof current === 'object'; index++) {
-      const component = this.path[index];
-      current = current[component];
+      current = getProperty(current, this.path[index]);
     }
     if (index === this.path.length - 1 && typeof current === 'object') {
-      return current[this.path[this.path.length - 1]];
+      return getProperty(current, this.path[this.path.length - 1]);
     }
     return undefined;
   }
@@ -162,9 +167,10 @@ export class Path {
     let current = _root;
     for (pathIndex = 0; pathIndex < this.path.length - 1 && current; pathIndex++) {
       const component = this.path[pathIndex];
-      const child = toObject(current[component], this.path);
+      // Only own properties, so that e.g. `__proto__` doesn't resolve to the (shared) prototype
+      const child = toObject(Object.hasOwn(current, component) ? current[component] : undefined, this.path);
       if (child !== undefined) {
-        current[component] = child;
+        setOwnProperty(current, component, child);
         current = child;
       }
     }
@@ -181,7 +187,7 @@ export class Path {
         }
       }
     } else {
-      current[this.path[pathIndex]] = value;
+      setOwnProperty(current, this.path[pathIndex], value);
     }
     return _root;
 
