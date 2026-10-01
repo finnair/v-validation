@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest';
-import { AnyIndex, Path, PathMatcher } from '@finnair/path';
+import { AnyIndex, AnyProperty, Path, PathMatcher } from '@finnair/path';
 import { Diff } from './Diff.js';
 import { VersionInfo, VersionInfoConfig } from './VersionInfo.js';
 import { Change } from './DiffNode.js';
@@ -118,6 +118,17 @@ describe('VersionInfo', () => {
     expect(aClone).toEqual(b);
   });
 
+  describe('apply changes of values that changed between object and array', () => {
+    test.each([
+      ['object to array', { a: { 0: 'old', x: 1 } }, { a: ['new'] }],
+      ['array to object', { a: ['old', 'other'] }, { a: { 0: 'new' } }],
+    ])('%s', (_name, previous: any, current: any) => {
+      const version = new VersionInfo(current, previous);
+      const result = [...version.changes!.values()].reduce((value, change) => change.path.set(value, change.newValue), structuredClone(previous));
+      expect(result).toEqual(current);
+    });
+  });
+
   test('apply patch', () => {
     const version = new VersionInfo(b, a, config);
     const aClone = structuredClone(a);
@@ -179,4 +190,32 @@ describe('VersionInfo', () => {
       previous: [1],
     })
   })
+
+  describe('previousValues', () => {
+    test('root', () => {
+      expect(new VersionInfo<any>('new', 'old', { previousValues: [PathMatcher.of()] }).previousValues).toEqual('old');
+    });
+
+    test('changed type', () => {
+      const version = new VersionInfo<any>({ a: ['new'] }, { a: { 0: 'old' } }, { previousValues: [PathMatcher.of('a', AnyProperty)] });
+      expect(version.changedPaths).toEqual(new Set(['$.a["0"]', '$.a[0]']));
+      expect(version.previousValues).toEqual({ a: { 0: 'old' } });
+    });
+
+    test('added value', () => {
+      expect(new VersionInfo<any>({ id: 1 }, {}, { previousValues: [PathMatcher.of('id')] }).previousValues).toEqual({});
+    });
+
+    test('removed array', () => {
+      const version = new VersionInfo<any>({}, { a: ['old'] }, { previousValues: [PathMatcher.of('a', AnyIndex)] });
+      expect(version.previousValues).toEqual({ a: ['old'] });
+    });
+  });
+
+  test('property and index are different paths', () => {
+    const version = new VersionInfo<any>({ a: ['new'] }, { a: { 0: 'old' } });
+    expect(version.matches('$.a[0]')).toBe(true);
+    expect(version.matches(PathMatcher.of('a', '0'))).toBe(true);
+    expect(version.matches(PathMatcher.of('a', 1))).toBe(false);
+  });
 });

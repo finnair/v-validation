@@ -10,7 +10,7 @@ export interface ResultCollector {
 
 export class PathMatcher {
   readonly allowGaps: boolean;
-  private constructor(private readonly expressions: PathExpression[]) {
+  private constructor(public readonly expressions: PathExpression[]) {
     this.allowGaps = expressions.some((expression) => expression.allowGaps);
     Object.freeze(this.expressions);
     Object.freeze(this);
@@ -19,8 +19,9 @@ export class PathMatcher {
   find(root: any, collector: ResultCollector): void {
     if (this.expressions.length === 0) {
       collector(Path.ROOT, root);
+      return;
     }
-    if (typeof root !== 'object') {
+    if (typeof root !== 'object' || root === null) {
       return;
     }
     const currentPath: PathComponent[] = [];

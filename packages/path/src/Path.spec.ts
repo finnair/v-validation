@@ -89,6 +89,20 @@ describe('path', () => {
 
     test('get own __proto__ property', () => expect(Path.of('__proto__', 'name').get(JSON.parse('{"__proto__":{"name":"value"}}'))).toEqual('value'));
 
+    test('get through null', () => {
+      expect(Path.of('a', 'b').get({ a: null })).toBeUndefined();
+      expect(Path.of('a').get(null)).toBeUndefined();
+      expect(Path.of(0).get(null)).toBeUndefined();
+    });
+
+    test('get null value', () => expect(Path.of('a').get({ a: null })).toBeNull());
+
+    test('get property of array', () => expect(Path.of('array', 'length').get({ array: [1, 2] })).toBeUndefined());
+
+    test('get index of object', () => expect(Path.of('object', 0).get({ object: { 0: 'zero' } })).toBeUndefined());
+
+    test('get string index of array', () => expect(Path.of('array', '0').get({ array: [1, 2] })).toBeUndefined());
+
     test('get inherited getter', () => {
       class Foo {
         get name() {
@@ -97,6 +111,10 @@ describe('path', () => {
       }
       expect(Path.of('child', 'name').get({ child: new Foo() })).toEqual('value');
     });
+
+    test('get inherited property', () => expect(Path.of('name').get(Object.create({ name: 'value' }))).toEqual('value'));
+
+    test('get own getter', () => expect(Path.of('name').get({ get name() { return 'value'; } })).toEqual('value'));
   });
 
   describe('set', () => {
@@ -104,8 +122,52 @@ describe('path', () => {
 
     test('creates necessary nested objects', () => expect(Path.of(0, 'array', 1, 'name').set([], 'name')).toEqual([{ array: [undefined, { name: 'name' }] }]));
 
-    test("doesn't replace root object with array", () =>
-      expect(Path.of(0, 'array', 1, 'name').set({}, 'name')).toEqual({ 0: { array: [undefined, { name: 'name' }] } }));
+    test('replaces root object with array', () => {
+      const root = {};
+      expect(Path.of(0, 'array', 1, 'name').set(root, 'name')).toEqual([{ array: [undefined, { name: 'name' }] }]);
+      expect(root).toEqual({});
+    });
+
+    test('replaces nested array with object', () => expect(Path.of('array', 'name').set({ array: [1] }, 'name')).toEqual({ array: { name: 'name' } }));
+
+    test('replaces nested object with array', () => expect(Path.of('object', 0, 'name').set({ object: { 0: 1 } }, 'name')).toEqual({ object: [{ name: 'name' }] }));
+
+    test('replaces null intermediate', () => expect(Path.of('a', 'b').set({ a: null }, 1)).toEqual({ a: { b: 1 } }));
+
+    test('replaces primitive intermediate', () => {
+      expect(Path.of('a', 'b').set({ a: 'str' }, 1)).toEqual({ a: { b: 1 } });
+      expect(Path.of('a', 0).set({ a: 5 }, 1)).toEqual({ a: [1] });
+    });
+
+    test('replaces null root', () => {
+      expect(Path.of('a').set(null, 1)).toEqual({ a: 1 });
+      expect(Path.of(0).set(null, 1)).toEqual([1]);
+    });
+
+    test('replaces primitive root', () => expect(Path.of('a').set('str', 1)).toEqual({ a: 1 }));
+
+    test('keeps existing intermediates', () => {
+      const child = { name: 'name' };
+      const root = Object.freeze({ child });
+      expect(Path.of('child', 'value').set(root, 'value')).toBe(root);
+      expect(child).toEqual({ name: 'name', value: 'value' });
+    });
+
+    test('shadows inherited property', () => {
+      const parent = { name: 'inherited' };
+      const object = Path.of('name').set(Object.create(parent), 'own');
+      expect(Object.hasOwn(object, 'name')).toBe(true);
+      expect(Path.of('name').get(object)).toEqual('own');
+      expect(parent).toEqual({ name: 'inherited' });
+    });
+
+    test('does not modify object reached through a prototype', () => {
+      const parent = { child: { a: 1 } };
+      const object = Path.of('child', 'b').set(Object.create(parent), 2);
+      expect(parent).toEqual({ child: { a: 1 } });
+      expect(Object.hasOwn(object, 'child')).toBe(true);
+      expect(object.child).toEqual({ b: 2 });
+    });
 
     test('creates root object if necessary', () =>
       expect(Path.of(0, 'array', 1, 'name').set(undefined, 'name')).toEqual([{ array: [undefined, { name: 'name' }] }]));
@@ -159,6 +221,43 @@ describe('path', () => {
     test('deletes property when setting undefined value', () => expect(Path.of('name').unset({ name: 'name' })).toEqual({}));
 
     test("delete doesn't create intermediate objects", () => expect(Path.of('nested', 'name').unset({})).toEqual({}));
+
+    test('unset root', () => expect(Path.of().unset({ name: 'name' })).toBeUndefined());
+
+    test('deletes array element', () => expect(Path.of('array', 1).unset({ array: [1, 2, 3] })).toEqual({ array: [1, undefined, 3] }));
+
+    test('missing intermediate does not delete a property of its parent', () => expect(Path.of('a', 'b').unset({ b: 1 })).toEqual({ b: 1 }));
+
+    test('primitive intermediate does not delete a property of its parent', () => expect(Path.of('a', 'b').unset({ a: 'str', b: 1 })).toEqual({ a: 'str', b: 1 }));
+
+    test('null intermediate', () => expect(Path.of('a', 'b').unset({ a: null })).toEqual({ a: null }));
+
+    test('null or primitive intermediate of a deep path', () => {
+      expect(Path.of('a', 'b', 'c').unset({ a: null })).toEqual({ a: null });
+      expect(Path.of('a', 'b', 'c').unset({ a: 'str', c: 1 })).toEqual({ a: 'str', c: 1 });
+    });
+
+    test('null root', () => expect(Path.of('a').unset(null)).toBeNull());
+
+    test('index does not delete a property of an object', () => expect(Path.of('a', 0).unset({ a: { 0: 1 } })).toEqual({ a: { 0: 1 } }));
+
+    test('property does not delete from an array', () => {
+      const array: any = [1];
+      array.name = 'name';
+      Path.of('name').unset(array);
+      expect(array.name).toEqual('name');
+    });
+
+    test('does not delete inherited property', () => {
+      const parent = { a: { b: 1 } };
+      Path.of('a', 'b').unset(Object.create(parent));
+      expect(parent).toEqual({ a: { b: 1 } });
+    });
+
+    test('inherited value remains visible after deleting own property', () => {
+      const object = Object.assign(Object.create({ name: 'inherited' }), { name: 'own' });
+      expect(Path.of('name').get(Path.of('name').unset(object))).toEqual('inherited');
+    });
   });
 
   test('connectTo', () => {
@@ -208,8 +307,13 @@ describe('path', () => {
     test('non equal path', () => {
       expect(Path.of('foo', 0).equals(Path.of('foo', 1))).toBe(false);
     });
-    test('string and number indexes are equal', () => {
-      expect(Path.of('foo', 0).equals(Path.of('foo', "0"))).toBe(true);
+    test('string and number components are not equal', () => {
+      expect(Path.of('foo', 0).equals(Path.of('foo', "0"))).toBe(false);
+      expect(Path.of(1).equals(Path.of('1'))).toBe(false);
+    });
+    test('lazily materialized path', () => {
+      expect(Path.ROOT.property('foo').index(0).equals(Path.of('foo', 0))).toBe(true);
+      expect(Path.ROOT.property('foo').property('0').equals(Path.of('foo', 0))).toBe(false);
     });
     test('shorter path', () => {
       expect(Path.of('foo', 'bar').equals(Path.of('foo'))).toBe(false);
@@ -255,9 +359,9 @@ describe('path', () => {
       expect(Path.of('a').startsWith(Path.of('b', 'c'))).toBe(false);
     });
 
-    test('string and number indexes match, consistent with equals', () => {
-      expect(Path.of('a', 0, 'b').startsWith(Path.of('a', '0'))).toBe(true);
-      expect(Path.of('a', '0').startsWith(Path.of('a', 0))).toBe(true);
+    test('string and number components do not match, consistent with equals', () => {
+      expect(Path.of('a', 0, 'b').startsWith(Path.of('a', '0'))).toBe(false);
+      expect(Path.of('a', '0').startsWith(Path.of('a', 0))).toBe(false);
     });
   });
 
@@ -308,7 +412,8 @@ describe('path', () => {
   test('documentation example', () => {
     const array: any = [1, 2];
     array.property = 'stupid thing to do';
-    expect(PathMatcher.of(AnyProperty).findValues(array)).toEqual([1, 2, 'stupid thing to do']);
+    expect(PathMatcher.of(AnyProperty).findValues(array)).toEqual([1, 2]);
     expect(PathMatcher.of(AnyIndex).findValues(array)).toEqual([1, 2]);
+    expect(PathMatcher.of('property').findValues(array)).toEqual([]);
   });
 });

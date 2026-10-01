@@ -1048,6 +1048,19 @@ describe('objects', () => {
       }
       return expectValid(new Foo(), V.object({ properties: { name: V.string() } }), { name: 'value' });
     });
+
+    test('violation path of inherited properties resolves to the invalid value', async () => {
+      class Foo {
+        get name() {
+          return 'getter';
+        }
+      }
+      const input = Object.assign(Object.create(new Foo()), { own: 'own' });
+      Object.getPrototypeOf(input).inherited = 'inherited';
+      const violations = (await V.object({ properties: { name: V.number() }, additionalProperties: { keys: V.any(), values: V.number() } }).validate(input)).getViolations();
+      expect(violations.map(violation => violation.path.toJSON()).sort()).toEqual(['$.inherited', '$.name', '$.own']);
+      expect(violations.map(violation => violation.path.get(input)).sort()).toEqual(['getter', 'inherited', 'own']);
+    });
   });
 
   describe('derived validators', () => {

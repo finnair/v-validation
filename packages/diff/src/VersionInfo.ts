@@ -88,7 +88,7 @@ export class VersionInfo<L> {
             if (this._previousValues === NO_PREVIOUS_VALUES) {
               this._previousValues = Array.isArray(this.previous) ? [] : {};
             }
-            path.set(this._previousValues, value.oldValue);
+            this._previousValues = path.set(this._previousValues, value.oldValue);
           }
         }
       }
