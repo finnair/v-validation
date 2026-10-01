@@ -21,6 +21,33 @@ export interface Node {
   readonly value: any;
 }
 
+function isObject(value: any): boolean {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/** Whether `for..in` lists `key`: an own or inherited enumerable property that isn't shadowed by a non-enumerable one. */
+function isEnumerable(object: object, key: string): boolean {
+  if (Object.prototype.propertyIsEnumerable.call(object, key)) {
+    return true;
+  }
+  for (let current: any = object; current !== null; current = Object.getPrototypeOf(current)) {
+    const descriptor = Object.getOwnPropertyDescriptor(current, key);
+    if (descriptor) {
+      return descriptor.enumerable === true;
+    }
+  }
+  return false;
+}
+
+function forEachIndex(array: any[], callback: MatchHandler): Continue {
+  for (let i = 0; i < array.length; i++) {
+    if (!callback(array[i], i)) {
+      return false;
+    }
+  }
+  return true;
+}
+
 export class IndexMatcher implements PathExpression {
   readonly allowGaps = true;
   constructor(private readonly index: number) {
@@ -50,14 +77,14 @@ export class PropertyMatcher implements PathExpression {
   }
 
   find(current: any, callback: MatchHandler): Continue {
-    if (typeof current === 'object' && current.hasOwnProperty(this.property)) {
+    if (isObject(current) && isEnumerable(current, this.property)) {
       return callback(current[this.property], this.property);
     }
     return true;
   }
 
   test(component: PathComponent): boolean {
-    return String(component) === this.property;
+    return component === this.property;
   }
 
   toString() {
@@ -66,37 +93,41 @@ export class PropertyMatcher implements PathExpression {
 }
 
 export class UnionMatcher implements PathExpression {
-  constructor(private readonly components: PathComponent[]) {
-    if (components.length < 2) {
+  private readonly _testComponents: Set<PathComponent>;
+  public readonly allowGaps: boolean;
+  constructor(private readonly _components: PathComponent[]) {
+    if (_components.length < 2) {
       throw new Error('Expected at least 2 properties');
     }
-    components.forEach(Path.validateComponent);
+    _components.forEach(Path.validateComponent);
+    this._testComponents = new Set(_components);
+    this.allowGaps = this._components.some(component => typeof component === 'number');
+    Object.freeze(this._components);
+    Object.freeze(this);
   }
 
   find(current: any, callback: MatchHandler): Continue {
-    if (typeof current === 'object') {
-      for (const component of this.components) {
-        if (current.hasOwnProperty(component)) {
-          if (!callback(current[component], component)) {
-            return false;
-          }
-        }
+    const isArray = Array.isArray(current);
+    if (!isArray && !isObject(current)) {
+      return true;
+    }
+    for (const component of this._components) {
+      const matches = isArray
+        ? typeof component === 'number' && component < current.length
+        : typeof component === 'string' && isEnumerable(current, component);
+      if (matches && !callback(current[component], component)) {
+        return false;
       }
     }
     return true;
   }
 
   test(component: PathComponent): boolean {
-    const str = String(component);
-    return this.components.find(component => String(component) === str) !== undefined;
-  }
-
-  get allowGaps() {
-    return this.components.some(component => typeof component === 'number');
+    return this._testComponents.has(component);
   }
 
   toString() {
-    return `[${this.components.map(this.propertyToString).join(',')}]`;
+    return `[${this._components.map(this.propertyToString).join(',')}]`;
   }
 
   static of(...components: PathComponent[]) {
@@ -112,11 +143,7 @@ export const AnyIndex: PathExpression = {
   allowGaps: false,
   find: (current: any, callback: MatchHandler): boolean => {
     if (Array.isArray(current)) {
-      for (let i = 0; i < current.length; i++) {
-        if (!callback(current[i], i)) {
-          return false;
-        }
-      }
+      return forEachIndex(current, callback);
     }
     return true;
   },
@@ -133,8 +160,11 @@ export const AnyIndex: PathExpression = {
 export const AnyProperty: PathExpression = {
   allowGaps: false,
   find: (current: any, callback: MatchHandler): Continue => {
-    if (typeof current === 'object') {
-      for (let key in current) {
+    if (Array.isArray(current)) {
+      return forEachIndex(current, callback);
+    }
+    if (isObject(current)) {
+      for (const key in current) {
         if (!callback(current[key], key)) {
           return false;
         }

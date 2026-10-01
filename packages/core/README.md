@@ -1128,6 +1128,31 @@ frozen, and cannot be. Luxon caches week data on the instance the first time `we
 those accessors throw. Luxon's API is immutable - every method returns a new instance - but its
 instances are not._
 
+## Security
+
+- **Unknown properties are rejected by default.** A property that is neither declared nor allowed by
+  `additionalProperties` results in an `UnknownProperty` violation. `ignoreUnknownProperties: true`
+  passes such values through as is - neither validated nor cloned. Use
+  `ignoreUnknownProperties: V.jsonValue()` to accept only JSON values and get them cloned (see
+  [Validator Options](#validator-options)).
+- **`__proto__` is always data.** Output objects are built with own properties only, so a `__proto__`
+  key (e.g. from `JSON.parse`) is validated and returned as a regular property - whether declared,
+  inherited from a parent model or additional - and a missing `__proto__` property is never resolved to
+  the prototype. Likewise model names and discriminator values such as `__proto__`, `constructor` or
+  `toString` never resolve to inherited members.
+- **Input may be any object.** Declared properties are read also from the prototype chain, which runs
+  getters of e.g. class instances, and additional properties are those listed by `for..in`. The output
+  contains them as own properties, and `violation.path.get(input)` returns the invalid value. Use
+  `V.jsonValue` when only plain JSON data (plain objects, arrays and JSON primitives) is acceptable.
+- **Reference cycles** are reported as `Cycle` violations instead of overflowing the stack (see
+  [Recursive Models](#recursive-models)).
+- **`Object.prototype` is assumed to have no enumerable properties.** v-validation guards against
+  causing prototype pollution, but if `Object.prototype` has been polluted, the polluted properties are
+  seen as additional properties of every object.
+
+To return only the parts of a result that are visible to JSON, e.g. in an API response, see `Projection`
+and `jsonClone` in [`@finnair/path`](../path/README.md).
+
 ## Custom Validators
 
 There are four main ways of defining custom validators

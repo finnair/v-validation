@@ -142,6 +142,18 @@ describe('path', () => {
     test('too short path', () => expect(PathMatcher.of('array', 0).prefixMatch(Path.of('array'))).toBe(false));
   });
 
+  describe('partialMatch', () => {
+    test('root', () => expect(PathMatcher.of().partialMatch(Path.of('any'))).toBe(true));
+
+    test('parent path', () => expect(PathMatcher.of('array', AnyIndex, 'name').partialMatch(Path.of('array'))).toBe(true));
+
+    test('child path', () => expect(PathMatcher.of('array').partialMatch(Path.of('array', 0, 'name'))).toBe(true));
+
+    test('sibling path', () => expect(PathMatcher.of('parent', 'one').partialMatch(Path.of('parent', 'two'))).toBe(false));
+
+    test('type-strict', () => expect(PathMatcher.of('array', AnyIndex).partialMatch(Path.of('array', '0'))).toBe(false));
+  });
+
   describe('findFirst', () => {
     test('first array element', () => expect(PathMatcher.of('array', AnyIndex, 'value').findFirst(obj)).toEqual(<Node>{ path: Path.of('array', 0, 'value'), value: 123 }));
 
@@ -212,5 +224,100 @@ describe('path', () => {
   test('array is not a valid component', () => {
     const array: any = [];
     expect(() => PathMatcher.of(array)).toThrow();
+  });
+
+  describe('root matcher with object root', () => {
+    test('findAll', () => expect(PathMatcher.of().findAll(obj)).toEqual([<Node>{ path: Path.of(), value: obj }]));
+
+    test('findValues', () => expect(PathMatcher.of().findValues({ a: 1 })).toEqual([{ a: 1 }]));
+
+    test('findValues of array root', () => expect(PathMatcher.of().findValues([1])).toEqual([[1]]));
+  });
+
+  describe('null values', () => {
+    test('property of null root', () => expect(PathMatcher.of('x').findAll(null)).toEqual([]));
+
+    test('property of null property', () => expect(PathMatcher.of('nil', 'x').findAll({ nil: null })).toEqual([]));
+
+    test('property of null array element', () =>
+      expect(PathMatcher.of('array', AnyIndex, 'name').findValues({ array: [null, { name: 'a' }] })).toEqual(['a']));
+
+    test('union of null array element', () =>
+      expect(PathMatcher.of('array', AnyIndex, UnionMatcher.of('name', 'value')).findValues({ array: [null, { name: 'a' }] })).toEqual(['a']));
+
+    test('PropertyMatcher.find of null', () => expect(new PropertyMatcher('x').find(null, () => true)).toBe(true));
+
+    test('UnionMatcher.find of null', () => expect(UnionMatcher.of('x', 1).find(null, () => true)).toBe(true));
+  });
+
+  describe('JSON types', () => {
+    const array = [1, 2];
+
+    test('property does not match array index', () => expect(PathMatcher.of('1').findAll(array)).toEqual([]));
+
+    test('property does not match array length', () => expect(PathMatcher.of('length').findAll(array)).toEqual([]));
+
+    test('property does not match non-index property of an array', () => {
+      const withProperty: any = [1];
+      withProperty.property = 'hidden';
+      expect(PathMatcher.of('property').findAll(withProperty)).toEqual([]);
+    });
+
+    test('index does not match numeric property of an object', () => expect(PathMatcher.of(1).findAll({ 1: 'one' })).toEqual([]));
+
+    test('any property of an array yields numeric indexes', () =>
+      expect(PathMatcher.of(AnyProperty).findAll(array)).toEqual([<Node>{ path: Path.of(0), value: 1 }, <Node>{ path: Path.of(1), value: 2 }]));
+
+    test('any property of an array includes undefined elements', () => expect(PathMatcher.of(AnyProperty).findValues([undefined, 2], true)).toEqual([undefined, 2]));
+
+    test('union matches strings on objects and numbers on arrays', () => {
+      const union = UnionMatcher.of(1, '1', 'length');
+      expect(PathMatcher.of(union).findAll(['a', 'b'])).toEqual([<Node>{ path: Path.of(1), value: 'b' }]);
+      expect(PathMatcher.of(union).findAll({ 1: 'one', length: 2 })).toEqual([
+        <Node>{ path: Path.of('1'), value: 'one' },
+        <Node>{ path: Path.of('length'), value: 2 },
+      ]);
+    });
+
+    test('property of an object without prototype', () => {
+      const object = Object.assign(Object.create(null), { a: 1 });
+      expect(PathMatcher.of('a').findValues(object)).toEqual([1]);
+      expect(PathMatcher.of(UnionMatcher.of('a', 'b')).findValues(object)).toEqual([1]);
+    });
+
+    test('property named hasOwnProperty', () => expect(PathMatcher.of('a').findValues({ hasOwnProperty: 1, a: 2 })).toEqual([2]));
+
+    test('inherited enumerable properties are matched like for..in', () => {
+      const object = Object.assign(Object.create({ inherited: 'i' }), { own: 'o' });
+      expect(PathMatcher.of(AnyProperty).findValues(object)).toEqual(['o', 'i']);
+      expect(PathMatcher.of('inherited').findValues(object)).toEqual(['i']);
+      expect(PathMatcher.of(UnionMatcher.of('inherited', 'own')).findValues(object)).toEqual(['i', 'o']);
+    });
+
+    test('non-enumerable properties are not matched', () => {
+      class Foo {
+        get name() {
+          return 'value';
+        }
+      }
+      const object = Object.defineProperty({}, 'hidden', { value: 'hidden', enumerable: false });
+      expect(PathMatcher.of('name').findValues(new Foo())).toEqual([]);
+      expect(PathMatcher.of('hidden').findValues(object)).toEqual([]);
+      expect(PathMatcher.of(UnionMatcher.of('toString', 'constructor', '__proto__')).findValues({})).toEqual([]);
+    });
+
+    test('non-enumerable own property shadows an inherited enumerable one', () => {
+      const object = Object.defineProperty(Object.create({ name: 'inherited' }), 'name', { value: 'own', enumerable: false });
+      expect(PathMatcher.of('name').findValues(object)).toEqual([]);
+      expect(PathMatcher.of(AnyProperty).findValues(object)).toEqual([]);
+    });
+
+    test('match is type-strict', () => {
+      expect(PathMatcher.of('1').match(Path.of(1))).toBe(false);
+      expect(PathMatcher.of(1).match(Path.of('1'))).toBe(false);
+      expect(PathMatcher.of(UnionMatcher.of('1', 'x')).match(Path.of(1))).toBe(false);
+      expect(PathMatcher.of(UnionMatcher.of(1, 'x')).match(Path.of('1'))).toBe(false);
+      expect(PathMatcher.of(AnyProperty).match(Path.of(1))).toBe(true);
+    });
   });
 });

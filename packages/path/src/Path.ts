@@ -4,6 +4,26 @@ export type PathComponent = number | string;
 
 const identifierPattern = /^[a-zA-Z_][a-zA-Z0-9_]*$/;
 
+/** Properties are accessible only on (non-array) objects and indexes only on arrays. */
+function accepts(container: any, component: PathComponent): boolean {
+  if (typeof component === 'number') {
+    return Array.isArray(container);
+  }
+  return typeof container === 'object' && container !== null && !Array.isArray(container);
+}
+
+/** Own properties only, so that e.g. `__proto__` doesn't resolve to the (shared) prototype. */
+function ownValue(container: any, component: PathComponent) {
+  return Object.hasOwn(container, component) ? container[component] : undefined;
+}
+
+function container(current: any, component: PathComponent) {
+  if (accepts(current, component)) {
+    return current;
+  }
+  return typeof component === 'number' ? [] : {};
+}
+
 export class Path {
   public static readonly ROOT = Path.newPath([]);
 
@@ -76,9 +96,11 @@ export class Path {
   }
 
   startsWith(other: Path) {
-    for (let i = 0; i < other.path.length; i++) {
-      // Loose comparison so string and number indexes match, consistent with `equals`.
-      if (String(this.path[i]) !== String(other.path[i])) {
+    if (other.length > this.length) {
+      return false;
+    }
+    for (let i = 0; i < other.length; i++) {
+      if (this.path[i] !== other.path[i]) {
         return false;
       }
     }
@@ -117,7 +139,7 @@ export class Path {
       const otherLength = other.length;
       if (otherLength === this.length) {
         for (let i = 0; i < otherLength; i++) {
-          if (String(other.componentAt(i)) !== String(this.componentAt(i))) {
+          if (other.componentAt(i) !== this.componentAt(i)) {
             return false;
           }
         }
@@ -139,71 +161,73 @@ export class Path {
     return this.path[Symbol.iterator]();
   }
 
+  /** Reads own or inherited properties, except inherited `__proto__`. */
   get(root: any) {
-    if (this.path.length === 0) {
-      return root;
-    }
     let current = root;
-    let index = 0;
-    for (; index < this.path.length - 1 && typeof current === 'object'; index++) {
-      current = getProperty(current, this.path[index]);
-    }
-    if (index === this.path.length - 1 && typeof current === 'object') {
-      return getProperty(current, this.path[this.path.length - 1]);
-    }
-    return undefined;
-  }
-
-  unset(root: any): any {
-    return this.set(root, undefined);
-  }
-
-  set(root: any, value: any): any {
-    if (this.path.length === 0) {
-      return value;
-    }
-    let pathIndex = -1;
-    const _root = toObject(root, this.path);
-    let current = _root;
-    for (pathIndex = 0; pathIndex < this.path.length - 1 && current; pathIndex++) {
-      const component = this.path[pathIndex];
-      // Only own properties, so that e.g. `__proto__` doesn't resolve to the (shared) prototype
-      const child = toObject(Object.hasOwn(current, component) ? current[component] : undefined, this.path);
-      if (child !== undefined) {
-        setOwnProperty(current, component, child);
-        current = child;
-      }
-    }
-    if (value === undefined) {
-      if (current !== undefined) {
-        delete current[this.path[pathIndex]];
-        // Truncate undefined tail of an array
-        if (Array.isArray(current)) {
-          let i = current.length - 1;
-          while (i >= 0 && current[i] === undefined) {
-            i--;
-          }
-          current.length = i + 1;
-        }
-      }
-    } else {
-      setOwnProperty(current, this.path[pathIndex], value);
-    }
-    return _root;
-
-    function toObject(current: any, path: PathComponent[]) {
-      if (typeof current === 'object') {
-        return current;
-      } else if (value !== undefined) {
-        if (typeof path[pathIndex + 1] === 'number') {
-          return [];
-        } else {
-          return {};
-        }
-      } else {
+    for (const component of this.path) {
+      if (!accepts(current, component)) {
         return undefined;
       }
+      current = getProperty(current, component);
     }
+    return current;
+  }
+
+  /** Deletes own property only, so an inherited value may still be visible to `get`. */
+  unset(root: any): any {
+    const path = this.path;
+    if (path.length === 0) {
+      return undefined;
+    }
+    const last = path.length - 1;
+    let current = root;
+    for (let i = 0; i < last; i++) {
+      if (!accepts(current, path[i])) {
+        return root;
+      }
+      current = ownValue(current, path[i]);
+    }
+    if (accepts(current, path[last])) {
+      delete current[path[last]];
+      // Truncate undefined tail of an array
+      if (Array.isArray(current)) {
+        let i = current.length - 1;
+        while (i >= 0 && current[i] === undefined) {
+          i--;
+        }
+        current.length = i + 1;
+      }
+    }
+    return root;
+  }
+
+  /**
+   * Sets `value` at this path, replacing any value along the path that cannot hold the next component
+   * (missing, `null`, primitive, or an array where an object is needed and vice versa) with a new object or array.
+   * Writes only own properties: inherited values are shadowed and objects reached through a prototype are never modified.
+   * 
+   * @returns root, or a new root if root was replaced
+   */
+  set(root: any, value: any): any {
+    if (value === undefined) {
+      return this.unset(root);
+    }
+    const path = this.path;
+    if (path.length === 0) {
+      return value;
+    }
+    const result = container(root, path[0]);
+    let current = result;
+    for (let i = 0; i < path.length - 1; i++) {
+      const child = ownValue(current, path[i]);
+      const next = container(child, path[i + 1]);
+      if (next !== child) {
+        setOwnProperty(current, path[i], next);
+      }
+      current = next;
+    }
+    setOwnProperty(current, path[path.length - 1], value);
+    return result;
   }
 
   static property(property: string): Path {
