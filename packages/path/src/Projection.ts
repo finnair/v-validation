@@ -133,10 +133,10 @@ class ProjectionTree {
     }
     // Exact class check, as subclasses may override test
     if (expression.constructor === PropertyMatcher) {
-      return getOrCreate(this.properties, (expression as PropertyMatcher)['property']);
+      return getOrCreate(this.properties, (expression as PropertyMatcher).property);
     }
     if (expression.constructor === IndexMatcher) {
-      return getOrCreate(this.indexes, (expression as IndexMatcher)['index']);
+      return getOrCreate(this.indexes, (expression as IndexMatcher).index);
     }
     let entry = this.tested.find(entry => entry.expression === expression);
     if (!entry) {

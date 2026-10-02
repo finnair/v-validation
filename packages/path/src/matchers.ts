@@ -50,8 +50,9 @@ function forEachIndex(array: any[], callback: MatchHandler): Continue {
 
 export class IndexMatcher implements PathExpression {
   readonly allowGaps = true;
-  constructor(private readonly index: number) {
+  constructor(readonly index: number) {
     Path.validateIndex(index);
+    Object.freeze(this);
   }
 
   find(current: any, callback: MatchHandler): Continue {
@@ -72,8 +73,9 @@ export class IndexMatcher implements PathExpression {
 
 export class PropertyMatcher implements PathExpression {
   readonly allowGaps = false;
-  constructor(private readonly property: string) {
+  constructor(readonly property: string) {
     Path.validateProperty(property);
+    Object.freeze(this);
   }
 
   find(current: any, callback: MatchHandler): Continue {
@@ -139,7 +141,7 @@ export class UnionMatcher implements PathExpression {
   }
 }
 
-export const AnyIndex: PathExpression = {
+export const AnyIndex: PathExpression = Object.freeze({
   allowGaps: false,
   find: (current: any, callback: MatchHandler): boolean => {
     if (Array.isArray(current)) {
@@ -155,9 +157,9 @@ export const AnyIndex: PathExpression = {
   toString: () => {
     return '[*]';
   },
-};
+});
 
-export const AnyProperty: PathExpression = {
+export const AnyProperty: PathExpression = Object.freeze({
   allowGaps: false,
   find: (current: any, callback: MatchHandler): Continue => {
     if (Array.isArray(current)) {
@@ -180,4 +182,4 @@ export const AnyProperty: PathExpression = {
   toString: () => {
     return '.*';
   },
-};
+});
