@@ -880,6 +880,24 @@ every validation, hit or miss, so keep it cheap.
 Note that the input of an object or array validator is `unknown`, so a key function usually
 annotates its parameter (`(value: any) => ...`) or the call states its types explicitly.
 
+Pass `isStale` to check on every cache hit whether the cached result is stale for the input. When it
+returns `true`, the entry is discarded and the input is re-validated, and the new result is cached
+under the same key. Together with `cacheKeyFn` this keeps only the latest version of each object,
+instead of filling the cache with old versions that are no longer needed:
+
+```typescript
+const latestLeg = V.memoize(V.frozen(leg), {
+  maxSize: 10000,
+  cacheKeyFn: (value: any) => value.id,
+  isStale: (cached, value: any) => cached.version !== value.version,
+});
+```
+
+`isStale` receives the cached (converted) result and the raw input. Return `false` only when the
+cached result is the correct result for the input - keeping a newer cached version for an older
+input, for example, would return the newer version. Inputs alternating between versions of the same
+key are re-validated every time. Like `cacheKeyFn`, it runs on every cache hit, so keep it cheap.
+
 A cache is valid only for the `ValidatorOptions` its results were produced under, since neither
 `group` nor `ignoreUnknownProperties`/`ignoreUnknownEnumValues` is part of the cache key. Most
 memoized validators do not care - parsing an ISO string into a Luxon `DateTime` produces the same
@@ -1306,7 +1324,7 @@ Unless otherwise stated, all validators require non-null and non-undefined value
 | whenGroup...otherwise   | group: GroupOrName, ...validators: Validator[]                   | Defines validation rules (`compositionOf`) to be executed for given `ValidatorOptions.group`.                                             |
 | json                    | ...validators: Validator[]                                       | Parse JSON input and validate it against given validators.                                                                                |
 | jsonValue               | ...allow: JsonValueType[]                                        | Accepts and clones a JSON value (`string`, `boolean`, `number`, `null`, `array`, `object`) whose root is one of `allow`; nested values may be any JSON value. All types when `allow` is empty. Returns a shared instance per combination. |
-| memoize                 | validator: Validator, options?: MemoizeValidatorOptions          | Caches a wrapped validator's successful results in a bounded cache (`maxSize`, `evictionPolicy`, `shouldCache`, `cacheKeyFn`). See [Memoization](#memoization). |
+| memoize                 | validator: Validator, options?: MemoizeValidatorOptions          | Caches a wrapped validator's successful results in a bounded cache (`maxSize`, `evictionPolicy`, `shouldCache`, `cacheKeyFn`, `isStale`). See [Memoization](#memoization). |
 | proxy                   | factory: () => Validator                                         | Defers validator construction to a factory, for e.g. self-reference. See [V.proxy](#proxy).  |
 | frozen                  | validator: Validator                                             | A view of `validator` whose subtree produces frozen output. See [Immutable Output](#frozen). |
 

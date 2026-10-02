@@ -81,6 +81,24 @@ export interface MemoizeValidatorOptions<Out = unknown, In = unknown, K=In> {
    * cached. It runs on every validation, hit or miss, so keep it cheap.
    */
   readonly cacheKeyFn?: (value: undefined | In) => K;
+
+  /**
+   * Checks on a cache hit whether the `cached` result is stale for the raw input `value`. Returning
+   * `true` discards the entry and re-validates the input, caching the new result under the same key.
+   * Together with `cacheKeyFn` this keeps only the latest version of an object:
+   *
+   * ```ts
+   * V.memoize(leg, {
+   *   cacheKeyFn: (value: any) => value.id,
+   *   isStale: (cached, value: any) => cached.version !== value.version,
+   * })
+   * ```
+   *
+   * Return `false` only if `cached` is the correct result for `value`: e.g. keeping a newer cached
+   * version for an older input would return the newer version. It runs on every cache hit, so keep
+   * it cheap. Defaults to never stale.
+   */
+  readonly isStale?: (cached: Out, value: In) => boolean;
 }
 
 /**
@@ -104,9 +122,11 @@ export interface MemoizeValidatorOptions<Out = unknown, In = unknown, K=In> {
  * Only successes are cached: a failure's violations carry the `path` at which the value appeared, so
  * replaying them elsewhere would report the wrong path, and the input might yet be valid in another
  * position. An optional `shouldCache` predicate can further exclude successful results from the
- * cache (e.g. outliers), so that rare values do not evict common ones. Memoization assumes the
- * wrapped validator is a pure function of its cache key - a validator whose result depends on the
- * active group or on `ValidatorOptions` should pin them with `options`, since neither is part of the key.
+ * cache (e.g. outliers), so that rare values do not evict common ones. An optional `isStale` check
+ * discards a cached result that no longer applies to the input, e.g. an older version of an object.
+ * Memoization assumes the wrapped validator is a pure function of its cache key - a validator whose
+ * result depends on the active group or on `ValidatorOptions` should pin them with `options`, since
+ * neither is part of the key.
  *
  * Only synchronous validators are supported. An asynchronous result settles after `validatePathV2`
  * returns, with no guarantee of when - or whether - the value becomes available, so it cannot be
@@ -125,6 +145,7 @@ export class MemoizeValidator<Out = unknown, In = unknown, K = In> extends Valid
   readonly maxSize: number;
   private readonly shouldCache?: (result: Out, value: In) => boolean;
   private readonly cacheKeyFn: (value: undefined | In) => K;
+  private readonly isStale?: (cached: Out, value: In) => boolean;
   /** True for `lru`; kept as a boolean so the hit path tests a flag rather than compares strings. */
   private readonly refreshOnHit: boolean;
   private readonly options?: ValidatorOptions;
@@ -145,6 +166,7 @@ export class MemoizeValidator<Out = unknown, In = unknown, K = In> extends Valid
     this.refreshOnHit = evictionPolicy === 'lru';
     this.shouldCache = options.shouldCache;
     this.cacheKeyFn = options.cacheKeyFn ?? ((input) => input as K);
+    this.isStale = options.isStale;
     if (validator.dependsOnFreezeContext()) {
       this.frozenCache = new MemoizeCache<K, Out>();
     } else {
@@ -181,11 +203,15 @@ export class MemoizeValidator<Out = unknown, In = unknown, K = In> extends Valid
     // An `undefined` result is never cached, so a plain `get` distinguishes a hit from a miss.
     const cached = cache.get(key);
     if (cached !== undefined) {
-      if (this.refreshOnHit) {
-        cache.delete(key);
-        cache.set(key, cached);
+      if (this.isStale === undefined || !this.isStale(cached, value)) {
+        if (this.refreshOnHit) {
+          cache.delete(key);
+          cache.set(key, cached);
+        }
+        return success(cached);
       }
-      return success(cached);
+      // A stale entry is not kept even if the new result fails or is not cached, and the new one is inserted as the newest
+      cache.delete(key);
     }
     // `settled` records whether the wrapped validator has produced its outcome synchronously - via a
     // callback or by throwing. If it has not by the time the call returns, the validator is
