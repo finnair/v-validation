@@ -1,6 +1,6 @@
 import { PathMatcher } from '@finnair/path';
 import { parsePathMatcher } from '@finnair/path-parser';
-import { Change, Diff, DiffConfig, Patch, ChangeTree, _changedPaths, _changeset, _changeTree, _matches, _matchesAdded, _patch } from './Diff.js';
+import { Change, Diff, DiffConfig, Patch, ChangeTree, _changedPaths, _changeset, _buildChangeTree, _matches, _matchesAdded, _patch } from './Diff.js';
 
 export interface VersionInfoConfig {
   /**
@@ -117,7 +117,7 @@ export class VersionInfo<L> {
 
   private get changeTree(): ChangeTree | undefined {
     if (this._changeTree === undefined) {
-      this._changeTree = _changeTree(true, this.previous, this.current, this.config.diffConfig) ?? null;
+      this._changeTree = _buildChangeTree(true, this.previous, this.current, this.config.diffConfig) ?? null;
     }
     return this._changeTree ?? undefined;
   }

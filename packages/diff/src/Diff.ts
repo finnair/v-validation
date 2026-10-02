@@ -52,16 +52,16 @@ export class Diff {
   }
 
   static changedPaths<T>(oldValue: T, newValue: T, config?: DiffConfig) {
-    return _changedPaths(_changeTree(true, oldValue, newValue, config));
+    return _changedPaths(_buildChangeTree(true, oldValue, newValue, config));
   }
 
   static changeset<T>(oldValue: T, newValue: T, config?: DiffConfig): Map<string, Change> {
-    return _changeset(_changeTree(true, oldValue, newValue, config));
+    return _changeset(_buildChangeTree(true, oldValue, newValue, config));
   }
   
   static pathsAndValues(value: any, config?: DiffConfig):  Map<string, Node> {
     const map = new Map<string, Node>();
-    for (const [pathString, change] of _changeset(_changeTree(false, undefined, value, config))) {
+    for (const [pathString, change] of _changeset(_buildChangeTree(false, undefined, value, config))) {
       map.set(pathString, { path: change.path, value: change.newValue });
     }
     return map;
@@ -71,7 +71,7 @@ export class Diff {
    * Minimal set of patches that turns `oldValue` into `newValue` with `Path.set`: a changed value is patched as a whole.
    */
   static patch<T>(oldValue: T, newValue: T, config?: DiffConfig): Patch[] {
-    return _patch(_changeTree(true, oldValue, newValue, config));
+    return _patch(_buildChangeTree(true, oldValue, newValue, config));
   }
 }
 
@@ -99,7 +99,7 @@ export class ChangeTree {
 }
 
 /** Internal: changes from `oldValue` (if `hasOld`) to `newValue`, or undefined if there are none. */
-export function _changeTree(hasOld: boolean, oldValue: any, newValue: any, config?: DiffConfig): ChangeTree | undefined {
+export function _buildChangeTree(hasOld: boolean, oldValue: any, newValue: any, config?: DiffConfig): ChangeTree | undefined {
   return new Walker(config).visit(Path.ROOT, undefined, hasOld, oldValue, true, newValue);
 }
 
