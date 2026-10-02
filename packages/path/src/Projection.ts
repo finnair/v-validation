@@ -14,7 +14,7 @@ interface Context {
 }
 
 export class Projection {
-  private readonly tree?: ProjectionNode;
+  private readonly tree?: ProjectionTree;
   /** Flags of paths applying to the root */
   private readonly rootState: number = 0;
   private readonly context: Context;
@@ -30,7 +30,7 @@ export class Projection {
     });
     // Always paths only apply with includes or excludes
     if (includes.length || excludes.length) {
-      const tree = new ProjectionNode();
+      const tree = new ProjectionTree();
       includes.forEach(matcher => tree.add(matcher.expressions, INCLUDE));
       excludes.forEach(matcher => tree.add(matcher.expressions, EXCLUDE));
       always.forEach(matcher => tree.add(matcher.expressions, ALWAYS));
@@ -97,26 +97,26 @@ function validatePathMatcher(value: PathMatcher): PathMatcher {
   }
 }
 
-type Live = readonly ProjectionNode[];
+type Live = readonly ProjectionTree[];
 
 /**
  * Prefix tree of include, exclude and always paths. Exact property and index steps are looked up, other expressions are tested.
  */
-class ProjectionNode {
+class ProjectionTree {
   /** Flags of paths ending at this node */
   terminal = 0;
   /** Flags of paths ending below this node */
   below = 0;
-  readonly properties = new Map<string, ProjectionNode>();
-  readonly indexes = new Map<number, ProjectionNode>();
-  anyProperty?: ProjectionNode;
-  anyIndex?: ProjectionNode;
-  readonly tested: { readonly expression: PathExpression, readonly node: ProjectionNode }[] = [];
+  readonly properties = new Map<string, ProjectionTree>();
+  readonly indexes = new Map<number, ProjectionTree>();
+  anyProperty?: ProjectionTree;
+  anyIndex?: ProjectionTree;
+  readonly tested: { readonly expression: PathExpression, readonly node: ProjectionTree }[] = [];
   /** Reusable, never mutated live list of just this node */
   readonly alone: Live = [this];
 
   add(expressions: readonly PathExpression[], flag: number) {
-    let node: ProjectionNode = this;
+    let node: ProjectionTree = this;
     for (const expression of expressions) {
       node.below |= flag;
       node = node.child(expression);
@@ -124,33 +124,33 @@ class ProjectionNode {
     node.terminal |= flag;
   }
 
-  private child(expression: PathExpression): ProjectionNode {
+  private child(expression: PathExpression): ProjectionTree {
     if (expression === AnyProperty) {
-      return this.anyProperty ??= new ProjectionNode();
+      return this.anyProperty ??= new ProjectionTree();
     }
     if (expression === AnyIndex) {
-      return this.anyIndex ??= new ProjectionNode();
+      return this.anyIndex ??= new ProjectionTree();
     }
     // Exact class check, as subclasses may override test
     if (expression.constructor === PropertyMatcher) {
-      return getOrCreate(this.properties, (expression as PropertyMatcher)['property']);
+      return getOrCreate(this.properties, (expression as PropertyMatcher).property);
     }
     if (expression.constructor === IndexMatcher) {
-      return getOrCreate(this.indexes, (expression as IndexMatcher)['index']);
+      return getOrCreate(this.indexes, (expression as IndexMatcher).index);
     }
     let entry = this.tested.find(entry => entry.expression === expression);
     if (!entry) {
-      entry = { expression, node: new ProjectionNode() };
+      entry = { expression, node: new ProjectionTree() };
       this.tested.push(entry);
     }
     return entry.node;
   }
 }
 
-function getOrCreate<K>(map: Map<K, ProjectionNode>, key: K): ProjectionNode {
+function getOrCreate<K>(map: Map<K, ProjectionTree>, key: K): ProjectionTree {
   let node = map.get(key);
   if (!node) {
-    node = new ProjectionNode();
+    node = new ProjectionTree();
     map.set(key, node);
   }
   return node;
@@ -262,7 +262,7 @@ function narrow(live: Live | undefined, component: PathComponent): Live | undefi
   return next;
 }
 
-function collect(next: Live | undefined, node: ProjectionNode | undefined): Live | undefined {
+function collect(next: Live | undefined, node: ProjectionTree | undefined): Live | undefined {
   if (!node) {
     return next;
   }
@@ -273,7 +273,7 @@ function collect(next: Live | undefined, node: ProjectionNode | undefined): Live
   if (next.length === 1) {
     return [next[0], node];
   }
-  (next as ProjectionNode[]).push(node);
+  (next as ProjectionTree[]).push(node);
   return next;
 }
 

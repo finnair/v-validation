@@ -1,7 +1,6 @@
-import { Path, PathMatcher } from '@finnair/path';
-import { parsePath, parsePathMatcher } from '@finnair/path-parser';
-import {  Diff, DiffConfig } from './Diff.js';
-import { Change, DiffNode, Patch } from './DiffNode.js';
+import { PathMatcher } from '@finnair/path';
+import { parsePathMatcher } from '@finnair/path-parser';
+import { Change, Diff, DiffConfig, Patch, ChangeTree, _changedPaths, _changeset, _buildChangeTree, _matches, _matchesAdded, _patch } from './Diff.js';
 
 export interface VersionInfoConfig {
   /**
@@ -15,10 +14,11 @@ export interface VersionInfoConfig {
 const NO_PREVIOUS_VALUES = Object.freeze({});
 
 export class VersionInfo<L> {
+  /** Changes from previous to current, computed once: null if there are none */
+  private _changeTree?: ChangeTree | null;
   private _changes?: Map<string, Change>;
   private _paths?: Set<string>;
   private _previousValues?: any;
-  private _diffNode?: DiffNode;
   public readonly config: VersionInfoConfig;
   constructor(
     public readonly current: L,
@@ -47,10 +47,7 @@ export class VersionInfo<L> {
   get changes(): undefined | Map<string, Change> {
     if (this.previous) {
       if (this._changes === undefined) {
-        this._changes = new Map<string, Change>();
-        for (const change of this.diffNode.getScalarChanges(this.config.diffConfig?.includeObjects)) {
-          this._changes.set(change.path.toJSON(), change);
-        }
+        this._changes = _changeset(this.changeTree);
       }
       return this._changes;
     }
@@ -70,10 +67,7 @@ export class VersionInfo<L> {
       if (this.previous) {
         this._paths = this.changedPaths!;
       } else {
-        this._paths = new Set<string>();
-        for (const path of this.diffNode.getChangedPaths(this.config.diffConfig?.includeObjects)) {
-          this._paths.add(path.toJSON());
-        }
+        this._paths = _changedPaths(this.changeTree);
       }
     }
     return this._paths;
@@ -82,13 +76,12 @@ export class VersionInfo<L> {
     if (this.previous && this.config.previousValues?.length) {
       if (this._previousValues === undefined) {
         this._previousValues = NO_PREVIOUS_VALUES;
-        for (const [key, value] of this.changes!) {
-          const path = parsePath(key);
+        for (const { path, oldValue } of this.changes!.values()) {
           if (this.config.previousValues.some((matcher) => matcher.match(path))) {
             if (this._previousValues === NO_PREVIOUS_VALUES) {
               this._previousValues = Array.isArray(this.previous) ? [] : {};
             }
-            this._previousValues = path.set(this._previousValues, value.oldValue);
+            this._previousValues = path.set(this._previousValues, oldValue);
           }
         }
       }
@@ -96,37 +89,19 @@ export class VersionInfo<L> {
     }
     return undefined;
   }
-  get diffNode(): DiffNode {
-    if (this._diffNode === undefined) {
-      this._diffNode = new DiffNode({ oldValue: this.previous, newValue: this.current }, this.config.diffConfig); 
-    }
-    return this._diffNode;
-  }
   get patch(): Patch[] {
-    return Array.from(this.diffNode.patch);
+    return _patch(this.changeTree);
   }
   matches(pathExpression: string | PathMatcher) {
     const matcher = VersionInfo.toMatcher(pathExpression);
-    if (this.previous) {
-      const changedPaths = VersionInfo.parsePaths(this.changedPaths!);
-      return VersionInfo.matchesAnyPath(matcher, changedPaths)
-    } else {
-      return matcher.findFirst(this.current) !== undefined;
+    if (this.previous || this._changeTree !== undefined) {
+      return _matches(this.changeTree, matcher);
     }
+    // Unlike the change tree, doesn't detect unsupported values in branches that matcher doesn't reach
+    return _matchesAdded(this.previous, this.current, matcher, this.config.diffConfig);
   }
   matchesAny(pathExpressions: (string | PathMatcher)[]) {
-    if (this.previous) {
-      const changedPaths = VersionInfo.parsePaths(this.changedPaths!);
-      return pathExpressions.some((pathExpression) => {
-        const matcher = VersionInfo.toMatcher(pathExpression);
-        return VersionInfo.matchesAnyPath(matcher, changedPaths)
-      });
-    } else {
-      return pathExpressions.some((pathExpression) => {
-        const matcher = VersionInfo.toMatcher(pathExpression);
-        return matcher.findFirst(this.current) !== undefined;
-      });
-    }
+    return pathExpressions.some((pathExpression) => this.matches(pathExpression));
   }
   toJSON() {
     const changedPaths = this.changedPaths;
@@ -137,17 +112,13 @@ export class VersionInfo<L> {
     };
   }
 
-  private static parsePaths(paths: Set<string>) {
-    const result = [];
-    for (const path of paths) {
-      result.push(parsePath(path));
+  private get changeTree(): ChangeTree | undefined {
+    if (this._changeTree === undefined) {
+      this._changeTree = _buildChangeTree(true, this.previous, this.current, this.config.diffConfig) ?? null;
     }
-    return result;
-  }
-  private static matchesAnyPath(matcher: PathMatcher, paths: Path[]) {
-    return paths.some((path) => matcher.prefixMatch(path));
+    return this._changeTree ?? undefined;
   }
   private static toMatcher(pathExpression: string | PathMatcher): PathMatcher {
-    return typeof pathExpression === 'string' ? parsePathMatcher(pathExpression) : (pathExpression as PathMatcher);
+    return typeof pathExpression === 'string' ? parsePathMatcher(pathExpression) : pathExpression;
   }
 }

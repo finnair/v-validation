@@ -212,6 +212,19 @@ describe('path', () => {
     test('IndexMatcher requires a number >= 0', () => expect(() => new IndexMatcher(-1)).toThrow());
 
     test('PropertyMatcher requires a string', () => expect(() => new PropertyMatcher(123 as any)).toThrow());
+
+    test('matched components are readable', () => {
+      expect(new PropertyMatcher('foo').property).toBe('foo');
+      expect(new IndexMatcher(1).index).toBe(1);
+    });
+
+    test('built-in expressions are frozen', () => {
+      for (const expression of [new PropertyMatcher('foo'), new IndexMatcher(1), UnionMatcher.of('foo', 1), AnyIndex, AnyProperty]) {
+        expect(Object.isFrozen(expression)).toBe(true);
+      }
+      expect(() => { (AnyProperty as any).test = () => false; }).toThrow(TypeError);
+      expect(() => { (new PropertyMatcher('foo') as any).property = 'bar'; }).toThrow(TypeError);
+    });
   });
 
   describe('toJSON', () => {

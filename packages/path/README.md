@@ -41,6 +41,7 @@ Paths, PathMatchers and Projection follow JSON types consistently, Projection is
 * BREAKING CHANGE: Property matchers match the same properties as `.*`, i.e. those listed by `for..in`: own and inherited enumerable properties. Earlier they matched only own properties, including non-enumerable ones.
 * Root matcher (`$`) finds the root also when it's an object or an array, and matchers handle `null` values instead of throwing.
 * `PathMatcher.expressions` is public (read-only).
+* BREAKING CHANGE: Built-in path expressions (`PropertyMatcher`, `IndexMatcher`, `UnionMatcher`, `AnyIndex` and `AnyProperty`) are frozen, so subclasses can't add fields. `PropertyMatcher.property` and `IndexMatcher.index` are public (read-only).
 
 ### Projection
 
