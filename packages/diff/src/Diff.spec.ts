@@ -1,8 +1,7 @@
 
 import { describe, test, expect } from 'vitest';
-import { Diff } from './Diff.js';
 import { Node, Path } from '@finnair/path';
-import { Change } from './DiffNode.js';
+import { Change, Diff } from './Diff.js';
 
 describe('Diff', () => {
   const defaultDiff = new Diff();
@@ -213,6 +212,98 @@ describe('Diff', () => {
     const diff = defaultDiff.changedPaths(oldObject, newObject);
     const expected = new Set(['$.array[0][0][0].name']);
     expect(diff).toEqual(expected);
+  });
+
+  describe('identical references', () => {
+    test('are not walked', () => {
+      const shared = {
+        nested: {
+          get value(): string {
+            throw new Error('identical subtree should not be read');
+          },
+        },
+      };
+      expect(defaultDiff.changeset({ shared, a: 1 }, { shared, a: 2 })).toEqual(new Map([['$.a', { path: Path.of('a'), oldValue: 1, newValue: 2 }]]));
+      expect(defaultDiff.changeset(shared, shared).size).toBe(0);
+    });
+
+    test('with includeObjects', () => {
+      const shared = { a: [1] };
+      expect(new Diff({ includeObjects: true }).changeset({ shared }, { shared }).size).toBe(0);
+    });
+  });
+
+  test('array holes are undefined elements', () => {
+    const holes = [1, , 3]; // eslint-disable-line no-sparse-arrays
+    expect(defaultDiff.changedPaths(holes, [1, undefined, 3])).toEqual(new Set());
+    expect(new Diff({ filter: () => true }).changeset(holes, [1, 2, 3])).toEqual(
+      new Map([['$[1]', { path: Path.of(1), oldValue: undefined, newValue: 2 }]]),
+    );
+  });
+
+  test('keys are path strings', () => {
+    const changeset = defaultDiff.changeset({ 'needs quotes': 1, a: [{ b: 1 }] }, { 'needs quotes': 2, a: [{ b: 2 }] });
+    expect(Array.from(changeset.keys())).toEqual(Array.from(changeset.values(), change => change.path.toJSON()));
+    expect(Array.from(changeset.keys())).toEqual(['$["needs quotes"]', '$.a[0].b']);
+  });
+
+  describe('randomized', () => {
+    function random(seed: number) {
+      return () => {
+        seed = (seed + 0x6d2b79f5) | 0;
+        let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      };
+    }
+    const keys = ['a', 'b', 'c', '0', '1'];
+
+    function value(rnd: () => number, depth: number): any {
+      const r = depth > 3 ? 0.5 + rnd() * 0.5 : rnd();
+      if (r < 0.3) {
+        const object: any = {};
+        keys.forEach(key => rnd() < 0.5 && (object[key] = value(rnd, depth + 1)));
+        return object;
+      }
+      if (r < 0.5) {
+        return Array.from({ length: Math.floor(rnd() * 4) }, () => value(rnd, depth + 1));
+      }
+      return [1, 2, 'x', null, true][Math.floor(rnd() * 5)];
+    }
+
+    /** Mutates a copy, sharing some unchanged branches by reference. */
+    function mutate(rnd: () => number, original: any, depth: number): any {
+      if (rnd() < 0.15) {
+        return value(rnd, depth);
+      }
+      if (Array.isArray(original)) {
+        return rnd() < 0.3 ? original : original.map(item => mutate(rnd, item, depth + 1));
+      }
+      if (original && typeof original === 'object') {
+        if (rnd() < 0.3) {
+          return original;
+        }
+        const copy: any = {};
+        Object.keys(original).forEach(key => rnd() < 0.9 && (copy[key] = mutate(rnd, original[key], depth + 1)));
+        return copy;
+      }
+      return original;
+    }
+
+    test('applying changeset with objects or patch to the old value results in the new value', () => {
+      const diff = new Diff({ includeObjects: true });
+      for (let seed = 1; seed <= 500; seed++) {
+        const rnd = random(seed);
+        const oldValue = Object.fromEntries(keys.map(key => [key, value(rnd, 1)]));
+        const newValue = mutate(rnd, oldValue, 0);
+        let changed: any = structuredClone(oldValue);
+        diff.changeset(oldValue, newValue).forEach(change => (changed = change.path.set(changed, change.newValue)));
+        expect(changed).toEqual(newValue);
+        let patched: any = structuredClone(oldValue);
+        Diff.patch(oldValue, newValue).forEach(patch => (patched = patch.path.set(patched, patch.value)));
+        expect(patched).toEqual(newValue);
+      }
+    });
   });
 });
 

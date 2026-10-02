@@ -24,6 +24,14 @@ Or [`npm`](https://www.npmjs.com/):
 npm install @finnair/diff
 ```
 
+## New in Version 13
+
+* Diff and VersionInfo are 2-4x faster. Identical values (same reference) are not compared further, and `VersionInfo.matches` no longer parses changed paths.
+* BREAKING CHANGE: `DiffNode` is removed. Use `Diff.patch` for patches, and `Diff.changeset` (with `includeObjects` if needed) for scalar changes. `VersionInfo.diffNode` is removed as well.
+* New `Diff.patch(oldValue, newValue)` returns the minimal set of patches that turns `oldValue` into `newValue` with `Path.set`, e.g. for applying a client's changes on top of a concurrently modified version, or for streaming changes to clients.
+* BREAKING CHANGE: Array holes are handled like `undefined` elements, as in JSON. This makes a difference only with a custom filter that accepts `undefined` values.
+* BREAKING CHANGE: `DiffNodeConfig` is merged into `DiffConfig`.
+
 ## Features
 
 ### Changeset 
@@ -35,6 +43,16 @@ const a = {...};
 const b = {...};
 // patch a into b - for revert, use set change.oldValue
 diff.changeset(a, b).forEach((change) => change.path.set(a, change.newValue));
+```
+
+### Patch
+
+`Diff.patch<T>(a: T, b: T)` returns the minimal list of `Patch` objects (`path` and `value`, no `value` for removal) that turns `a` into `b` with `Path.set`. Unlike a changeset, a changed object or array is patched as a whole. Patches are well suited for 
+* applying a client's modifications on top of the latest version: a client edits version 1 while versions 2-4 are saved concurrently, and its changes are merged as `Diff.patch(version1, edited)` applied on top of version 4, or
+* streaming changes to clients that have fetched an initial version.
+
+```ts
+const merged = Diff.patch(base, edited).reduce((value, patch) => patch.path.set(value, patch.value), latest);
 ```
 
 ### Change Triggering

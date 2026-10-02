@@ -1,8 +1,8 @@
 import { describe, test, expect } from 'vitest';
-import { AnyIndex, AnyProperty, Path, PathMatcher } from '@finnair/path';
-import { Diff } from './Diff.js';
+import { AnyIndex, AnyProperty, Path, PathMatcher, UnionMatcher } from '@finnair/path';
+import { parsePath } from '@finnair/path-parser';
+import { Change, Diff, DiffConfig } from './Diff.js';
 import { VersionInfo, VersionInfoConfig } from './VersionInfo.js';
-import { Change } from './DiffNode.js';
 
 describe('VersionInfo', () => {
   const a: any = Object.freeze({
@@ -212,10 +212,76 @@ describe('VersionInfo', () => {
     });
   });
 
+  test('many different string matchers', () => {
+    const version = new VersionInfo<any>({ a: 2 }, { a: 1 });
+    for (let i = 0; i < 1100; i++) {
+      expect(version.matches(`$.b${i}`)).toBe(false);
+    }
+    expect(version.matches('$.a')).toBe(true);
+  });
+
   test('property and index are different paths', () => {
     const version = new VersionInfo<any>({ a: ['new'] }, { a: { 0: 'old' } });
     expect(version.matches('$.a[0]')).toBe(true);
     expect(version.matches(PathMatcher.of('a', '0'))).toBe(true);
     expect(version.matches(PathMatcher.of('a', 1))).toBe(false);
+  });
+
+  describe('randomized', () => {
+    function random(seed: number) {
+      return () => {
+        seed = (seed + 0x6d2b79f5) | 0;
+        let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      };
+    }
+    const keys = ['a', 'b', '0'];
+
+    function value(rnd: () => number, depth: number): any {
+      const r = depth > 3 ? 0.5 + rnd() * 0.5 : rnd();
+      if (r < 0.3) {
+        const object: any = {};
+        keys.forEach(key => rnd() < 0.6 && (object[key] = value(rnd, depth + 1)));
+        return object;
+      }
+      if (r < 0.5) {
+        return Array.from({ length: Math.floor(rnd() * 3) }, () => value(rnd, depth + 1));
+      }
+      return [1, 'x', null, undefined][Math.floor(rnd() * 4)];
+    }
+
+    const matchers = [
+      PathMatcher.of(),
+      PathMatcher.of('a'),
+      PathMatcher.of(0),
+      PathMatcher.of(AnyProperty),
+      PathMatcher.of(AnyIndex, 'a'),
+      PathMatcher.of('a', AnyProperty, 'b'),
+      PathMatcher.of(UnionMatcher.of('a', 0), AnyProperty),
+      PathMatcher.of(AnyProperty, AnyProperty, AnyProperty),
+    ];
+    const configs: (DiffConfig | undefined)[] = [undefined, { includeObjects: true }, { filter: () => true }];
+
+    test('changes, paths, patch and matches are derived from the same changes', () => {
+      for (let seed = 1; seed <= 300; seed++) {
+        const rnd = random(seed);
+        const previous = value(rnd, 0);
+        const current = value(rnd, 0);
+        for (const diffConfig of configs) {
+          const version = new VersionInfo<any>(current, previous, { diffConfig });
+          const changedPaths = previous ? Array.from(Diff.changeset(previous, current, diffConfig).keys(), key => parsePath(key)) : [];
+          expect(version.patch).toEqual(Diff.patch(previous, current, diffConfig));
+          if (previous) {
+            expect(version.changes).toEqual(Diff.changeset(previous, current, diffConfig));
+            for (const matcher of matchers) {
+              expect(version.matches(matcher)).toBe(changedPaths.some(path => matcher.prefixMatch(path)));
+            }
+          } else {
+            expect(version.paths).toEqual(Diff.changedPaths(previous, current, diffConfig));
+          }
+        }
+      }
+    });
   });
 });
