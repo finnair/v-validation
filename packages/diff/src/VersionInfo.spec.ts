@@ -260,14 +260,6 @@ describe('VersionInfo', () => {
     });
   });
 
-  test('many different string matchers', () => {
-    const version = new VersionInfo<any>({ a: 2 }, { a: 1 });
-    for (let i = 0; i < 1100; i++) {
-      expect(version.matches(`$.b${i}`)).toBe(false);
-    }
-    expect(version.matches('$.a')).toBe(true);
-  });
-
   test('property and index are different paths', () => {
     const version = new VersionInfo<any>({ a: ['new'] }, { a: { 0: 'old' } });
     expect(version.matches('$.a[0]')).toBe(true);

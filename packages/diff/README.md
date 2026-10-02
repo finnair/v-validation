@@ -59,7 +59,7 @@ const merged = Diff.patch(base, edited).reduce((value, patch) => patch.path.set(
 
 ### Change Triggering
 
-`VersionInfo.matches` and `matchesAny` can be used to trigger functionality based on what has changed. Use `PathMatcher` to specify paths of interest. A matcher matches if it matches (a prefix of) any changed path, or any path of the first version.
+`VersionInfo.matches` and `matchesAny` can be used to trigger functionality based on what has changed. Use `PathMatcher` to specify paths of interest. A matcher matches if it matches (a prefix of) any changed path, or any path of the first version. String expressions are parsed on every call, so parse frequently used matchers once with `parsePathMatcher` and reuse them (e.g. use `V.memoize` for matchers from external input).
 
 ### Filtering
 

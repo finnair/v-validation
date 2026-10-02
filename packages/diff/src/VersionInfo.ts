@@ -13,9 +13,6 @@ export interface VersionInfoConfig {
 
 const NO_PREVIOUS_VALUES = Object.freeze({});
 
-const MATCHER_CACHE_SIZE = 1000;
-const matcherCache = new Map<string, PathMatcher>();
-
 export class VersionInfo<L> {
   /** Changes from previous to current, computed once: null if there are none */
   private _changeTree?: ChangeTree | null;
@@ -122,17 +119,6 @@ export class VersionInfo<L> {
     return this._changeTree ?? undefined;
   }
   private static toMatcher(pathExpression: string | PathMatcher): PathMatcher {
-    if (typeof pathExpression !== 'string') {
-      return pathExpression;
-    }
-    let matcher = matcherCache.get(pathExpression);
-    if (!matcher) {
-      matcher = parsePathMatcher(pathExpression);
-      if (matcherCache.size >= MATCHER_CACHE_SIZE) {
-        matcherCache.clear();
-      }
-      matcherCache.set(pathExpression, matcher);
-    }
-    return matcher;
+    return typeof pathExpression === 'string' ? parsePathMatcher(pathExpression) : pathExpression;
   }
 }
