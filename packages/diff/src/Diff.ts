@@ -1,4 +1,4 @@
-import { Node, Path, PathComponent, PathExpression, PathMatcher } from '@finnair/path';
+import { IndexMatcher, Node, Path, PathComponent, PathExpression, PathMatcher, PropertyMatcher } from '@finnair/path';
 
 export interface DiffFilter {
   (path: Path, value: any): boolean;
@@ -135,6 +135,14 @@ export function _matches(tree: ChangeTree | undefined, matcher: PathMatcher): bo
   return tree !== undefined && matchesBelow(tree, matcher.expressions, 0);
 }
 
+/**
+ * Internal: same as `_matches(_changeTree(true, oldValue, newValue, config), matcher)` for a primitive or undefined `oldValue`,
+ * but visits only the branches of `newValue` that `matcher` can match.
+ */
+export function _matchesAdded(oldValue: any, newValue: any, matcher: PathMatcher, config?: DiffConfig): boolean {
+  return new Walker(config).matchesAdded(oldValue, newValue, matcher.expressions);
+}
+
 function pathStringOf(node: ChangeTree, parentString: string) {
   return node.key === undefined ? '$' : parentString + Path.componentToString(node.key);
 }
@@ -205,8 +213,11 @@ export function arrayOrPlainObject(value: any): undefined | 'array' | 'object' {
   if (value && typeof value === 'object') {
     if (Array.isArray(value)) {
       return 'array';
-    } else if (value.constructor === Object) {
-      return 'object';
+    } else {
+      const proto = Object.getPrototypeOf(value);
+      if (proto === Object.prototype || proto === null) {
+        return 'object';
+      }
     }
   }
   return undefined;
@@ -279,6 +290,8 @@ class Walker {
     let children: ChangeTree[] | undefined;
     let child: ChangeTree | undefined;
     if (oldType === 'object') {
+      // NOTE: This is intentionally different from PathMatcher.AnyProperty by including only own enumerable string keys:
+      // a diff or patch should only describe what would actually be serialized or written.
       for (const key of Object.keys(oldValue)) {
         const inNew = newType === 'object' && Object.prototype.propertyIsEnumerable.call(newValue, key);
         if ((child = this.visit(path.property(key), key, true, oldValue[key], inNew, inNew ? newValue[key] : undefined))) {
@@ -310,6 +323,83 @@ class Walker {
       }
     }
     return children;
+  }
+
+  matchesAdded(oldValue: any, newValue: any, expressions: readonly PathExpression[]): boolean {
+    const newType = this.valueType(Path.ROOT, newValue);
+    if (expressions.length === 0) {
+      const oldType = this.valueType(Path.ROOT, oldValue);
+      const composite = isCompositeType(newType);
+      return (
+        (this.isChange(Path.ROOT, oldType, oldValue, newType, newValue) && (oldType === 'primitive' || newType === 'primitive' || (composite && this.includeObjects))) ||
+        (composite && this.hasAddedChildren(Path.ROOT, newType, newValue))
+      );
+    }
+    return this.addedMatches(Path.ROOT, newType, newValue, expressions, 0);
+  }
+
+  private addedMatches(path: Path, type: ValueType, value: any, expressions: readonly PathExpression[], depth: number): boolean {
+    if (depth === expressions.length) {
+      return this.hasAdded(path, type, value);
+    }
+    const expression = expressions[depth];
+    // Exact class checks, as subclasses may override test
+    const exactProperty = expression.constructor === PropertyMatcher;
+    const exactIndex = expression.constructor === IndexMatcher;
+    if (type === 'object') {
+      if (exactProperty) {
+        const key = (expression as PropertyMatcher).property;
+        return Object.prototype.propertyIsEnumerable.call(value, key) && this.addedChildMatches(path.property(key), value[key], expressions, depth + 1);
+      }
+      if (!exactIndex) {
+        for (const key of Object.keys(value)) {
+          if (expression.test(key) && this.addedChildMatches(path.property(key), value[key], expressions, depth + 1)) {
+            return true;
+          }
+        }
+      }
+    } else if (type === 'array') {
+      if (exactIndex) {
+        const index = (expression as IndexMatcher).index;
+        return index < value.length && this.addedChildMatches(path.index(index), value[index], expressions, depth + 1);
+      }
+      if (!exactProperty) {
+        for (let i = 0; i < value.length; i++) {
+          if (expression.test(i) && this.addedChildMatches(path.index(i), value[i], expressions, depth + 1)) {
+            return true;
+          }
+        }
+      }
+    }
+    return false;
+  }
+
+  private addedChildMatches(path: Path, value: any, expressions: readonly PathExpression[], depth: number): boolean {
+    return this.addedMatches(path, this.valueType(path, value), value, expressions, depth);
+  }
+
+  /** Whether an added value of `type` is or contains a scalar change */
+  private hasAdded(path: Path, type: ValueType, value: any): boolean {
+    return type === 'primitive' || (isCompositeType(type) && (this.includeObjects || this.hasAddedChildren(path, type, value)));
+  }
+
+  private hasAddedChildren(path: Path, type: 'object' | 'array', value: any): boolean {
+    if (type === 'object') {
+      for (const key of Object.keys(value)) {
+        const childPath = path.property(key);
+        if (this.hasAdded(childPath, this.valueType(childPath, value[key]), value[key])) {
+          return true;
+        }
+      }
+    } else {
+      for (let i = 0; i < value.length; i++) {
+        const childPath = path.index(i);
+        if (this.hasAdded(childPath, this.valueType(childPath, value[i]), value[i])) {
+          return true;
+        }
+      }
+    }
+    return false;
   }
 
   private isChange(path: Path, oldType: ValueType, oldValue: any, newType: ValueType, newValue: any): boolean {

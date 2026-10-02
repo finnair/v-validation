@@ -1,6 +1,6 @@
 import { PathMatcher } from '@finnair/path';
 import { parsePathMatcher } from '@finnair/path-parser';
-import { Change, Diff, DiffConfig, Patch, ChangeTree, _changedPaths, _changeset, _changeTree, _matches, _patch } from './Diff.js';
+import { Change, Diff, DiffConfig, Patch, ChangeTree, _changedPaths, _changeset, _changeTree, _matches, _matchesAdded, _patch } from './Diff.js';
 
 export interface VersionInfoConfig {
   /**
@@ -97,11 +97,11 @@ export class VersionInfo<L> {
   }
   matches(pathExpression: string | PathMatcher) {
     const matcher = VersionInfo.toMatcher(pathExpression);
-    if (this.previous) {
+    if (this.previous || this._changeTree !== undefined) {
       return _matches(this.changeTree, matcher);
-    } else {
-      return matcher.findFirst(this.current) !== undefined;
     }
+    // Unlike the change tree, doesn't detect unsupported values in branches that matcher doesn't reach
+    return _matchesAdded(this.previous, this.current, matcher, this.config.diffConfig);
   }
   matchesAny(pathExpressions: (string | PathMatcher)[]) {
     return pathExpressions.some((pathExpression) => this.matches(pathExpression));

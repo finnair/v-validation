@@ -1,7 +1,7 @@
 
 import { describe, test, expect } from 'vitest';
 import { Node, Path } from '@finnair/path';
-import { Change, Diff } from './Diff.js';
+import { Change, Diff, arrayOrPlainObject } from './Diff.js';
 
 describe('Diff', () => {
   const defaultDiff = new Diff();
@@ -73,6 +73,52 @@ describe('Diff', () => {
   test('only primitives, arrays and plain objects are supported', () => {
     expect(() => defaultDiff.allPaths(new Set([1]))).toThrow('only primitives, arrays and plain objects are supported, got "Set"')
   })
+
+  describe('plain objects', () => {
+    test('arrayOrPlainObject', () => {
+      expect(arrayOrPlainObject({})).toBe('object');
+      expect(arrayOrPlainObject(Object.create(null))).toBe('object');
+      expect(arrayOrPlainObject([])).toBe('array');
+      expect(arrayOrPlainObject(Object.create({ a: 1 }))).toBeUndefined();
+      expect(arrayOrPlainObject(new (class Foo {})())).toBeUndefined();
+      expect(arrayOrPlainObject(null)).toBeUndefined();
+      expect(arrayOrPlainObject('string')).toBeUndefined();
+    });
+
+    test('null prototype objects are supported', () => {
+      const oldValue = Object.assign(Object.create(null), { a: 1, b: Object.assign(Object.create(null), { c: 2 }) });
+      const newValue = Object.assign(Object.create(null), { a: 2, b: { c: 2, d: 3 } });
+      expect(defaultDiff.changeset(oldValue, newValue)).toEqual(new Map<string, Change>([
+        ['$.a', { path: Path.of('a'), oldValue: 1, newValue: 2 }],
+        ['$.b.d', { path: Path.of('b', 'd'), newValue: 3 }],
+      ]));
+      expect(defaultDiff.patch(oldValue, newValue)).toEqual([
+        { path: Path.of('a'), value: 2 },
+        { path: Path.of('b', 'd'), value: 3 },
+      ]);
+    });
+
+    test('inherited properties are not silently ignored', () => {
+      const inherited = Object.create({ a: 1 });
+      expect(() => defaultDiff.changeset({}, inherited)).toThrow('only primitives, arrays and plain objects are supported, got "Object"');
+      expect(() => defaultDiff.changeset({ nested: {} }, { nested: inherited })).toThrow('only primitives, arrays and plain objects are supported, got "Object"');
+    });
+
+    test('class instances are not supported', () => {
+      class Foo { a = 1 }
+      expect(() => defaultDiff.allPaths({ foo: new Foo() })).toThrow('only primitives, arrays and plain objects are supported, got "Foo"');
+    });
+
+    test('class instances are supported as custom primitives', () => {
+      class Foo { constructor(readonly a: number) {} }
+      const diff = new Diff({ isPrimitive: value => value instanceof Foo });
+      const oldFoo = new Foo(1);
+      const newFoo = new Foo(2);
+      expect(diff.changeset({ foo: oldFoo }, { foo: newFoo })).toEqual(new Map<string, Change>([
+        ['$.foo', { path: Path.of('foo'), oldValue: oldFoo, newValue: newFoo }],
+      ]));
+    });
+  });
   
   describe('nested object', () => {
     const oldObject = {

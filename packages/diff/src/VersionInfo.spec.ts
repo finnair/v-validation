@@ -191,6 +191,54 @@ describe('VersionInfo', () => {
     })
   })
 
+  test('null prototype objects', () => {
+    const version = new VersionInfo<any>(Object.assign(Object.create(null), { a: 2, b: 1 }), Object.assign(Object.create(null), { a: 1, b: 1 }));
+    expect(version.changedPaths).toEqual(new Set(['$.a']));
+    expect(version.matches('$.*')).toBe(true);
+    expect(version.matches('$.b')).toBe(false);
+  });
+
+  test('inherited properties are not silently ignored', () => {
+    const version = new VersionInfo<any>(Object.create({ a: 1 }), {});
+    expect(() => version.matches('$.*')).toThrow('only primitives, arrays and plain objects are supported, got "Object"');
+  });
+
+  describe('first version matches like later versions', () => {
+    test('inherited properties are not silently ignored', () => {
+      const version = new VersionInfo<any>(Object.create({ a: 1 }));
+      expect(() => version.matches('$.*')).toThrow('only primitives, arrays and plain objects are supported, got "Object"');
+    });
+
+    test('filtered values do not match', () => {
+      const version = new VersionInfo<any>({ _timestamp: new Date(), id: 1 }, undefined, config);
+      expect(version.matches('$._timestamp')).toBe(false);
+      expect(version.matches('$.id')).toBe(true);
+    });
+
+    test('undefined values do not match by default', () => {
+      expect(new VersionInfo<any>({ a: undefined }).matches('$.a')).toBe(false);
+      expect(new VersionInfo<any>({ a: undefined }, undefined, { diffConfig: { filter: () => true } }).matches('$.a')).toBe(true);
+    });
+
+    test('empty objects match only with includeObjects', () => {
+      expect(new VersionInfo<any>({ a: {} }).matches('$.a')).toBe(false);
+      expect(new VersionInfo<any>({ a: {} }, undefined, { diffConfig: { includeObjects: true } }).matches('$.a')).toBe(true);
+    });
+
+    test('unsupported values are detected only on matching branches', () => {
+      const current = { a: 1, b: new Set() };
+      expect(new VersionInfo<any>(current).matches('$.a')).toBe(true);
+      expect(() => new VersionInfo<any>(current).matches('$.b')).toThrow('only primitives, arrays and plain objects are supported, got "Set"');
+      expect(() => new VersionInfo<any>(current).paths).toThrow('only primitives, arrays and plain objects are supported, got "Set"');
+    });
+
+    test('custom primitives are not matched below', () => {
+      const version = new VersionInfo<any>({ date: new Date() }, undefined, { diffConfig: { isPrimitive: value => value instanceof Date } });
+      expect(version.matches('$.date')).toBe(true);
+      expect(version.matches('$.date.*')).toBe(false);
+    });
+  });
+
   describe('previousValues', () => {
     test('root', () => {
       expect(new VersionInfo<any>('new', 'old', { previousValues: [PathMatcher.of()] }).previousValues).toEqual('old');
@@ -270,15 +318,18 @@ describe('VersionInfo', () => {
         const current = value(rnd, 0);
         for (const diffConfig of configs) {
           const version = new VersionInfo<any>(current, previous, { diffConfig });
-          const changedPaths = previous ? Array.from(Diff.changeset(previous, current, diffConfig).keys(), key => parsePath(key)) : [];
           expect(version.patch).toEqual(Diff.patch(previous, current, diffConfig));
           if (previous) {
             expect(version.changes).toEqual(Diff.changeset(previous, current, diffConfig));
-            for (const matcher of matchers) {
-              expect(version.matches(matcher)).toBe(changedPaths.some(path => matcher.prefixMatch(path)));
-            }
           } else {
             expect(version.paths).toEqual(Diff.changedPaths(previous, current, diffConfig));
+          }
+          const paths = Array.from(version.paths, key => parsePath(key));
+          for (const matcher of matchers) {
+            const expected = paths.some(path => matcher.prefixMatch(path));
+            // Fresh version matches without the change tree when there is no previous version
+            expect(new VersionInfo<any>(current, previous, { diffConfig }).matches(matcher)).toBe(expected);
+            expect(version.matches(matcher)).toBe(expected);
           }
         }
       }
