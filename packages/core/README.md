@@ -940,6 +940,25 @@ const recent = V.memoize(Vluxon.dateTime(), {
 });
 ```
 
+Pass a `statsLogger` to analyze whether caching and its options help more than they hurt: a low hit
+ratio or frequent eviction means the cache costs more than it saves, and many `stale` entries or
+skipped results point at `cacheKeyFn`, `isStale` or `shouldCache`. `BasicMemoizeStatsLogger` counts
+the events and logs them every `every` lookups (default 1000), by default as a JSON row with
+`console.log`:
+
+```typescript
+const statsLogger = new BasicMemoizeStatsLogger({ every: 10000, name: 'leg' });
+const cachedLeg = V.memoize(V.frozen(leg), { cacheKeyFn: (value: any) => `${value.id}:${value.version}`, statsLogger });
+// {"name":"leg","lookups":10000,"hits":8700,"stale":300,"misses":1000,"stored":1250,"skipped":0,"failed":50,"evicted":950,"hitRatio":0.87}
+```
+
+Each window covers the lookups since the previous one. A window is logged when the next lookup
+starts, so call `statsLogger.flush()` to log a partial window, e.g. on shutdown. Use one logger per
+memoized validator. Pass `log: (stats: MemoizeStats) => ...` to log the counts some other way, e.g.
+with your own logger. For other metrics, implement `MemoizeStatsLogger`: each lookup is exactly one of `hit`,
+`stale` or `miss`, a successful result after `stale` or `miss` is either `store`d or `skip`ped (a
+failure reports nothing further), and `evict` follows a `store` that grew the cache past `maxSize`.
+
 Things to keep in mind:
 
 - **Only synchronous validators are supported.** An asynchronous result settles after validation
@@ -1324,7 +1343,7 @@ Unless otherwise stated, all validators require non-null and non-undefined value
 | whenGroup...otherwise   | group: GroupOrName, ...validators: Validator[]                   | Defines validation rules (`compositionOf`) to be executed for given `ValidatorOptions.group`.                                             |
 | json                    | ...validators: Validator[]                                       | Parse JSON input and validate it against given validators.                                                                                |
 | jsonValue               | ...allow: JsonValueType[]                                        | Accepts and clones a JSON value (`string`, `boolean`, `number`, `null`, `array`, `object`) whose root is one of `allow`; nested values may be any JSON value. All types when `allow` is empty. Returns a shared instance per combination. |
-| memoize                 | validator: Validator, options?: MemoizeValidatorOptions          | Caches a wrapped validator's successful results in a bounded cache (`maxSize`, `evictionPolicy`, `shouldCache`, `cacheKeyFn`, `isStale`). See [Memoization](#memoization). |
+| memoize                 | validator: Validator, options?: MemoizeValidatorOptions          | Caches a wrapped validator's successful results in a bounded cache (`maxSize`, `evictionPolicy`, `shouldCache`, `cacheKeyFn`, `isStale`, `statsLogger`). See [Memoization](#memoization). |
 | proxy                   | factory: () => Validator                                         | Defers validator construction to a factory, for e.g. self-reference. See [V.proxy](#proxy).  |
 | frozen                  | validator: Validator                                             | A view of `validator` whose subtree produces frozen output. See [Immutable Output](#frozen). |
 

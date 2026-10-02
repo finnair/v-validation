@@ -22,6 +22,27 @@ function optionsReplacer(_key: string, value: unknown) {
  */
 export type MemoizeEvictionPolicy = 'fifo' | 'lru';
 
+/**
+ * Receives the cache events of a {@link MemoizeValidator}, e.g. to count them. Each lookup is exactly
+ * one of `hit`, `stale` or `miss`. After a `stale` or `miss`, a successful result is either `store`d or
+ * `skip`ped, while a failure reports nothing further. `evict` follows a `store` that grew the cache
+ * past `maxSize`. Events are reported synchronously, so keep them cheap.
+ */
+export interface MemoizeStatsLogger {
+  /** A cached result was returned. */
+  hit(): void;
+  /** A cached result was discarded by `isStale`, and the input is validated. */
+  stale(): void;
+  /** Nothing was cached for the key, and the input is validated. */
+  miss(): void;
+  /** A successful result was stored in the cache. */
+  store(): void;
+  /** A successful result was not cached: it was `undefined` or rejected by `shouldCache`. */
+  skip(): void;
+  /** The oldest entry was evicted, as the cache was full. */
+  evict(): void;
+}
+
 export interface MemoizeValidatorOptions<Out = unknown, In = unknown, K=In> {
   /**
    * The `ValidatorOptions` this cache is valid for. Options can change what a validator produces -
@@ -99,6 +120,13 @@ export interface MemoizeValidatorOptions<Out = unknown, In = unknown, K=In> {
    * it cheap. Defaults to never stale.
    */
   readonly isStale?: (cached: Out, value: In) => boolean;
+
+  /**
+   * Receives cache events, to analyze whether caching and its options help: e.g. a low hit ratio or
+   * frequent eviction means the cache costs more than it saves. {@link BasicMemoizeStatsLogger} logs
+   * them periodically as JSON. Frozen and mutable caches report to the same logger.
+   */
+  readonly statsLogger?: MemoizeStatsLogger;
 }
 
 /**
@@ -146,6 +174,7 @@ export class MemoizeValidator<Out = unknown, In = unknown, K = In> extends Valid
   private readonly shouldCache?: (result: Out, value: In) => boolean;
   private readonly cacheKeyFn: (value: undefined | In) => K;
   private readonly isStale?: (cached: Out, value: In) => boolean;
+  readonly statsLogger?: MemoizeStatsLogger;
   /** True for `lru`; kept as a boolean so the hit path tests a flag rather than compares strings. */
   private readonly refreshOnHit: boolean;
   private readonly options?: ValidatorOptions;
@@ -166,6 +195,7 @@ export class MemoizeValidator<Out = unknown, In = unknown, K = In> extends Valid
     this.refreshOnHit = evictionPolicy === 'lru';
     this.shouldCache = options.shouldCache;
     this.cacheKeyFn = options.cacheKeyFn ?? ((input) => input as K);
+    this.statsLogger = options.statsLogger;
     this.isStale = options.isStale;
     if (validator.dependsOnFreezeContext()) {
       this.frozenCache = new MemoizeCache<K, Out>();
@@ -204,6 +234,7 @@ export class MemoizeValidator<Out = unknown, In = unknown, K = In> extends Valid
     const cached = cache.get(key);
     if (cached !== undefined) {
       if (this.isStale === undefined || !this.isStale(cached, value)) {
+        this.statsLogger?.hit();
         if (this.refreshOnHit) {
           cache.delete(key);
           cache.set(key, cached);
@@ -211,7 +242,10 @@ export class MemoizeValidator<Out = unknown, In = unknown, K = In> extends Valid
         return success(cached);
       }
       // A stale entry is not kept even if the new result fails or is not cached, and the new one is inserted as the newest
+      this.statsLogger?.stale();
       cache.delete(key);
+    } else {
+      this.statsLogger?.miss();
     }
     // `settled` records whether the wrapped validator has produced its outcome synchronously - via a
     // callback or by throwing. If it has not by the time the call returns, the validator is
@@ -229,10 +263,14 @@ export class MemoizeValidator<Out = unknown, In = unknown, K = In> extends Valid
           }
           settled = true;
           if (result !== undefined && (this.shouldCache === undefined || this.shouldCache(result, value))) {
+            this.statsLogger?.store();
             cache.set(key, result);
             if (cache.size > this.maxSize) {
+              this.statsLogger?.evict();
               cache.evictOldest();
             }
+          } else {
+            this.statsLogger?.skip();
           }
           success(result);
         },

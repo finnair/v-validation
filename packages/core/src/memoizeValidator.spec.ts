@@ -1,8 +1,9 @@
-import { describe, test, expect } from 'vitest';
+import { describe, test, expect, vi } from 'vitest';
 import { Path } from '@finnair/path';
 import { V } from './V.js';
 import { defaultViolations, Validator } from './validators.js';
-import { DEFAULT_MEMOIZE_MAX_SIZE } from './memoizeValidator.js';
+import { DEFAULT_MEMOIZE_MAX_SIZE, MemoizeStatsLogger } from './memoizeValidator.js';
+import { BasicMemoizeStatsLogger, MemoizeStats } from './basicMemoizeStatsLogger.js';
 import { Groups, ValidatorConfigurationError } from './validators.js';
 import { JsonValueValidator } from './jsonValue.js';
 
@@ -742,6 +743,135 @@ describe('MemoizeValidator', () => {
       expect(v2).not.toBe(v1);
       expect(Object.isFrozen(v2)).toBe(true);
       expect((memo as any).frozenCache.size).toBe(1);
+    });
+  });
+
+  describe('statsLogger', () => {
+    const recording = () => {
+      const events: string[] = [];
+      const logger: MemoizeStatsLogger = {
+        hit: () => events.push('hit'),
+        stale: () => events.push('stale'),
+        miss: () => events.push('miss'),
+        store: () => events.push('store'),
+        skip: () => events.push('skip'),
+        evict: () => events.push('evict'),
+      };
+      return { events, logger };
+    };
+    const memoized = (statsLogger: MemoizeStatsLogger) =>
+      V.memoize(
+        V.fn((value: any) => {
+          if (value.fail) {
+            throw new Error('invalid');
+          }
+          return value.undefined ? undefined : { id: value.id, version: value.version };
+        }),
+        {
+          maxSize: 1,
+          cacheKeyFn: (value: any) => value.id,
+          isStale: (cached: any, value: any) => cached.version !== value.version,
+          shouldCache: (_result, value: any) => !value.skip,
+          statsLogger,
+        },
+      );
+
+    test('reports each lookup and its outcome', async () => {
+      const { events, logger } = recording();
+      const memo = memoized(logger);
+
+      await memo.validate({ id: 'a', version: 1 });
+      expect(events).toEqual(['miss', 'store']);
+      await memo.validate({ id: 'a', version: 1 });
+      expect(events.slice(2)).toEqual(['hit']);
+      await memo.validate({ id: 'a', version: 2 });
+      expect(events.slice(3)).toEqual(['stale', 'store']);
+      await memo.validate({ id: 'b', version: 1 });
+      expect(events.slice(5)).toEqual(['miss', 'store', 'evict']);
+      await memo.validate({ id: 'c', skip: true });
+      expect(events.slice(8)).toEqual(['miss', 'skip']);
+      await memo.validate({ id: 'c', undefined: true });
+      expect(events.slice(10)).toEqual(['miss', 'skip']);
+      await memo.validate({ id: 'c', fail: true });
+      expect(events.slice(12)).toEqual(['miss']);
+    });
+
+    test('does not report a configuration error, which is not a lookup', async () => {
+      const { events, logger } = recording();
+      const memo = V.memoize(V.string(), { options: {}, statsLogger: logger });
+
+      await expect(memo.validate('x', { group: new Groups().define('g') })).rejects.toThrow(ValidatorConfigurationError);
+      expect(events).toEqual([]);
+    });
+
+    describe('BasicMemoizeStatsLogger', () => {
+      test('logs each window of `every` lookups', async () => {
+        const logged: MemoizeStats[] = [];
+        const memo = memoized(new BasicMemoizeStatsLogger({ every: 4, name: 'leg', log: stats => logged.push(stats) }));
+
+        await memo.validate({ id: 'a', version: 1 }); // miss, store
+        await memo.validate({ id: 'a', version: 1 }); // hit
+        await memo.validate({ id: 'a', version: 2 }); // stale, store
+        await memo.validate({ id: 'b', fail: true }); // miss, failed
+        expect(logged).toEqual([]);
+
+        await memo.validate({ id: 'a', version: 2 }); // hit, starts the next window
+        expect(logged).toEqual([
+          { name: 'leg', lookups: 4, hits: 1, stale: 1, misses: 2, stored: 2, skipped: 0, failed: 1, evicted: 0, hitRatio: 0.25 },
+        ]);
+      });
+
+      test('logs a JSON row with console.log by default', async () => {
+        const consoleLog = vi.spyOn(console, 'log').mockImplementation(() => {});
+        try {
+          const statsLogger = new BasicMemoizeStatsLogger();
+          const memo = memoized(statsLogger);
+
+          await memo.validate({ id: 'a', version: 1 });
+          await memo.validate({ id: 'b', version: 1 });
+          await memo.validate({ id: 'c', skip: true });
+          statsLogger.flush();
+
+          expect(consoleLog.mock.calls).toEqual([
+            ['{"lookups":3,"hits":0,"stale":0,"misses":3,"stored":2,"skipped":1,"failed":0,"evicted":1,"hitRatio":0}'],
+          ]);
+        } finally {
+          consoleLog.mockRestore();
+        }
+      });
+
+      test('flush logs a partial window and resets it', async () => {
+        const logged: MemoizeStats[] = [];
+        const statsLogger = new BasicMemoizeStatsLogger({ log: stats => logged.push(stats) });
+        const memo = memoized(statsLogger);
+
+        statsLogger.flush();
+        expect(logged).toEqual([]);
+
+        await memo.validate({ id: 'a', version: 1 });
+        statsLogger.flush();
+        statsLogger.flush();
+
+        expect(logged).toEqual([{ lookups: 1, hits: 0, stale: 0, misses: 1, stored: 1, skipped: 0, failed: 0, evicted: 0, hitRatio: 0 }]);
+      });
+
+      test('rounds hitRatio to four decimals', async () => {
+        const logged: MemoizeStats[] = [];
+        const statsLogger = new BasicMemoizeStatsLogger({ log: stats => logged.push(stats) });
+        const memo = memoized(statsLogger);
+
+        await memo.validate({ id: 'a', version: 1 });
+        await memo.validate({ id: 'a', version: 1 });
+        await memo.validate({ id: 'a', version: 1 });
+        statsLogger.flush();
+
+        expect(logged[0].hitRatio).toBe(0.6667);
+      });
+
+      test('rejects a non-positive or non-integer every', () => {
+        expect(() => new BasicMemoizeStatsLogger({ every: 0 })).toThrow('every must be an integer >= 1, got 0');
+        expect(() => new BasicMemoizeStatsLogger({ every: 1.5 })).toThrow();
+      });
     });
   });
 

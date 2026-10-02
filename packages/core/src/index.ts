@@ -1,6 +1,7 @@
 export * from './V.js';
 export * from './validators.js';
 export * from './memoizeValidator.js';
+export * from './basicMemoizeStatsLogger.js';
 export * from './proxyValidator.js';
 export * from './objectValidator.js';
 export * from './objectValidatorBuilder.js';
