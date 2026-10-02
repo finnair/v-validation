@@ -6,7 +6,7 @@
 
 `@finnair/diff` library offers paths and values (Map<Path, any>) based configurable object difference utility. Use `Diff` class to analyze differences of two objects, or `Versioninfo` to compare and transform two versions of the same object. 
 
-`Diff` supports only primitive, array and plain object values.
+`Diff` supports only primitive, array and plain object values. Plain objects are those with `Object.prototype` or `null` as prototype, and only their own enumerable properties are compared. Other values can be compared as primitives with the `isPrimitive` configuration.
 
 JSON serialization of `VersionInfo` offers nice representation of the new version (`current`) with `changedPaths` and configurable set of old values (`previous`). Old values are useful for example in cases where natural identifier of an object changes and the old identifier is needed for targeting an update. `VersionInfo` is great for change based triggers configurable by a [`PathMatcher`](../path/README.md).
 
@@ -26,11 +26,13 @@ npm install @finnair/diff
 
 ## New in Version 13
 
-* Diff and VersionInfo are 2-4x faster. Identical values (same reference) are not compared further, and `VersionInfo.matches` no longer parses changed paths.
+* Diff and VersionInfo are 2-4x faster. Identical values (same reference) are not compared further, and `VersionInfo` computes changes once for `changes`, `paths`, `patch` and `matches`, which no longer parses changed paths.
 * BREAKING CHANGE: `DiffNode` is removed. Use `Diff.patch` for patches, and `Diff.changeset` (with `includeObjects` if needed) for scalar changes. `VersionInfo.diffNode` is removed as well.
 * New `Diff.patch(oldValue, newValue)` returns the minimal set of patches that turns `oldValue` into `newValue` with `Path.set`, e.g. for applying a client's changes on top of a concurrently modified version, or for streaming changes to clients.
 * BREAKING CHANGE: Array holes are handled like `undefined` elements, as in JSON. This makes a difference only with a custom filter that accepts `undefined` values.
 * BREAKING CHANGE: `DiffNodeConfig` is merged into `DiffConfig`.
+* BREAKING CHANGE: Objects with a custom prototype (e.g. `Object.create(proto)`) are no longer treated as plain objects and throw an error, as their inherited properties would be ignored. Objects with `null` prototype are supported.
+* BREAKING CHANGE: Without a previous version, `VersionInfo.matches` follows the same rules as `paths` and as with a previous version: it matches if a matcher matches (a prefix of) any of the `paths`. Configured `filter`, `isPrimitive` and `includeObjects` apply, so e.g. `undefined` values (by default) and empty objects (without `includeObjects`) no longer match.
 
 ## Features
 
@@ -57,7 +59,7 @@ const merged = Diff.patch(base, edited).reduce((value, patch) => patch.path.set(
 
 ### Change Triggering
 
-`VersionInfo.matches` and `matchesAny` can be used to trigger functionality based on what has changed. Use `PathMatcher` to specify paths of interest. 
+`VersionInfo.matches` and `matchesAny` can be used to trigger functionality based on what has changed. Use `PathMatcher` to specify paths of interest. A matcher matches if it matches (a prefix of) any changed path, or any path of the first version.
 
 ### Filtering
 
