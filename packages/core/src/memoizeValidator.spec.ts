@@ -729,6 +729,30 @@ describe('MemoizeValidator', () => {
       expect(state.calls).toBe(5);
     });
 
+    test('drops the eviction cursor after maxSize replacements, and still evicts the oldest entry', async () => {
+      const { state, memo, cache } = latest({ maxSize: 3 });
+
+      await memo.validate({ id: 'a', version: 0 });
+      await memo.validate({ id: 'b', version: 0 });
+      await memo.validate({ id: 'c', version: 0 });
+      await memo.validate({ id: 'd', version: 0 }); // [b, c, d] - opens the cursor
+      expect(cache.evictCursor.it).toBeDefined();
+
+      // A parked cursor would pin every table the Map rehashes away from during these replacements.
+      for (let version = 1; version <= 3; version++) {
+        await memo.validate({ id: 'b', version });
+      }
+      expect(cache.evictCursor.it).toBeUndefined(); // [c, d, b]
+
+      await memo.validate({ id: 'e', version: 0 }); // [d, b, e] - 'c' evicted
+      expect(state.calls).toBe(8);
+      await memo.validate({ id: 'd', version: 0 });
+      await memo.validate({ id: 'b', version: 3 });
+      expect(state.calls).toBe(8);
+      await memo.validate({ id: 'c', version: 0 });
+      expect(state.calls).toBe(9);
+    });
+
     test('applies to the frozen cache too', async () => {
       const memo = V.memoize(V.object({ properties: { id: V.string(), version: V.number() } }), {
         cacheKeyFn: (value: any) => value.id,
