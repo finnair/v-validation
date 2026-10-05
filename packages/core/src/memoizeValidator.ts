@@ -167,7 +167,7 @@ export interface MemoizeValidatorOptions<Out = unknown, In = unknown, K=In> {
  * both contexts share one cache.
  */
 export class MemoizeValidator<Out = unknown, In = unknown, K = In> extends Validator<Out, In> {
-  private readonly cache = new MemoizeCache<K, Out>();
+  private readonly cache: MemoizeCache<K, Out>;
   /** The cache used under `V.frozen`: the same map as `cache` unless the output depends on it. */
   private readonly frozenCache: MemoizeCache<K, Out>;
   readonly maxSize: number;
@@ -188,6 +188,7 @@ export class MemoizeValidator<Out = unknown, In = unknown, K = In> extends Valid
     if (!Number.isInteger(this.maxSize) || this.maxSize < 1) {
       throw new Error(`maxSize must be an integer >= 1, got ${this.maxSize}`);
     }
+    this.cache = new MemoizeCache<K, Out>(this.maxSize);
     const evictionPolicy = options.evictionPolicy ?? 'fifo';
     if (evictionPolicy !== 'fifo' && evictionPolicy !== 'lru') {
       throw new Error(`evictionPolicy must be 'fifo' or 'lru', got ${evictionPolicy}`);
@@ -198,7 +199,7 @@ export class MemoizeValidator<Out = unknown, In = unknown, K = In> extends Valid
     this.statsLogger = options.statsLogger;
     this.isStale = options.isStale;
     if (validator.dependsOnFreezeContext()) {
-      this.frozenCache = new MemoizeCache<K, Out>();
+      this.frozenCache = new MemoizeCache<K, Out>(this.maxSize);
     } else {
       this.frozenCache = this.cache;
     }
@@ -304,11 +305,6 @@ export class MemoizeValidator<Out = unknown, In = unknown, K = In> extends Valid
   /**
    * Empties the cache. Useful in tests, where a validator is usually built once and shared between
    * cases, and for discarding results whose inputs are no longer the source of truth.
-   *
-   * The eviction cursor is replaced rather than left alone: a `Map` iterator that was live when
-   * `clear` ran is permanently exhausted, and would not see the entries added afterwards. The
-   * fallback in {@link evictOldest} would recover from that, but replacing the cursor here keeps
-   * its invariant - every live key sits at or after it - true at all times.
    */
   resetCache(): void {
     this.cache.clear();
@@ -344,10 +340,15 @@ class MemoizeCache<K, V> {
    * entries deleted by earlier evictions, which makes a fresh iterator per eviction cost
    * O(deleted) and the eviction path degrade with `maxSize`. Held in a mutable box because the
    * instance itself is frozen.
+   *
+   * A live iterator pins every table the `Map` has rehashed away from since its last `next()`,
+   * including the values in them. Evictions advance it, but the deletes of stale replaces and `lru`
+   * hits do not, so the cursor is dropped after `maxSize` of those and reopened lazily on the next
+   * eviction - one scan over the leading holes per `maxSize` deletes.
    */
-  private readonly evictCursor = { it: this.cache.keys() };
+  private readonly evictCursor: { it?: Iterator<K>; deletes: number } = { deletes: 0 };
 
-  constructor() {
+  constructor(private readonly maxSize: number) {
     Object.freeze(this);
   }
 
@@ -365,11 +366,19 @@ class MemoizeCache<K, V> {
 
   delete(key: K): void {
     this.cache.delete(key);
+    if (++this.evictCursor.deletes >= this.maxSize) {
+      this.dropCursor();
+    }
   }
 
   clear(): void {
     this.cache.clear();
-    this.evictCursor.it = this.cache.keys();
+    this.dropCursor();
+  }
+
+  private dropCursor(): void {
+    this.evictCursor.it = undefined;
+    this.evictCursor.deletes = 0;
   }
 
   /**
@@ -380,7 +389,7 @@ class MemoizeCache<K, V> {
    * then restarts from the oldest key.
    */
   evictOldest(): void {
-    let next = this.evictCursor.it.next();
+    let next = (this.evictCursor.it ??= this.cache.keys()).next();
     if (next.done) {
       this.evictCursor.it = this.cache.keys();
       next = this.evictCursor.it.next();
