@@ -3,6 +3,10 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [13.0.1](https://github.com/finnair/v-validation/compare/v13.0.0...v13.0.1) (2026-10-05)
+
+**Note:** Version bump only for package @finnair/diff
+
 # [13.0.0](https://github.com/finnair/v-validation/compare/v12.3.0...v13.0.0) (2026-10-05)
 
 - perf(diff)!: faster Diff and VersionInfo, Diff.patch replaces DiffNode (#158) ([08308f2](https://github.com/finnair/v-validation/commit/08308f29c9a0dc3a555816aa2cac4ba44109b69d)), closes [#158](https://github.com/finnair/v-validation/issues/158)

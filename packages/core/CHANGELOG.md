@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [13.0.1](https://github.com/finnair/v-validation/compare/v13.0.0...v13.0.1) (2026-10-05)
+
+### Bug Fixes
+
+- **core:** stop memoize eviction cursor from retaining replaced values ([#160](https://github.com/finnair/v-validation/issues/160)) ([727656c](https://github.com/finnair/v-validation/commit/727656c721450dedaec47eb064825c82e52a957c))
+
 # [13.0.0](https://github.com/finnair/v-validation/compare/v12.3.0...v13.0.0) (2026-10-05)
 
 - feat(path)!: single-pass Projection, JSON-typed paths and matchers, JSON.stringify compatible jsonClone (#157) ([bee1116](https://github.com/finnair/v-validation/commit/bee11169c65f7421f4232ccaf93214c5151e2264)), closes [#157](https://github.com/finnair/v-validation/issues/157)
