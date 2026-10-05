@@ -1,8 +1,9 @@
-import { describe, test, expect } from 'vitest';
+import { describe, test, expect, vi } from 'vitest';
 import { Path } from '@finnair/path';
 import { V } from './V.js';
 import { defaultViolations, Validator } from './validators.js';
-import { DEFAULT_MEMOIZE_MAX_SIZE } from './memoizeValidator.js';
+import { DEFAULT_MEMOIZE_MAX_SIZE, MemoizeStatsLogger } from './memoizeValidator.js';
+import { BasicMemoizeStatsLogger, MemoizeStats } from './basicMemoizeStatsLogger.js';
 import { Groups, ValidatorConfigurationError } from './validators.js';
 import { JsonValueValidator } from './jsonValue.js';
 
@@ -614,6 +615,277 @@ describe('MemoizeValidator', () => {
 
       const result = (await memo.validate('x')).getValue();
       expect(seen).toEqual([[result, 'x']]);
+    });
+  });
+
+  describe('isStale', () => {
+    // The motivating case: keep only the latest version of each object.
+    const latest = (options: Parameters<typeof V.memoize>[1] = {}) => {
+      const state = { calls: 0 };
+      const memo = V.memoize(
+        V.fn((value: any) => {
+          state.calls++;
+          if (value.fail) {
+            throw new Error('invalid');
+          }
+          return { id: value.id, version: value.version };
+        }),
+        {
+          cacheKeyFn: (value: any) => value.id,
+          isStale: (cached: any, value: any) => cached.version !== value.version,
+          ...options,
+        },
+      );
+      return { state, memo, cache: (memo as any).cache };
+    };
+
+    test('serves a cached result that is not stale', async () => {
+      const { state, memo } = latest();
+
+      const first = (await memo.validate({ id: 'a', version: 1 })).getValue();
+      const second = (await memo.validate({ id: 'a', version: 1 })).getValue();
+
+      expect(state.calls).toBe(1);
+      expect(second).toBe(first);
+    });
+
+    test('re-validates a stale result and replaces it, so only the latest version is cached', async () => {
+      const { state, memo, cache } = latest();
+
+      await memo.validate({ id: 'a', version: 1 });
+      const v2 = (await memo.validate({ id: 'a', version: 2 })).getValue();
+      expect(state.calls).toBe(2);
+      expect(cache.size).toBe(1);
+
+      expect((await memo.validate({ id: 'a', version: 2 })).getValue()).toBe(v2);
+      expect(state.calls).toBe(2);
+    });
+
+    test('an older version replaces a newer one: isStale must keep only a correct result', async () => {
+      const { state, memo } = latest();
+
+      await memo.validate({ id: 'a', version: 2 });
+      expect((await memo.validate({ id: 'a', version: 1 })).getValue()).toEqual({ id: 'a', version: 1 });
+      await memo.validate({ id: 'a', version: 2 });
+      expect(state.calls).toBe(3);
+    });
+
+    test('receives the cached result and the raw input, only on a hit', async () => {
+      const seen: Array<[unknown, unknown]> = [];
+      const memo = V.memoize(
+        V.fn((value: any) => ({ converted: value.id })),
+        {
+          cacheKeyFn: (value: any) => value.id,
+          isStale: (cached, value) => {
+            seen.push([cached, value]);
+            return false;
+          },
+        },
+      );
+
+      const first = { id: 'a' };
+      const second = { id: 'a' };
+      const result = (await memo.validate(first)).getValue();
+      expect(seen).toEqual([]);
+
+      await memo.validate(second);
+      expect(seen).toHaveLength(1);
+      expect(seen[0][0]).toBe(result);
+      expect(seen[0][1]).toBe(second);
+    });
+
+    test('discards a stale entry when re-validation fails', async () => {
+      const { state, memo, cache } = latest();
+
+      await memo.validate({ id: 'a', version: 1 });
+      expect((await memo.validate({ id: 'a', version: 2, fail: true })).isSuccess()).toBe(false);
+      expect(cache.size).toBe(0);
+
+      await memo.validate({ id: 'a', version: 1 });
+      expect(state.calls).toBe(3);
+    });
+
+    test('discards a stale entry when shouldCache rejects the new result', async () => {
+      const { memo, cache } = latest({ shouldCache: (result: any) => result.version < 2 });
+
+      await memo.validate({ id: 'a', version: 1 });
+      await memo.validate({ id: 'a', version: 2 });
+
+      expect(cache.size).toBe(0);
+    });
+
+    test('a replaced entry is the newest for fifo eviction', async () => {
+      const { state, memo } = latest({ maxSize: 2 });
+
+      await memo.validate({ id: 'a', version: 1 }); // [a]
+      await memo.validate({ id: 'b', version: 1 }); // [a, b]
+      await memo.validate({ id: 'a', version: 2 }); // [b, a]
+      await memo.validate({ id: 'c', version: 1 }); // [a, c] - 'b' evicted
+      expect(state.calls).toBe(4);
+
+      await memo.validate({ id: 'a', version: 2 });
+      expect(state.calls).toBe(4);
+      await memo.validate({ id: 'b', version: 1 });
+      expect(state.calls).toBe(5);
+    });
+
+    test('applies to the frozen cache too', async () => {
+      const memo = V.memoize(V.object({ properties: { id: V.string(), version: V.number() } }), {
+        cacheKeyFn: (value: any) => value.id,
+        isStale: (cached: any, value: any) => cached.version !== value.version,
+      });
+      const frozen = V.frozen(memo);
+
+      const v1 = await frozen.getValid({ id: 'a', version: 1 });
+      const v2 = await frozen.getValid({ id: 'a', version: 2 });
+
+      expect(v2).toEqual({ id: 'a', version: 2 });
+      expect(v2).not.toBe(v1);
+      expect(Object.isFrozen(v2)).toBe(true);
+      expect((memo as any).frozenCache.size).toBe(1);
+    });
+  });
+
+  describe('statsLogger', () => {
+    const recording = () => {
+      const events: string[] = [];
+      const logger: MemoizeStatsLogger = {
+        hit: () => events.push('hit'),
+        stale: () => events.push('stale'),
+        miss: () => events.push('miss'),
+        store: () => events.push('store'),
+        skip: () => events.push('skip'),
+        evict: () => events.push('evict'),
+      };
+      return { events, logger };
+    };
+    const memoized = (statsLogger: MemoizeStatsLogger) =>
+      V.memoize(
+        V.fn((value: any) => {
+          if (value.fail) {
+            throw new Error('invalid');
+          }
+          return value.undefined ? undefined : { id: value.id, version: value.version };
+        }),
+        {
+          maxSize: 1,
+          cacheKeyFn: (value: any) => value.id,
+          isStale: (cached: any, value: any) => cached.version !== value.version,
+          shouldCache: (_result, value: any) => !value.skip,
+          statsLogger,
+        },
+      );
+
+    test('reports each lookup and its outcome', async () => {
+      const { events, logger } = recording();
+      const memo = memoized(logger);
+
+      await memo.validate({ id: 'a', version: 1 });
+      expect(events).toEqual(['miss', 'store']);
+      await memo.validate({ id: 'a', version: 1 });
+      expect(events.slice(2)).toEqual(['hit']);
+      await memo.validate({ id: 'a', version: 2 });
+      expect(events.slice(3)).toEqual(['stale', 'store']);
+      await memo.validate({ id: 'b', version: 1 });
+      expect(events.slice(5)).toEqual(['miss', 'store', 'evict']);
+      await memo.validate({ id: 'c', skip: true });
+      expect(events.slice(8)).toEqual(['miss', 'skip']);
+      await memo.validate({ id: 'c', undefined: true });
+      expect(events.slice(10)).toEqual(['miss', 'skip']);
+      await memo.validate({ id: 'c', fail: true });
+      expect(events.slice(12)).toEqual(['miss']);
+    });
+
+    test('does not report a configuration error, which is not a lookup', async () => {
+      const { events, logger } = recording();
+      const memo = V.memoize(V.string(), { options: {}, statsLogger: logger });
+
+      await expect(memo.validate('x', { group: new Groups().define('g') })).rejects.toThrow(ValidatorConfigurationError);
+      expect(events).toEqual([]);
+    });
+
+    describe('BasicMemoizeStatsLogger', () => {
+      test('logs each window of `every` lookups', async () => {
+        const logged: MemoizeStats[] = [];
+        const memo = memoized(new BasicMemoizeStatsLogger({ every: 4, name: 'leg', log: stats => logged.push(stats) }));
+
+        await memo.validate({ id: 'a', version: 1 }); // miss, store
+        await memo.validate({ id: 'a', version: 1 }); // hit
+        await memo.validate({ id: 'a', version: 2 }); // stale, store
+        await memo.validate({ id: 'b', fail: true }); // miss, failed
+        expect(logged).toEqual([]);
+
+        await memo.validate({ id: 'a', version: 2 }); // hit, starts the next window
+        expect(logged).toEqual([
+          { name: 'leg', lookups: 4, hits: 1, stale: 1, misses: 2, stored: 2, skipped: 0, failed: 1, evicted: 0, hitRatio: 0.25 },
+        ]);
+      });
+
+      test('a logged window is not changed by later lookups', async () => {
+        const logged: MemoizeStats[] = [];
+        const memo = memoized(new BasicMemoizeStatsLogger({ every: 1, log: stats => logged.push(stats) }));
+
+        await memo.validate({ id: 'a', version: 1 });
+        await memo.validate({ id: 'a', version: 1 });
+        await memo.validate({ id: 'a', version: 1 });
+
+        expect(logged).toEqual([
+          { lookups: 1, hits: 0, stale: 0, misses: 1, stored: 1, skipped: 0, failed: 0, evicted: 0, hitRatio: 0 },
+          { lookups: 1, hits: 1, stale: 0, misses: 0, stored: 0, skipped: 0, failed: 0, evicted: 0, hitRatio: 1 },
+        ]);
+      });
+
+      test('logs a JSON row with console.log by default', async () => {
+        const consoleLog = vi.spyOn(console, 'log').mockImplementation(() => {});
+        try {
+          const statsLogger = new BasicMemoizeStatsLogger();
+          const memo = memoized(statsLogger);
+
+          await memo.validate({ id: 'a', version: 1 });
+          await memo.validate({ id: 'b', version: 1 });
+          await memo.validate({ id: 'c', skip: true });
+          statsLogger.flush();
+
+          expect(consoleLog.mock.calls).toEqual([
+            ['{"lookups":3,"hits":0,"stale":0,"misses":3,"stored":2,"skipped":1,"failed":0,"evicted":1,"hitRatio":0}'],
+          ]);
+        } finally {
+          consoleLog.mockRestore();
+        }
+      });
+
+      test('flush logs a partial window and resets it', async () => {
+        const logged: MemoizeStats[] = [];
+        const statsLogger = new BasicMemoizeStatsLogger({ log: stats => logged.push(stats) });
+        const memo = memoized(statsLogger);
+
+        statsLogger.flush();
+        expect(logged).toEqual([]);
+
+        await memo.validate({ id: 'a', version: 1 });
+        statsLogger.flush();
+        statsLogger.flush();
+
+        expect(logged).toEqual([{ lookups: 1, hits: 0, stale: 0, misses: 1, stored: 1, skipped: 0, failed: 0, evicted: 0, hitRatio: 0 }]);
+      });
+
+      test('rounds hitRatio to four decimals', async () => {
+        const logged: MemoizeStats[] = [];
+        const statsLogger = new BasicMemoizeStatsLogger({ log: stats => logged.push(stats) });
+        const memo = memoized(statsLogger);
+
+        await memo.validate({ id: 'a', version: 1 });
+        await memo.validate({ id: 'a', version: 1 });
+        await memo.validate({ id: 'a', version: 1 });
+        statsLogger.flush();
+
+        expect(logged[0].hitRatio).toBe(0.6667);
+      });
+
+      test('rejects a non-positive or non-integer every', () => {
+        expect(() => new BasicMemoizeStatsLogger({ every: 0 })).toThrow('every must be an integer >= 1, got 0');
+        expect(() => new BasicMemoizeStatsLogger({ every: 1.5 })).toThrow();
+      });
     });
   });
 

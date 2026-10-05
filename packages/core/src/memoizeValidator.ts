@@ -22,6 +22,27 @@ function optionsReplacer(_key: string, value: unknown) {
  */
 export type MemoizeEvictionPolicy = 'fifo' | 'lru';
 
+/**
+ * Receives the cache events of a {@link MemoizeValidator}, e.g. to count them. Each lookup is exactly
+ * one of `hit`, `stale` or `miss`. After a `stale` or `miss`, a successful result is either `store`d or
+ * `skip`ped, while a failure reports nothing further. `evict` follows a `store` that grew the cache
+ * past `maxSize`. Events are reported synchronously, so keep them cheap.
+ */
+export interface MemoizeStatsLogger {
+  /** A cached result was returned. */
+  hit(): void;
+  /** A cached result was discarded by `isStale`, and the input is validated. */
+  stale(): void;
+  /** Nothing was cached for the key, and the input is validated. */
+  miss(): void;
+  /** A successful result was stored in the cache. */
+  store(): void;
+  /** A successful result was not cached: it was `undefined` or rejected by `shouldCache`. */
+  skip(): void;
+  /** The oldest entry was evicted, as the cache was full. */
+  evict(): void;
+}
+
 export interface MemoizeValidatorOptions<Out = unknown, In = unknown, K=In> {
   /**
    * The `ValidatorOptions` this cache is valid for. Options can change what a validator produces -
@@ -81,6 +102,31 @@ export interface MemoizeValidatorOptions<Out = unknown, In = unknown, K=In> {
    * cached. It runs on every validation, hit or miss, so keep it cheap.
    */
   readonly cacheKeyFn?: (value: undefined | In) => K;
+
+  /**
+   * Checks on a cache hit whether the `cached` result is stale for the raw input `value`. Returning
+   * `true` discards the entry and re-validates the input, caching the new result under the same key.
+   * Together with `cacheKeyFn` this keeps only the latest version of an object:
+   *
+   * ```ts
+   * V.memoize(leg, {
+   *   cacheKeyFn: (value: any) => value.id,
+   *   isStale: (cached, value: any) => cached.version !== value.version,
+   * })
+   * ```
+   *
+   * Return `false` only if `cached` is the correct result for `value`: e.g. keeping a newer cached
+   * version for an older input would return the newer version. It runs on every cache hit, so keep
+   * it cheap. Defaults to never stale.
+   */
+  readonly isStale?: (cached: Out, value: In) => boolean;
+
+  /**
+   * Receives cache events, to analyze whether caching and its options help: e.g. a low hit ratio or
+   * frequent eviction means the cache costs more than it saves. {@link BasicMemoizeStatsLogger} logs
+   * them periodically as JSON. Frozen and mutable caches report to the same logger.
+   */
+  readonly statsLogger?: MemoizeStatsLogger;
 }
 
 /**
@@ -104,9 +150,11 @@ export interface MemoizeValidatorOptions<Out = unknown, In = unknown, K=In> {
  * Only successes are cached: a failure's violations carry the `path` at which the value appeared, so
  * replaying them elsewhere would report the wrong path, and the input might yet be valid in another
  * position. An optional `shouldCache` predicate can further exclude successful results from the
- * cache (e.g. outliers), so that rare values do not evict common ones. Memoization assumes the
- * wrapped validator is a pure function of its cache key - a validator whose result depends on the
- * active group or on `ValidatorOptions` should pin them with `options`, since neither is part of the key.
+ * cache (e.g. outliers), so that rare values do not evict common ones. An optional `isStale` check
+ * discards a cached result that no longer applies to the input, e.g. an older version of an object.
+ * Memoization assumes the wrapped validator is a pure function of its cache key - a validator whose
+ * result depends on the active group or on `ValidatorOptions` should pin them with `options`, since
+ * neither is part of the key.
  *
  * Only synchronous validators are supported. An asynchronous result settles after `validatePathV2`
  * returns, with no guarantee of when - or whether - the value becomes available, so it cannot be
@@ -125,6 +173,8 @@ export class MemoizeValidator<Out = unknown, In = unknown, K = In> extends Valid
   readonly maxSize: number;
   private readonly shouldCache?: (result: Out, value: In) => boolean;
   private readonly cacheKeyFn: (value: undefined | In) => K;
+  private readonly isStale?: (cached: Out, value: In) => boolean;
+  readonly statsLogger?: MemoizeStatsLogger;
   /** True for `lru`; kept as a boolean so the hit path tests a flag rather than compares strings. */
   private readonly refreshOnHit: boolean;
   private readonly options?: ValidatorOptions;
@@ -145,6 +195,8 @@ export class MemoizeValidator<Out = unknown, In = unknown, K = In> extends Valid
     this.refreshOnHit = evictionPolicy === 'lru';
     this.shouldCache = options.shouldCache;
     this.cacheKeyFn = options.cacheKeyFn ?? ((input) => input as K);
+    this.statsLogger = options.statsLogger;
+    this.isStale = options.isStale;
     if (validator.dependsOnFreezeContext()) {
       this.frozenCache = new MemoizeCache<K, Out>();
     } else {
@@ -181,11 +233,19 @@ export class MemoizeValidator<Out = unknown, In = unknown, K = In> extends Valid
     // An `undefined` result is never cached, so a plain `get` distinguishes a hit from a miss.
     const cached = cache.get(key);
     if (cached !== undefined) {
-      if (this.refreshOnHit) {
-        cache.delete(key);
-        cache.set(key, cached);
+      if (this.isStale === undefined || !this.isStale(cached, value)) {
+        this.statsLogger?.hit();
+        if (this.refreshOnHit) {
+          cache.delete(key);
+          cache.set(key, cached);
+        }
+        return success(cached);
       }
-      return success(cached);
+      // A stale entry is not kept even if the new result fails or is not cached, and the new one is inserted as the newest
+      this.statsLogger?.stale();
+      cache.delete(key);
+    } else {
+      this.statsLogger?.miss();
     }
     // `settled` records whether the wrapped validator has produced its outcome synchronously - via a
     // callback or by throwing. If it has not by the time the call returns, the validator is
@@ -203,10 +263,14 @@ export class MemoizeValidator<Out = unknown, In = unknown, K = In> extends Valid
           }
           settled = true;
           if (result !== undefined && (this.shouldCache === undefined || this.shouldCache(result, value))) {
+            this.statsLogger?.store();
             cache.set(key, result);
             if (cache.size > this.maxSize) {
+              this.statsLogger?.evict();
               cache.evictOldest();
             }
+          } else {
+            this.statsLogger?.skip();
           }
           success(result);
         },
