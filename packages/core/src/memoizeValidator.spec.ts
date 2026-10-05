@@ -821,6 +821,20 @@ describe('MemoizeValidator', () => {
         ]);
       });
 
+      test('a logged window is not changed by later lookups', async () => {
+        const logged: MemoizeStats[] = [];
+        const memo = memoized(new BasicMemoizeStatsLogger({ every: 1, log: stats => logged.push(stats) }));
+
+        await memo.validate({ id: 'a', version: 1 });
+        await memo.validate({ id: 'a', version: 1 });
+        await memo.validate({ id: 'a', version: 1 });
+
+        expect(logged).toEqual([
+          { lookups: 1, hits: 0, stale: 0, misses: 1, stored: 1, skipped: 0, failed: 0, evicted: 0, hitRatio: 0 },
+          { lookups: 1, hits: 1, stale: 0, misses: 0, stored: 0, skipped: 0, failed: 0, evicted: 0, hitRatio: 1 },
+        ]);
+      });
+
       test('logs a JSON row with console.log by default', async () => {
         const consoleLog = vi.spyOn(console, 'log').mockImplementation(() => {});
         try {

@@ -45,13 +45,7 @@ export class BasicMemoizeStatsLogger implements MemoizeStatsLogger {
   private readonly every: number;
   private readonly name?: string;
   private readonly log: (stats: MemoizeStats) => void;
-  private lookups = 0;
-  private hits = 0;
-  private stales = 0;
-  private misses = 0;
-  private stored = 0;
-  private skipped = 0;
-  private evicted = 0;
+  private stats: MutableStats;
 
   constructor(options: BasicMemoizeStatsLoggerOptions = {}) {
     this.every = options.every ?? 1000;
@@ -60,60 +54,59 @@ export class BasicMemoizeStatsLogger implements MemoizeStatsLogger {
     }
     this.name = options.name;
     this.log = options.log ?? logJson;
+    this.stats = this.newStats();
   }
 
   hit(): void {
     this.lookup();
-    this.hits++;
+    this.stats.hits++;
   }
 
   stale(): void {
     this.lookup();
-    this.stales++;
+    this.stats.stale++;
   }
 
   miss(): void {
     this.lookup();
-    this.misses++;
+    this.stats.misses++;
   }
 
   store(): void {
-    this.stored++;
+    this.stats.stored++;
   }
 
   skip(): void {
-    this.skipped++;
+    this.stats.skipped++;
   }
 
   evict(): void {
-    this.evicted++;
+    this.stats.evicted++;
   }
 
   /** Logs and resets the current window, unless it is empty. */
   flush(): void {
-    if (this.lookups === 0) {
+    const stats = this.stats;
+    if (stats.lookups === 0) {
       return;
     }
-    const stats: MemoizeStats = {
-      name: this.name,
-      lookups: this.lookups,
-      hits: this.hits,
-      stale: this.stales,
-      misses: this.misses,
-      stored: this.stored,
-      skipped: this.skipped,
-      failed: this.stales + this.misses - this.stored - this.skipped,
-      evicted: this.evicted,
-      hitRatio: Math.round((this.hits / this.lookups) * 10000) / 10000,
-    };
-    this.lookups = this.hits = this.stales = this.misses = this.stored = this.skipped = this.evicted = 0;
+    stats.failed = stats.stale + stats.misses - stats.stored - stats.skipped;
+    stats.hitRatio = Math.round((stats.hits / stats.lookups) * 10000) / 10000;
+    this.stats = this.newStats();
     this.log(stats);
   }
 
   private lookup() {
-    if (this.lookups >= this.every) {
+    if (this.stats.lookups >= this.every) {
       this.flush();
     }
-    this.lookups++;
+    this.stats.lookups++;
+  }
+
+  /** All fields are created up front, so that the object's shape never changes. */
+  private newStats(): MutableStats {
+    return { name: this.name, lookups: 0, hits: 0, stale: 0, misses: 0, stored: 0, skipped: 0, failed: 0, evicted: 0, hitRatio: 0 };
   }
 }
+
+type MutableStats = { -readonly [P in keyof MemoizeStats]: MemoizeStats[P] };
