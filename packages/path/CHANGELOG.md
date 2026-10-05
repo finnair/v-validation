@@ -3,6 +3,34 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [13.0.0](https://github.com/finnair/v-validation/compare/v12.3.0...v13.0.0) (2026-10-05)
+
+- perf(diff)!: faster Diff and VersionInfo, Diff.patch replaces DiffNode (#158) ([08308f2](https://github.com/finnair/v-validation/commit/08308f29c9a0dc3a555816aa2cac4ba44109b69d)), closes [#158](https://github.com/finnair/v-validation/issues/158)
+- feat(path)!: single-pass Projection, JSON-typed paths and matchers, JSON.stringify compatible jsonClone (#157) ([bee1116](https://github.com/finnair/v-validation/commit/bee11169c65f7421f4232ccaf93214c5151e2264)), closes [#157](https://github.com/finnair/v-validation/issues/157)
+
+### BREAKING CHANGES
+
+- DiffNode and VersionInfo.diffNode are removed; use
+  Diff.patch and Diff.changeset instead. DiffNodeConfig is merged into
+  DiffConfig.
+- Array holes are handled like undefined elements.
+- Objects with a custom prototype throw "only primitives,
+  arrays and plain objects are supported".
+- Without a previous version, VersionInfo.matches applies
+  filter, isPrimitive and includeObjects and matches only own properties, so
+  e.g. undefined values (by default) and empty objects (without
+  includeObjects) no longer match.
+- Built-in path expressions (PropertyMatcher, IndexMatcher,
+  AnyIndex, AnyProperty) are frozen, so subclasses can't add fields.
+- PathMatchers, Path.get/set/unset and Path.equals/startsWith follow JSON types strictly: string
+  components access only objects and numeric components only arrays. Path.set may replace the root, so its return value
+  must be used. Property matchers match own and inherited enumerable properties, no longer own non-enumerable ones.
+  jsonClone and Projection clone only own enumerable properties, convert NaN and Infinity to null, unwrap boxed
+  primitives, and throw a TypeError for circular structures and for input without a JSON representation. Projection
+  reads always paths from the JSON clone, doesn't apply toJSON, the replacer or the BigInt check to parts left out of
+  the result, orders output keys like the input, and omits objects and arrays that are not included themselves when
+  nothing below them is in the output.
+
 # [12.3.0](https://github.com/finnair/v-validation/compare/v12.2.0...v12.3.0) (2026-09-25)
 
 ### Features

@@ -3,6 +3,25 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [13.0.0](https://github.com/finnair/v-validation/compare/v12.3.0...v13.0.0) (2026-10-05)
+
+- feat(path)!: single-pass Projection, JSON-typed paths and matchers, JSON.stringify compatible jsonClone (#157) ([bee1116](https://github.com/finnair/v-validation/commit/bee11169c65f7421f4232ccaf93214c5151e2264)), closes [#157](https://github.com/finnair/v-validation/issues/157)
+
+### Features
+
+- **core:** V.memoize isStale option and cache statistics with BasicMemoizeStatsLogger [#159](https://github.com/finnair/v-validation/issues/159) ([6addc4f](https://github.com/finnair/v-validation/commit/6addc4f40067bd9d3b816b924cdf8f5f3f3a5aae))
+
+### BREAKING CHANGES
+
+- PathMatchers, Path.get/set/unset and Path.equals/startsWith follow JSON types strictly: string
+  components access only objects and numeric components only arrays. Path.set may replace the root, so its return value
+  must be used. Property matchers match own and inherited enumerable properties, no longer own non-enumerable ones.
+  jsonClone and Projection clone only own enumerable properties, convert NaN and Infinity to null, unwrap boxed
+  primitives, and throw a TypeError for circular structures and for input without a JSON representation. Projection
+  reads always paths from the JSON clone, doesn't apply toJSON, the replacer or the BigInt check to parts left out of
+  the result, orders output keys like the input, and omits objects and arrays that are not included themselves when
+  nothing below them is in the output.
+
 # [12.3.0](https://github.com/finnair/v-validation/compare/v12.2.0...v12.3.0) (2026-09-25)
 
 ### Features
