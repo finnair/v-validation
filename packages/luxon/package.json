@@ -42,7 +42,7 @@
   },
   "peerDependencies": {
     "@finnair/path": ">=7",
-    "@finnair/v-validation": ">=7",
+    "@finnair/v-validation": ">=11",
     "luxon": "^3.4.4"
   },
   "devDependencies": {
