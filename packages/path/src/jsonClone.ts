@@ -37,8 +37,10 @@ export function _cloneValue(value: any, replacer: JsonReplacer | undefined, stac
     _enter(value, stack);
     let clone: JsonValue;
     if (Array.isArray(value)) {
-      clone = [];
-      for (let i=0; i < value.length; i++) {
+      const len = value.length;
+      // Allocated at its final size: growing from [] leaves spare capacity in every retained clone.
+      clone = new Array(len);
+      for (let i=0; i < len; i++) {
         clone[i] = _jsonClone(i.toString(), value, replacer, stack) ?? null;
       }
     } else {

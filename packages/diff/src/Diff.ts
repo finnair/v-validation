@@ -1,4 +1,4 @@
-import { IndexMatcher, Node, Path, PathComponent, PathExpression, PathMatcher, PropertyMatcher } from '@finnair/path';
+import { _cloneValue, _enter, _jsonClone, _replaceValue, _rootValue, IndexMatcher, JsonReplacer, Node, Path, PathComponent, PathExpression, PathMatcher, PropertyMatcher, setOwnProperty } from '@finnair/path';
 
 export interface DiffFilter {
   (path: Path, value: any): boolean;
@@ -20,6 +20,23 @@ export interface Change {
   readonly path: Path;
   readonly newValue?: any;
   readonly oldValue?: any;
+}
+
+export interface ApplyPatchOptions {
+  /**
+   * Apply the patches to a JSON clone of the input instead of modifying it in place: same as applying them to
+   * `JSON.parse(JSON.stringify(value, replacer))`, but the parts of the input that a patch replaces or removes are not
+   * cloned.
+   */
+  readonly clone?: boolean;
+  /**
+   * JSON clone patch values before inserting them, as if the result was serialized: a value without a JSON representation
+   * removes a property and is `null` in an array. By default patch values are inserted as is, e.g. values that are already
+   * JSON, or converted values such as dates of a validated object.
+   */
+  readonly clonePatchValues?: boolean;
+  /** `JSON.stringify` replacer for whatever is cloned, with the key of the patched path for a patch value. */
+  readonly replacer?: JsonReplacer;
 }
 
 export const defaultDiffFilter = (_path: Path, value: any) => value !== undefined;
@@ -73,6 +90,129 @@ export class Diff {
   static patch<T>(oldValue: T, newValue: T, config?: DiffConfig): Patch[] {
     return _patch(_buildChangeTree(true, oldValue, newValue, config));
   }
+
+  /**
+   * Applies `patches` in order with `Path.set`, by default modifying `value` in place. Use the return value, as the root may be replaced.
+   */
+  static applyPatch<T = any>(value: any, patches: readonly Patch[], options?: ApplyPatchOptions): T {
+    const replacer = options?.replacer ?? undefined;
+    let root = value;
+    if (options?.clone) {
+      const tree = patchTree(patches);
+      root = tree.patched ? undefined : clonePatched(_rootValue(value, replacer), tree, replacer, []);
+    }
+    for (const patch of patches) {
+      root = patch.path.set(root, options?.clonePatchValues ? clonePatchValue(patch, replacer) : patch.value);
+    }
+    return root;
+  }
+}
+
+function clonePatchValue({ path, value }: Patch, replacer: JsonReplacer | undefined) {
+  if (value === undefined) {
+    return undefined;
+  }
+  const key = path.length ? path.componentAt(path.length - 1) : '';
+  const clone = _jsonClone(String(key), { [key]: value }, replacer, []);
+  return clone === undefined && typeof key === 'number' ? null : clone;
+}
+
+interface PatchTree {
+  patched: boolean;
+  properties?: Record<string, PatchTree>;
+  indexes?: PatchTree[];
+}
+
+/** Shared leaf for patched paths: nothing below a patched value matters for cloning. */
+const PATCHED: PatchTree = Object.freeze({ patched: true });
+
+function childOf(node: PatchTree, component: PathComponent): PatchTree | undefined {
+  return typeof component === 'number' ? node.indexes?.[component] : node.properties?.[component];
+}
+
+function setChild(node: PatchTree, component: PathComponent, child: PatchTree) {
+  if (typeof component === 'number') {
+    (node.indexes ??= [])[component] = child;
+  } else {
+    (node.properties ??= Object.create(null))[component] = child;
+  }
+}
+
+function patchTree(patches: readonly Patch[]): PatchTree {
+  const root: PatchTree = { patched: false };
+  for (let p = 0; p < patches.length && !root.patched; p++) {
+    const path = patches[p].path;
+    const last = path.length - 1;
+    if (last < 0) {
+      root.patched = true;
+      break;
+    }
+    let node = root;
+    for (let i = 0; i < last && !node.patched; i++) {
+      const component = path.componentAt(i);
+      let child = childOf(node, component);
+      if (!child) {
+        setChild(node, component, (child = { patched: false }));
+      }
+      node = child;
+    }
+    if (!node.patched) {
+      setChild(node, path.componentAt(last), PATCHED);
+    }
+  }
+  return root;
+}
+
+/**
+ * JSON clone of `value`, after `toJSON` and `replacer`, without the parts that patches in `node` replace. A replaced
+ * property keeps its place if its value has a JSON representation, as in `JSON.parse(JSON.stringify(value, replacer))`.
+ */
+function clonePatched(value: any, node: PatchTree, replacer: JsonReplacer | undefined, stack: object[]): any {
+  if (!value || typeof value !== 'object') {
+    return _cloneValue(value, replacer, stack);
+  }
+  const isArray = Array.isArray(value);
+  const indexes = node.indexes;
+  const properties = node.properties;
+  // Patches that don't fit the type of the value replace it as a whole
+  if (isArray ? !indexes : !properties) {
+    return _cloneValue(value, replacer, stack);
+  }
+  _enter(value, stack);
+  let clone: any;
+  if (isArray) {
+    const length = value.length;
+    clone = new Array(length);
+    for (let i = 0; i < length; i++) {
+      const child = indexes![i];
+      // A replaced element is left as a hole for its patch
+      if (child !== PATCHED) {
+        const key = String(i);
+        clone[i] = (child ? clonePatched(_replaceValue(key, value, replacer), child, replacer, stack) : _jsonClone(key, value, replacer, stack)) ?? null;
+      }
+    }
+  } else {
+    clone = {};
+    const keys = Array.isArray(replacer) ? replacer.map(String) : Object.keys(value);
+    for (const key of keys) {
+      const child = properties![key];
+      let keyValue: any;
+      if (!child) {
+        keyValue = _jsonClone(key, value, replacer, stack);
+      } else if (child === PATCHED) {
+        // Converted only to see whether JSON would keep the property
+        const replaced = _replaceValue(key, value, replacer);
+        keyValue = replaced === undefined || typeof replaced === 'function' || typeof replaced === 'symbol' ? undefined : null;
+      } else {
+        keyValue = clonePatched(_replaceValue(key, value, replacer), child, replacer, stack);
+      }
+      if (keyValue !== undefined) {
+        setOwnProperty(clone, key, keyValue);
+      }
+    }
+  }
+  stack.pop();
+  return clone;
 }
 
 /**

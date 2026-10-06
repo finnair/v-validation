@@ -29,6 +29,7 @@ npm install @finnair/diff
 * Diff and VersionInfo are 2-4x faster. Identical values (same reference) are not compared further, and `VersionInfo` computes changes once for `changes`, `paths`, `patch` and `matches`, which no longer parses changed paths.
 * BREAKING CHANGE: `DiffNode` is removed. Use `Diff.patch` for patches, and `Diff.changeset` (with `includeObjects` if needed) for scalar changes. `VersionInfo.diffNode` is removed as well.
 * New `Diff.patch(oldValue, newValue)` returns the minimal set of patches that turns `oldValue` into `newValue` with `Path.set`, e.g. for applying a client's changes on top of a concurrently modified version, or for streaming changes to clients.
+* New `Diff.applyPatch(value, patches, { clone, clonePatchValues, replacer })` applies patches in place or to a JSON clone of the input.
 * BREAKING CHANGE: Array holes are handled like `undefined` elements, as in JSON. This makes a difference only with a custom filter that accepts `undefined` values.
 * BREAKING CHANGE: `DiffNodeConfig` is merged into `DiffConfig`.
 * BREAKING CHANGE: Objects with a custom prototype (e.g. `Object.create(proto)`) are no longer treated as plain objects and throw an error, as their inherited properties would be ignored. Objects with `null` prototype are supported.
@@ -54,8 +55,11 @@ diff.changeset(a, b).forEach((change) => change.path.set(a, change.newValue));
 * streaming changes to clients that have fetched an initial version.
 
 ```ts
-const merged = Diff.patch(base, edited).reduce((value, patch) => patch.path.set(value, patch.value), latest);
+const merged = Diff.applyPatch(latest, Diff.patch(base, edited)); // modifies latest
+const cloned = Diff.applyPatch(latest, Diff.patch(base, edited), { clone: true }); // JSON clone of latest
 ```
+
+`Diff.applyPatch` applies patches in order with `Path.set`, so use its return value, as the root may be replaced. With `clone: true` the result is the same as applying the patches to `JSON.parse(JSON.stringify(value, replacer))`, but the parts of the input that patches replace or remove are not cloned. Patch values are inserted as is, e.g. values that are already JSON or converted values of a validated object, unless `clonePatchValues: true` clones them with the same `replacer`.
 
 ### Change Triggering
 
