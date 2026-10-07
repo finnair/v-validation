@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [13.1.0](https://github.com/finnair/v-validation/compare/v13.0.1...v13.1.0) (2026-10-07)
+
+### Features
+
+- **diff:** add patch application with optional JSON cloning ([#161](https://github.com/finnair/v-validation/issues/161)) ([7cf382e](https://github.com/finnair/v-validation/commit/7cf382e04eeaf228a8e72966c2966ade71b85847))
+
 ## [13.0.1](https://github.com/finnair/v-validation/compare/v13.0.0...v13.0.1) (2026-10-05)
 
 **Note:** Version bump only for package @finnair/diff
