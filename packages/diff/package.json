@@ -38,7 +38,7 @@
     "build:esm": "tsc -b . && cp ../../package.esm.json dist/esm/package.json"
   },
   "peerDependencies": {
-    "@finnair/path": ">=7",
+    "@finnair/path": "^13.1.0",
     "@finnair/path-parser": ">=7"
   },
   "devDependencies": {
