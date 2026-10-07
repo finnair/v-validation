@@ -50,7 +50,7 @@ describe('Diff.patch', () => {
 });
 
 describe('Diff.applyPatch', () => {
-  const oldValue = () => ({
+  const oldValue = (): any => ({
     id: 1,
     name: 'old',
     tags: ['a', 'b', 'c'],
@@ -58,7 +58,7 @@ describe('Diff.applyPatch', () => {
     removed: { nested: true },
     kept: { deep: { value: 1 } },
   });
-  const newValue = () => ({
+  const newValue = (): any => ({
     id: 1,
     name: 'new',
     tags: ['a', 'c'],
@@ -116,15 +116,15 @@ describe('Diff.applyPatch', () => {
     expect(result.created).toBe(patches.find(patch => patch.path.equals(Path.of('created')))!.value);
   });
 
-  test('clone converts to JSON, but not the parts that patches replace', () => {
-    const replaced = vi.fn(() => 'replaced');
+  test('clone converts the full input before applying patches', () => {
+    const replaced = vi.fn((key: string) => `replaced-${key}`);
     const kept = vi.fn(() => 'kept');
     const input = { a: { nested: { toJSON: replaced } }, b: { toJSON: kept }, c: [{ toJSON: replaced }, 1] };
 
     const result = Diff.applyPatch(input, [{ path: Path.of('a'), value: 'a' }, { path: Path.of('c', 0) }], { clone: true });
 
     expect(result).toEqual({ a: 'a', b: 'kept', c: [undefined, 1] });
-    expect(replaced).not.toHaveBeenCalled();
+    expect(replaced.mock.calls.map(([key]) => key)).toEqual(['nested', '0']);
     expect(kept).toHaveBeenCalledWith('b');
   });
 
@@ -149,8 +149,8 @@ describe('Diff.applyPatch', () => {
       expect(replacer.mock.calls.map(call => call[0])).toEqual(['', 'b']);
     });
 
-    test('applies the replacer with the patched key', () => {
-      const replacer = (key: string, value: any) => (key === 'upper' ? value.toUpperCase() : value);
+    test('clones patch values as roots before inserting them', () => {
+      const replacer = (key: string, value: any) => (key === '' || key === 'upper') && typeof value === 'string' ? value.toUpperCase() : value;
       const patches = [
         { path: Path.of('upper'), value: 'a' },
         { path: Path.of('nested'), value: { upper: 'b' } },
@@ -167,6 +167,22 @@ describe('Diff.applyPatch', () => {
       expect(Diff.applyPatch({ a: 1, b: [1, 2], c: 3 }, patches, { clonePatchValues: true })).toEqual({ b: [null, 2] });
     });
 
+    test('an undefined array patch still removes the index', () => {
+      const result = Diff.applyPatch({ items: [1, 2] }, [{ path: Path.of('items', 0) }], { clonePatchValues: true });
+      expect(result.items).toHaveLength(2);
+      expect(0 in result.items).toBe(false);
+      expect(result.items[1]).toBe(2);
+    });
+
+    test('toJSON or the replacer can make a root patch value have no JSON representation', () => {
+      const patches = [
+        { path: Path.of('a'), value: { toJSON: () => undefined } },
+        { path: Path.of('b', 0), value: 'removed by replacer' },
+      ];
+      const replacer = (key: string, value: any) => key === '' && value === 'removed by replacer' ? undefined : value;
+      expect(Diff.applyPatch({ a: 1, b: [1] }, patches, { clonePatchValues: true, replacer })).toEqual({ b: [null] });
+    });
+
     test('is the same as a JSON round-trip of the patched result', () => {
       const replacer = (key: string, value: any) => (key === 'secret' ? undefined : value);
       const input = { list: [1, 2], secret: 's', kept: 1 };
@@ -180,7 +196,7 @@ describe('Diff.applyPatch', () => {
     });
   });
 
-  describe('clone is the same as patching a JSON round-trip', () => {
+  describe('clone then patch matches a JSON round-trip followed by patching', () => {
     const roundTrip = (input: any, patches: Patch[], replacer?: any) =>
       patches.reduce((root, patch) => patch.path.set(root, patch.value), JSON.parse(JSON.stringify(input, replacer)));
 
@@ -267,7 +283,7 @@ describe('Diff.applyPatch', () => {
     });
   });
 
-  test('clone throws on a circular structure along a patched path', () => {
+  test('clone throws on a circular structure even when a patch replaces part of it', () => {
     const input: any = { a: { b: 1 } };
     input.a.self = input;
     expect(() => Diff.applyPatch(input, [{ path: Path.of('a', 'b'), value: 2 }], { clone: true })).toThrow(TypeError);
