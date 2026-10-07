@@ -78,6 +78,10 @@ describe('Diff.applyPatch', () => {
       expect(Diff.applyPatch({ a: 1 }, [{ path: Path.ROOT, value: [1] }], { clone })).toEqual([1]);
     });
 
+    test('starts from undefined with a root patch', () => {
+      expect(Diff.applyPatch(undefined, [{ path: Path.ROOT, value: { a: 1 } }], { clone })).toEqual({ a: 1 });
+    });
+
     test('removes the root', () => {
       expect(Diff.applyPatch({ a: 1 }, [{ path: Path.ROOT }], { clone })).toBeUndefined();
     });
@@ -149,7 +153,7 @@ describe('Diff.applyPatch', () => {
       expect(replacer.mock.calls.map(call => call[0])).toEqual(['', 'b']);
     });
 
-    test('clones patch values as roots before inserting them', () => {
+    test('clones patch values using the final path component as the root key', () => {
       const replacer = (key: string, value: any) => (key === '' || key === 'upper') && typeof value === 'string' ? value.toUpperCase() : value;
       const patches = [
         { path: Path.of('upper'), value: 'a' },
@@ -174,16 +178,16 @@ describe('Diff.applyPatch', () => {
       expect(result.items[1]).toBe(2);
     });
 
-    test('toJSON or the replacer can make a root patch value have no JSON representation', () => {
+    test('toJSON or the replacer can make a patch value have no JSON representation', () => {
       const patches = [
         { path: Path.of('a'), value: { toJSON: () => undefined } },
         { path: Path.of('b', 0), value: 'removed by replacer' },
       ];
-      const replacer = (key: string, value: any) => key === '' && value === 'removed by replacer' ? undefined : value;
+      const replacer = (key: string, value: any) => key === '0' && value === 'removed by replacer' ? undefined : value;
       expect(Diff.applyPatch({ a: 1, b: [1] }, patches, { clonePatchValues: true, replacer })).toEqual({ b: [null] });
     });
 
-    test('is the same as a JSON round-trip of the patched result', () => {
+    test('applies the replacer while cloning nested patch values', () => {
       const replacer = (key: string, value: any) => (key === 'secret' ? undefined : value);
       const input = { list: [1, 2], secret: 's', kept: 1 };
       const patches = [
@@ -193,6 +197,28 @@ describe('Diff.applyPatch', () => {
       const expected = JSON.parse(JSON.stringify(Diff.applyPatch(structuredClone(input), patches), replacer));
       const result = Diff.applyPatch(input, patches, { clone: true, clonePatchValues: true, replacer });
       expect(JSON.stringify(result)).toEqual(JSON.stringify(expected));
+    });
+
+    test('uses the patched key when the replacer filters a patch value', () => {
+      const replacer = vi.fn((key: string, value: any) => key === 'secret' ? undefined : value);
+      const result = Diff.applyPatch({ secret: 'old' }, [{ path: Path.of('secret'), value: 'removed by replacer' }], {
+        clonePatchValues: true,
+        replacer,
+      });
+
+      expect(result).toEqual({});
+      expect(replacer).toHaveBeenCalledWith('secret', 'removed by replacer');
+    });
+
+    test('uses the stringified index when cloning an array patch value', () => {
+      const replacer = vi.fn((key: string, value: any) => key === '0' ? undefined : value);
+      const result = Diff.applyPatch({ items: [1, 2] }, [{ path: Path.of('items', 0), value: 'removed by replacer' }], {
+        clonePatchValues: true,
+        replacer,
+      });
+
+      expect(result).toEqual({ items: [null, 2] });
+      expect(replacer).toHaveBeenCalledWith('0', 'removed by replacer');
     });
   });
 

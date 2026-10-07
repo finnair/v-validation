@@ -59,7 +59,7 @@ const merged = Diff.applyPatch(latest, Diff.patch(base, edited)); // modifies la
 const cloned = Diff.applyPatch(latest, Diff.patch(base, edited), { clone: true }); // JSON clone of latest
 ```
 
-`Diff.applyPatch` applies patches in order with `Path.set`, so use its return value, as the root may be replaced. With `clone: true` it first JSON-clones the entire input using `jsonClone(value, replacer)`, then applies the patches. JSON conversion therefore also applies to values that a patch later replaces or removes. Patch values are inserted as is by default, e.g. values that are already JSON or converted values of a validated object. Set `clonePatchValues: true` to JSON-clone each patch value as a root before insertion; the replacer receives `''` for that value, just as when serializing it independently.
+`Diff.applyPatch` applies patches in order with `Path.set`, so use its return value, as the root may be replaced. With `clone: true` it first JSON-clones the entire input using `jsonClone(value, replacer)`, then applies the patches. JSON conversion therefore also applies to values that a patch later replaces or removes. Patch values are inserted as is by default, e.g. values that are already JSON or converted values of a validated object. Set `clonePatchValues: true` to JSON-clone each patch value before insertion; the replacer receives the final path component as its key (`''` for root patches), but its `this` value is a synthetic holder rather than the target parent.
 
 ### Change Triggering
 

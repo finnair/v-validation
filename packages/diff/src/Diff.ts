@@ -1,4 +1,4 @@
-import { _jsonClone, IndexMatcher, JsonReplacer, jsonClone, Node, Path, PathComponent, PathExpression, PathMatcher, PropertyMatcher } from '@finnair/path';
+import { _jsonClone, IndexMatcher, JsonReplacer, Node, Path, PathComponent, PathExpression, PathMatcher, PropertyMatcher } from '@finnair/path';
 
 export interface DiffFilter {
   (path: Path, value: any): boolean;
@@ -29,9 +29,10 @@ export interface ApplyPatchOptions {
    */
   readonly clone?: boolean;
   /**
-   * JSON clone patch values before inserting them, as if the result was serialized: a value without a JSON representation
-   * removes a property and is `null` in an array. By default patch values are inserted as is, e.g. values that are already
-   * JSON, or converted values such as dates of a validated object.
+  * JSON clone patch values before inserting them. A value without a JSON representation removes a property and is `null`
+  * in an array. The replacer receives the final path component as its key (`''` for a root patch); its `this` value is a
+  * synthetic holder, not the target parent. By default patch values are inserted as is, e.g. values that are already JSON,
+  * or converted values such as dates of a validated object.
    */
   readonly clonePatchValues?: boolean;
   /** `JSON.stringify` replacer for the input clone and, when enabled, patch values cloned as roots. */
@@ -95,19 +96,23 @@ export class Diff {
    */
   static applyPatch<T = any>(value: any, patches: readonly Patch[], options?: ApplyPatchOptions): T {
     const replacer = options?.replacer ?? undefined;
-    let root = options?.clone ? jsonClone(value, replacer) : value;
+    let root = options?.clone ? _jsonClone('', { '': value }, replacer, []) : value;
     for (const patch of patches) {
-      root = patch.path.set(root, options?.clonePatchValues ? clonePatchValue(patch.value, replacer, patch.path.length > 0 && typeof patch.path.componentAt(patch.path.length - 1) === 'number') : patch.value);
+      const lastComponent = patch.path.length ? patch.path.componentAt(patch.path.length - 1) : undefined;
+      const value = options?.clonePatchValues
+        ? clonePatchValue(patch.value, replacer, typeof lastComponent === 'number', lastComponent === undefined ? '' : String(lastComponent))
+        : patch.value;
+      root = patch.path.set(root, value);
     }
     return root;
   }
 }
 
-function clonePatchValue(value: any, replacer: JsonReplacer | undefined, isArrayElement: boolean) {
+function clonePatchValue(value: any, replacer: JsonReplacer | undefined, isArrayElement: boolean, key: string) {
   if (value === undefined) {
     return undefined;
   }
-  const clone = _jsonClone('', { '': value }, replacer, []);
+  const clone = _jsonClone(key, { [key]: value }, replacer, []);
   return clone === undefined && isArrayElement ? null : clone;
 }
 
