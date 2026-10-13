@@ -73,6 +73,25 @@ export const assertType = <Type>(_: Type): void => void 0;
 export type Equals<A, B> =
   (<T>() => T extends A ? 1 : 2) extends (<T>() => T extends B ? 1 : 2) ? true : false;
 
+type AtActual<A, K extends PropertyKey> = K extends keyof A ? A[K] : 'MISSING: property is absent';
+type AtExpected<B, K extends PropertyKey> = K extends keyof B ? B[K] : 'UNEXPECTED: property not allowed';
+
+/**
+ * A structural, per-property diff of `Actual` against `Expected`. Resolves to `never` when they are
+ * strictly equal (so it can gate an assertion), otherwise to an object that keeps only the mismatching
+ * keys - recursively - with `{ expected; actual }` at each offending leaf. Surfaced in a type error, it
+ * points at the exact property path (e.g. `{ address: { zip: { expected: string; actual: number } } }`).
+ */
+export type OutputTypeMismatch<Actual, Expected> = Equals<Actual, Expected> extends true
+  ? never
+  : [Actual, Expected] extends [object, object]
+    ? {
+        [K in keyof Actual | keyof Expected as Equals<AtActual<Actual, K>, AtExpected<Expected, K>> extends true
+          ? never
+          : K]: OutputTypeMismatch<AtActual<Actual, K>, AtExpected<Expected, K>>;
+      }
+    : { expected: Expected; actual: Actual };
+
 /**
  * Assert at compile time that a validator's inferred output type is *exactly* `Expected`.
  *
@@ -85,13 +104,15 @@ export type Equals<A, B> =
  * ```
  *
  * The call fails to compile unless `VType<typeof validator>` equals `Expected`, including optionality.
+ * On a mismatch TypeScript reports the parameter type, whose second tuple element is an {@link OutputTypeMismatch}
+ * diff naming the offending property path and its expected/actual types.
  */
 export const assertValidatorType =
   <Expected>() =>
   <V extends Validator<any>>(
-    _validator: Equals<VType<V>, Expected> extends true
+    _validator: OutputTypeMismatch<VType<V>, Expected> extends never
       ? V
-      : 'a validator whose output type matches the asserted type',
+      : ['Validator output type does not match the asserted type:', OutputTypeMismatch<VType<V>, Expected>],
   ): void => void 0;
 
 /**

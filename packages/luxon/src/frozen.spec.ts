@@ -1,11 +1,11 @@
 import { describe, test, expect } from 'vitest';
 import { DateTime } from 'luxon';
-import { V } from '@finnair/v-validation';
+import { V, Validator } from '@finnair/v-validation';
 import { Vluxon } from './Vluxon.js';
 
 describe('V.frozen with Vluxon', () => {
   describe('wrapper validators support freeze', () => {
-    const wrappers: Array<[string, ReturnType<typeof Vluxon.localDate>, string]> = [
+    const wrappers: Array<[string, Validator<unknown>, string]> = [
       ['localDate', Vluxon.localDate(), '2026-09-17'],
       ['localTime', Vluxon.localTime(), '10:30:00'],
       ['localDateTime', Vluxon.localDateTime(), '2026-09-17T10:30:00'],
@@ -99,8 +99,9 @@ describe('V.frozen with Vluxon', () => {
 
       expect(Object.isFrozen(result.dateTime)).toBe(false);
       // Reaching into Luxon internals is still possible; V.frozen does not claim otherwise.
-      result.dateTime.loc = DateTime.utc().loc;
-      expect(result.dateTime.loc).toBeDefined();
+      // `loc` is a Luxon-internal field not present in its public types, hence the casts.
+      (result.dateTime as any).loc = (DateTime.utc() as any).loc;
+      expect((result.dateTime as any).loc).toBeDefined();
     });
   });
 });
