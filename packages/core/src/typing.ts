@@ -1,4 +1,4 @@
-import { Validator } from "./validators";
+import { Validator } from "./validators.js";
 
 export type VType<V extends Validator<any>> = V extends Validator<infer Out> ? Out : unknown;
 
