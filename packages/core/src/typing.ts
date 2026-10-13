@@ -73,6 +73,26 @@ export const assertType = <Type>(_: Type): void => void 0;
 export type Equals<A, B> =
   (<T>() => T extends A ? 1 : 2) extends (<T>() => T extends B ? 1 : 2) ? true : false;
 
+type IsAny<T> = 0 extends 1 & T ? true : false;
+
+// Enum members become their literal values and intersections are flattened; ?, readonly and tuples are kept.
+type Normalize<T> =
+  IsAny<T> extends true ? T
+  : T extends string ? `${T}`
+  : T extends number ? (`${T}` extends `${infer N extends number}` ? N : T)
+  : T extends Function ? T
+  : T extends object ? { [K in keyof T]: Normalize<T[K]> }
+  : T;
+
+type MutuallyAssignable<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
+
+/**
+ * Like {@link Equals}, but treats an enum and the union of its members, and an intersection and its
+ * flattened object, as equal. Mutual assignability keeps classes with private members and distinct enums
+ * nominal - and, as in plain TS, a string enum is not equal to the union of its literal values.
+ */
+export type StructurallyEquals<A, B> = MutuallyAssignable<A, B> extends true ? Equals<Normalize<A>, Normalize<B>> : false;
+
 type AtActual<A, K extends PropertyKey> = K extends keyof A ? A[K] : 'MISSING: property is absent';
 type AtExpected<B, K extends PropertyKey> = K extends keyof B ? B[K] : 'UNEXPECTED: property not allowed';
 
@@ -82,11 +102,11 @@ type AtExpected<B, K extends PropertyKey> = K extends keyof B ? B[K] : 'UNEXPECT
  * keys - recursively - with `{ expected; actual }` at each offending leaf. Surfaced in a type error, it
  * points at the exact property path (e.g. `{ address: { zip: { expected: string; actual: number } } }`).
  */
-export type OutputTypeMismatch<Actual, Expected> = Equals<Actual, Expected> extends true
+export type OutputTypeMismatch<Actual, Expected> = StructurallyEquals<Actual, Expected> extends true
   ? never
   : [Actual, Expected] extends [object, object]
     ? {
-        [K in keyof Actual | keyof Expected as Equals<AtActual<Actual, K>, AtExpected<Expected, K>> extends true
+        [K in keyof Actual | keyof Expected as StructurallyEquals<AtActual<Actual, K>, AtExpected<Expected, K>> extends true
           ? never
           : K]: OutputTypeMismatch<AtActual<Actual, K>, AtExpected<Expected, K>>;
       }

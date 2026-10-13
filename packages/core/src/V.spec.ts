@@ -1717,6 +1717,44 @@ describe('enum', () => {
       (await expectValid(IntEnum.A satisfies validatorType, validator)) satisfies validatorType);
     test('valid int', () => expectValid(0, validator));
     test('invalid', () => expectViolations(2, validator, defaultViolations.enum('IntEnum', 2)));
+    test('member name is invalid', () => expectViolations('A', validator, defaultViolations.enum('IntEnum', 'A')));
+  });
+
+  describe('mixed', () => {
+    enum MixedEnum {
+      A = 1,
+      B = 'A',
+    }
+    const validator = V.enum(MixedEnum, 'MixedEnum');
+    test('valid int', () => expectValid(1, validator));
+    test('valid string equal to a member name', () => expectValid('A', validator));
+    test('reverse mapping key is invalid', () => expectViolations('1', validator, defaultViolations.enum('MixedEnum', '1')));
+  });
+
+  describe('typing', () => {
+    enum OtherIntEnum {
+      A,
+      B,
+    }
+    test('string enum', () => {
+      assertValidatorType<StrEnum>()(V.enum(StrEnum, 'StrEnum'));
+      // @ts-expect-error a string enum is not its literal values
+      assertValidatorType<'A' | 'B'>()(V.enum(StrEnum, 'StrEnum'));
+    });
+    test('int enum', () => {
+      assertValidatorType<IntEnum>()(V.enum(IntEnum, 'IntEnum'));
+      assertValidatorType<0 | 1>()(V.enum(IntEnum, 'IntEnum'));
+      // @ts-expect-error distinct enums are not equal
+      assertValidatorType<OtherIntEnum>()(V.enum(IntEnum, 'IntEnum'));
+    });
+    test('enum property', () => {
+      const validator = V.objectType()
+        .properties({ str: V.enum(StrEnum, 'StrEnum'), ints: V.optionalStrict(V.array(V.enum(IntEnum, 'IntEnum'))) })
+        .build();
+      assertValidatorType<{ str: StrEnum; ints?: IntEnum[] }>()(validator);
+      // @ts-expect-error ints has a wrong enum type
+      assertValidatorType<{ str: StrEnum; ints?: OtherIntEnum[] }>()(validator);
+    });
   });
 
   test('ignoreUnknownEnumValues', () =>

@@ -2100,11 +2100,18 @@ export class MaxValidator extends Validator<number, number> {
   }
 }
 
+// numeric members also get a reverse mapping entry: String(value) -> name
+function enumValues(enumType: Record<string, string | number>) {
+  return Object.entries(enumType)
+    .filter(([key, value]) => !(typeof value === 'string' && typeof enumType[value] === 'number' && String(enumType[value]) === key))
+    .map(([, value]) => value);
+}
+
 export class EnumValidator<Out extends Record<string, string | number>> extends Validator<Out[keyof Out]> {
   private readonly _values: Set<string | number>;
   constructor(public readonly enumType: Out, public readonly name: string) {
     super();
-    this._values = new Set(Object.values(enumType));
+    this._values = new Set(enumValues(enumType));
     Object.freeze(this);
   }
   supportsFreeze(): boolean {
