@@ -97,8 +97,11 @@ type Unmatched<A, B> = A extends unknown ? (true extends (B extends unknown ? St
 // Homomorphic mapping keeps ? and readonly
 type Modifiers<T> = { [K in keyof T]: 0 };
 
+// A mapped type over `string` has keyof `string`, a declared string index signature `string | number`
+type Keys<T> = string extends keyof T ? keyof T | number : keyof T;
+
 type ObjectEquals<A, B> =
-  Equals<keyof A, keyof B> extends true
+  StructurallyEquals<Keys<A>, Keys<B>> extends true
     ? Equals<Modifiers<A>, Modifiers<B>> extends true
       ? AllTrue<{ [K in keyof A]-?: StructurallyEquals<A[K], B[K & keyof B]> }[keyof A]>
       : false
@@ -138,8 +141,14 @@ export type StructurallyEquals<A, B> =
         ? StructuralCompare<A, B>
         : false;
 
-type AtActual<A, K extends PropertyKey> = K extends keyof A ? A[K] : 'MISSING: property is absent';
-type AtExpected<B, K extends PropertyKey> = K extends keyof B ? B[K] : 'UNEXPECTED: property not allowed';
+// A numeric key reads a string index signature, see Keys
+type At<T, K extends PropertyKey, Absent> = K extends keyof T
+  ? T[K]
+  : K extends number
+    ? string extends keyof T ? T[string & keyof T] : Absent
+    : Absent;
+type AtActual<A, K extends PropertyKey> = At<A, K, 'MISSING: property is absent'>;
+type AtExpected<B, K extends PropertyKey> = At<B, K, 'UNEXPECTED: property not allowed'>;
 
 /**
  * A structural, per-property diff of `Actual` against `Expected`. Resolves to `never` when they are

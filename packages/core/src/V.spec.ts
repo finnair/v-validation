@@ -34,7 +34,7 @@ import { V } from './V.js';
 import { jsonClone, Path, JsonValue as PathJsonValue } from '@finnair/path';
 import { expectUndefined, expectValid, expectViolations, verifyValid } from './testUtil.spec.js';
 import { fail } from 'assert';
-import { EqualTypes, ComparableType, assertType, assertValidatorType, OptionalKeys, VType, StructurallyEquals } from './typing.js';
+import { EqualTypes, ComparableType, assertType, assertValidatorType, OptionalKeys, VType, StructurallyEquals, OutputTypeMismatch, Equals } from './typing.js';
 import { JsonValue } from './jsonValue.js';
 
 const ROOT = Path.ROOT,
@@ -493,6 +493,43 @@ describe('objects', () => {
           assertType<StructurallyEquals<{ a: JsonValue; kind: Kind }, { a: PathJsonValue; kind: OtherKind }>>(false);
           assertType<StructurallyEquals<JsonValue, PathJsonValue | undefined>>(false);
           assertType<StructurallyEquals<readonly JsonValue[], PathJsonValue[]>>(false);
+        });
+      });
+
+      // Only reached when the values differ under strict Equals, e.g. intersection vs flattened object
+      describe('object keys', () => {
+        enum Source {
+          X = 'X',
+          Y = 'Y',
+        }
+        enum NumSource {
+          X = 1,
+          Y = 2,
+        }
+        type AB = { a: 1 } & { b: 2 };
+        type ABFlat = { a: 1; b: 2 };
+
+        test('enum keys compare structurally', () => {
+          type SourceKey = VType<EnumValidator<typeof Source>>;
+          type NumSourceKey = VType<EnumValidator<typeof NumSource>>;
+          assertType<StructurallyEquals<Partial<Record<SourceKey, AB>>, Partial<Record<Source, ABFlat>>>>(true);
+          assertType<StructurallyEquals<Partial<Record<NumSourceKey, AB>>, Partial<Record<NumSource, ABFlat>>>>(true);
+          assertType<StructurallyEquals<Partial<Record<SourceKey, AB>>, Partial<Record<Source, { a: 1 }>>>>(false);
+        });
+        test('mapped string keys equal a declared string index signature', () => {
+          // additionalProperties(V.string(), ...) outputs { [key in string]?: V }
+          assertType<StructurallyEquals<{ [key in string]?: AB }, { [key: string]: ABFlat | undefined }>>(true);
+          assertType<StructurallyEquals<{ [key in string]?: AB }, { [key: string]: { a: 1 } | undefined }>>(false);
+          assertType<StructurallyEquals<{ [key: string]: AB }, { [key: number]: ABFlat }>>(false);
+        });
+        test('mismatch reads a numeric key from a mapped string index signature', () => {
+          type Mismatch = OutputTypeMismatch<{ s: { [key in string]?: AB } }, { s: { [key: string]: { a: 1 } | undefined } }>;
+          assertType<Equals<Mismatch['s'][number]['ACTUAL'], AB | undefined>>(true);
+        });
+        test('never typed properties', () => {
+          assertType<StructurallyEquals<{ a: never } & { b: 1 }, { a: never; b: 1 }>>(true);
+          assertType<StructurallyEquals<{ a: never }, { a: string }>>(false);
+          assertType<Equals<OutputTypeMismatch<{ a: string }, { a: string; b: never }>['b']['ACTUAL'], 'MISSING: property is absent'>>(true);
         });
       });
     });
