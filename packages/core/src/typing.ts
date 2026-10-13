@@ -86,12 +86,57 @@ type Normalize<T> =
 
 type MutuallyAssignable<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
 
+type IsUnion<T, U = T> = T extends unknown ? ([U] extends [T] ? false : true) : never;
+type IsTuple<T extends readonly unknown[]> = number extends T['length'] ? false : true;
+type IsReadonlyArray<T extends readonly unknown[]> = T extends unknown[] ? false : true;
+type AllTrue<T> = [T] extends [true] ? true : false;
+
+// A members without a structurally equal member in B
+type Unmatched<A, B> = A extends unknown ? (true extends (B extends unknown ? StructurallyEquals<A, B> : never) ? never : A) : never;
+
+// Homomorphic mapping keeps ? and readonly
+type Modifiers<T> = { [K in keyof T]: 0 };
+
+type ObjectEquals<A, B> =
+  Equals<keyof A, keyof B> extends true
+    ? Equals<Modifiers<A>, Modifiers<B>> extends true
+      ? AllTrue<{ [K in keyof A]-?: StructurallyEquals<A[K], B[K & keyof B]> }[keyof A]>
+      : false
+    : false;
+
+type ArrayEquals<A extends readonly unknown[], B extends readonly unknown[]> =
+  [IsTuple<A>, IsTuple<B>] extends [false, false]
+    ? Equals<IsReadonlyArray<A>, IsReadonlyArray<B>> extends true ? StructurallyEquals<A[number], B[number]> : false
+    : Equals<Normalize<A>, Normalize<B>>;
+
+/**
+ * Walk both types in parallel so that every level is first checked with `Equals`. Normalizing whole
+ * types up front would expand recursive aliases (e.g. two distinct `JsonValue` declarations) forever.
+ */
+type StructuralCompare<A, B> =
+  true extends IsUnion<A> | IsUnion<B>
+    ? [Unmatched<A, B> | Unmatched<B, A>] extends [never] ? true : false
+    : A extends readonly unknown[]
+      ? B extends readonly unknown[] ? ArrayEquals<A, B> : false
+      : [A, B] extends [Function, unknown] | [unknown, Function]
+        ? false
+        : [A, B] extends [object, object]
+          ? ObjectEquals<A, B>
+          : Equals<Normalize<A>, Normalize<B>>;
+
 /**
  * Like {@link Equals}, but treats an enum and the union of its members, and an intersection and its
  * flattened object, as equal. Mutual assignability keeps classes with private members and distinct enums
  * nominal - and, as in plain TS, a string enum is not equal to the union of its literal values.
  */
-export type StructurallyEquals<A, B> = MutuallyAssignable<A, B> extends true ? Equals<Normalize<A>, Normalize<B>> : false;
+export type StructurallyEquals<A, B> =
+  Equals<A, B> extends true
+    ? true
+    : true extends IsAny<A> | IsAny<B>
+      ? false
+      : MutuallyAssignable<A, B> extends true
+        ? StructuralCompare<A, B>
+        : false;
 
 type AtActual<A, K extends PropertyKey> = K extends keyof A ? A[K] : 'MISSING: property is absent';
 type AtExpected<B, K extends PropertyKey> = K extends keyof B ? B[K] : 'UNEXPECTED: property not allowed';

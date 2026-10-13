@@ -1,6 +1,7 @@
 import { describe, test, expect } from 'vitest'
 import {
   Validator,
+  EnumValidator,
   Violation,
   ValidationResult,
   defaultViolations,
@@ -30,10 +31,11 @@ import {
 } from './validators.js';
 import { ObjectValidator, VInheritableType, lenientUnknownPropertyValidator } from './objectValidator.js';
 import { V } from './V.js';
-import { jsonClone, Path } from '@finnair/path';
+import { jsonClone, Path, JsonValue as PathJsonValue } from '@finnair/path';
 import { expectUndefined, expectValid, expectViolations, verifyValid } from './testUtil.spec.js';
 import { fail } from 'assert';
-import { EqualTypes, ComparableType, assertType, assertValidatorType, OptionalKeys, VType } from './typing.js';
+import { EqualTypes, ComparableType, assertType, assertValidatorType, OptionalKeys, VType, StructurallyEquals } from './typing.js';
+import { JsonValue } from './jsonValue.js';
 
 const ROOT = Path.ROOT,
   index = Path.index,
@@ -442,6 +444,56 @@ describe('objects', () => {
           .next(V.map(value => JSON.stringify(value)))
           .build();
         assertValidatorType<string>()(validator);
+      });
+
+      // V.jsonValue() outputs this package's JsonValue; the expected types use the identical but distinct
+      // recursive alias of @finnair/path. Expanding either alias must not hit TS2589 (excessively deep).
+      describe('recursive JsonValue aliases', () => {
+        enum Kind {
+          A = 1,
+          B = 2,
+        }
+        enum OtherKind {
+          A = 1,
+          B = 2,
+        }
+        const entryValidator = V.objectType()
+          .properties({ value: V.optionalStrict(V.jsonValue()) })
+          .build();
+
+        test('equal aliases compile', () => {
+          assertValidatorType<{ value?: PathJsonValue }>()(entryValidator);
+        });
+        test('alias with an enum in an intersection compiles', () => {
+          const validator = V.objectType().extends(entryValidator).properties({ kind: V.enum(Kind, 'Kind') }).build();
+          assertValidatorType<{ value?: PathJsonValue; kind: Kind }>()(validator);
+          // @ts-expect-error kind has a wrong enum type
+          assertValidatorType<{ value?: PathJsonValue; kind: OtherKind }>()(validator);
+        });
+        test('recursive tree with an alias leaf compiles', () => {
+          type Tree = { [key: string]: { value?: PathJsonValue } | Tree };
+          const treeValidator: Validator<Tree> = V.properties(
+            V.string(),
+            V.if((value: any) => 'value' in value, entryValidator).else(V.proxy(() => treeValidator, true)),
+          );
+          assertValidatorType<Tree>()(treeValidator);
+          // @ts-expect-error value must be a JsonValue
+          assertValidatorType<{ [key: string]: { value?: string } }>()(treeValidator);
+        });
+        test('StructurallyEquals', () => {
+          // Kind as an indexed access type is not Equals to Kind, so the comparison walks into the alias
+          type KindValue = VType<EnumValidator<typeof Kind>>;
+          assertType<StructurallyEquals<JsonValue, PathJsonValue>>(true);
+          assertType<StructurallyEquals<{ a: JsonValue; kind: KindValue }, { a: PathJsonValue; kind: Kind }>>(true);
+          assertType<StructurallyEquals<JsonValue[], PathJsonValue[]>>(true);
+          assertType<StructurallyEquals<JsonValue | Kind, PathJsonValue | Kind>>(true);
+          assertType<StructurallyEquals<{ a: JsonValue } & { kind: Kind }, { a: PathJsonValue; kind: Kind }>>(true);
+          assertType<StructurallyEquals<{ a: JsonValue }, { a: string }>>(false);
+          assertType<StructurallyEquals<{ a: JsonValue }, { a?: PathJsonValue }>>(false);
+          assertType<StructurallyEquals<{ a: JsonValue; kind: Kind }, { a: PathJsonValue; kind: OtherKind }>>(false);
+          assertType<StructurallyEquals<JsonValue, PathJsonValue | undefined>>(false);
+          assertType<StructurallyEquals<readonly JsonValue[], PathJsonValue[]>>(false);
+        });
       });
     });
 
