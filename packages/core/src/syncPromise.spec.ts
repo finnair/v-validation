@@ -3,9 +3,14 @@ import { Path } from '@finnair/path';
 import { V } from './V.js';
 import { SyncPromise, ValidationContext } from './validators.js';
 
+// `SyncPromise.then` intentionally requires both handlers (it invokes the rejection handler
+// unconditionally when rejected), so the single-handler, Promise-like subscriptions below are
+// deliberate type errors marked with `@ts-expect-error`. They also guard the required signature:
+// relaxing `onRejected` to optional would turn these directives into reported "unused" errors.
 describe('SyncPromise', () => {
   test('invokes the handler synchronously when already settled', () => {
     const seen: number[] = [];
+    // @ts-expect-error single-handler subscription
     new SyncPromise<number>(resolve => resolve(1)).then(value => seen.push(value));
     expect(seen).toEqual([1]);
   });
@@ -15,7 +20,9 @@ describe('SyncPromise', () => {
     let settle!: (value: number) => void;
     new SyncPromise<number>(resolve => {
       settle = resolve;
-    }).then(value => seen.push(value));
+    })
+      // @ts-expect-error single-handler subscription
+      .then(value => seen.push(value));
 
     expect(seen).toEqual([]);
     settle(2);
@@ -63,6 +70,7 @@ describe('SyncPromise', () => {
     const promise = new SyncPromise<number>(resolve => {
       settle = resolve;
     });
+    // @ts-expect-error single-handler subscription
     promise.then(value => seen.push(value));
     settle(1);
     expect(() => settle(2)).toThrow(/already settled/);
@@ -71,16 +79,21 @@ describe('SyncPromise', () => {
 
   test('a second subscriber throws instead of being silently dropped', () => {
     const settled = new SyncPromise<number>(resolve => resolve(1));
+    // @ts-expect-error single-handler subscription
     settled.then(() => {});
+    // @ts-expect-error single-handler subscription
     expect(() => settled.then(() => {})).toThrow(/single subscriber/);
 
     const pending = new SyncPromise<number>(() => {});
+    // @ts-expect-error single-handler subscription
     pending.then(() => {});
+    // @ts-expect-error single-handler subscription
     expect(() => pending.then(() => {})).toThrow(/single subscriber/);
   });
 
   test('SyncPromise.resolve is already fulfilled', () => {
     const seen: number[] = [];
+    // @ts-expect-error single-handler subscription
     SyncPromise.resolve(5).then(value => seen.push(value));
     expect(seen).toEqual([5]);
   });
@@ -99,7 +112,9 @@ describe('SyncPromise', () => {
     await expect(Promise.resolve(SyncPromise.reject<string>(new Error('bad')))).rejects.toThrow('bad');
 
     const settled = SyncPromise.resolve(1);
+    // @ts-expect-error single-handler subscription
     settled.then(() => {});
+    // @ts-expect-error single-handler subscription
     expect(() => settled.then(() => {})).toThrow(/single subscriber/);
   });
 

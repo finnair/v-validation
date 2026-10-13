@@ -363,6 +363,13 @@ V.string()
 All built-in validators (except `V.schema`) have input and output types. Typed ObjectValidators can be built with `V.objectType()`.
 Since inferred types tend to get quite long and hard to read, you can also combine them with hand-written types.
 
+> **New in Version 13.2:** Inferred object validator types are now flattened into plain object literals, so
+> hovers and error messages read as `{ id: string; name?: string }` instead of nested
+> `RequiredProperties<...> & Partial<OptionalProperties<...>>` intersections. In addition, a `next`/`localNext`
+> transform to a non-object (e.g. `string`) now yields that type directly instead of `object & string`.
+> The new `assertValidatorType` / `Equals` helpers (see [Type Guards](#type-guards) below) replace the
+> now-deprecated `EqualTypes` + `ComparableType` pattern for verifying validator/interface compatibility.
+
 ### Validator Type
 Use `VType<typeof validator>` to get the result type of `validator`.
 
@@ -374,16 +381,15 @@ LocalType and InheritableType will only differ when `localProperties` or `localN
 
 ### Type Guards
 
-When using custom interfaces it's good to verify that the validator is in sync with the interface. The 
-challenge is that TypeScript's generic `extends` only verifies type-compatibility and optional
-properties do not count unless they are of conflicting type. For type/validator compatibility
-we need to also consider optional properties and nested structure. For this there are a couple of helper
-types:
+When using custom interfaces it's good to verify that the validator is in sync with the interface. The
+challenge is that TypeScript's generic `extends` only verifies type-compatibility, so optional and extra
+properties do not count unless they are of conflicting type. Type/validator compatibility must also
+consider optionality and nested structure.
 
-1. `ComparableType<T>` converts all optional properties to mandatory `Optional<T>` recursively.
-2. `EqualTypes<A, B>` verifies that `A extends B` and `B extends A` and resolves to `true` if there's no error.
+Use `assertValidatorType<Expected>()(validator)` to assert, at compile time, that a validator's output
+type is *exactly* `Expected`. It fails compilation on any difference, including optional-vs-required,
+missing and extra properties, and nested differences:
 
-These can be used with `assertType` to verify type equality:
 ```typescript
 interface MyInterface {
   //...
@@ -394,11 +400,25 @@ const myInterfaceValidator = V.objectType()
   })
   .build();
 
-// Use assertType function with EqualTypes and ComparableType to verify that myInterfaceValidator type is equal to MyInterface
-assertType<EqualTypes<ComparableType<VType<typeof myInterfaceValidator>>, ComparableType<MyInterface>>>(true);
+// Compile error unless VType<typeof myInterfaceValidator> equals MyInterface exactly:
+assertValidatorType<MyInterface>()(myInterfaceValidator);
 ```
-Why `assertType`? EqualTypes can also be used directly, but it needs to be tied to something (e.g. `type verified = Equaltypes<...>`),
-but that something may then cause "is declared but never used" -error.
+
+The empty `()` is required because TypeScript cannot both accept `Expected` explicitly and infer the
+validator in a single call. For a type-only check (e.g. comparing two arbitrary types), use the
+underlying `Equals<A, B>`, which resolves to `true` or `false`:
+
+```typescript
+assertType<Equals<VType<typeof myInterfaceValidator>, MyInterface>>(true);
+```
+
+> **Deprecated:** Earlier versions used `ComparableType<T>` (which wraps optional properties so they are
+> compared strictly) together with `EqualTypes<A, B>`:
+> ```typescript
+> assertType<EqualTypes<ComparableType<VType<typeof myInterfaceValidator>>, ComparableType<MyInterface>>>(true);
+> ```
+> These still work but are deprecated in favor of `assertValidatorType` / `Equals`, which are strict
+> without the `ComparableType` wrapping.
 
 ## Combining Validators
 

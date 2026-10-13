@@ -492,8 +492,6 @@ export abstract class Validator<Out = unknown, In = unknown> {
   }
 }
 
-export type VType<V extends Validator<any>> = V extends Validator<infer Out> ? Out : unknown;
-
 export interface WarnLogger {
   (violation: Violation, ctx: ValidatorOptions): void;
 }

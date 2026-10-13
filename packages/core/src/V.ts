@@ -50,7 +50,6 @@ import {
   RequiredValidator,
   SetValidator,
   UuidValidator,
-  VType,
   maybeCompositionOf,
   CompositionParameters,
   OptionalUndefinedValidator,
@@ -58,6 +57,7 @@ import {
   JsonBigIntValidator,
   UnknownValidator,
 } from './validators.js';
+import { VType } from './typing.js';
 import {ObjectModel, ObjectValidator, ObjectNormalizer } from './objectValidator.js';
 import { ObjectValidatorBuilder } from './objectValidatorBuilder.js';
 import { MemoizeValidator, MemoizeValidatorOptions } from './memoizeValidator.js';

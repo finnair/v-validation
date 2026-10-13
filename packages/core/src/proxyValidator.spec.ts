@@ -116,6 +116,10 @@ describe('ProxyValidator', () => {
         name: string;
         child?: Node;
       }
+      // A recursive validator cannot infer its own output type: the proxy erases `child` to
+      // `unknown`, so the build result is not structurally assignable to `Validator<Node>` even
+      // though it produces `Node` at runtime. The annotation documents the intended type.
+      // @ts-expect-error inferred `child` is `unknown`, not `Node`
       const node: Validator<Node> = V.objectType()
         .properties({
           name: V.string(),
