@@ -19,7 +19,6 @@ import {
   SizeViolation,
   EnumMismatch,
   JsonSet,
-  VType,
   JsonMap,
   JsonBigInt,
   SuccessCallback,
@@ -34,7 +33,7 @@ import { V } from './V.js';
 import { jsonClone, Path } from '@finnair/path';
 import { expectUndefined, expectValid, expectViolations, verifyValid } from './testUtil.spec.js';
 import { fail } from 'assert';
-import { EqualTypes, ComparableType, assertType, OptionalKeys } from './typing.js';
+import { EqualTypes, ComparableType, assertType, assertValidatorType, OptionalKeys, VType } from './typing.js';
 
 const ROOT = Path.ROOT,
   index = Path.index,
@@ -349,197 +348,312 @@ describe('objects', () => {
       type T = { optional?: string, undef: string | undefined, required: string };
       assertType<EqualTypes<OptionalKeys<T>, 'optional' | 'undef'>>(true)
     });
-    describe('simple type', () => {
-      const validator = V.objectType()
-        .properties({
-          required: V.string(),
-          optional: V.optionalStrict(V.string()),
-        })
-        .build();
+    describe('assertValidatorType', () => {
+      describe('simple type', () => {
+        const validator = V.objectType()
+          .properties({
+            required: V.string(),
+            optional: V.optionalStrict(V.string()),
+          })
+          .build();
 
-      test('required property missing', () => {
-        // @ts-ignore
-        type v = EqualTypes<
-          ComparableType<VType<typeof validator>>,
-          // @ts-expect-error
-          ComparableType<{
-            optional?: string;
-          }>
-        >;
+        test('exact match compiles', () => {
+          assertValidatorType<{ required: string; optional?: string }>()(validator);
+        });
+        test('required property missing', () => {
+          // @ts-expect-error `required` is missing from the expected type
+          assertValidatorType<{ optional?: string }>()(validator);
+        });
+        test('required property is optional', () => {
+          // @ts-expect-error `required` must be required, not optional
+          assertValidatorType<{ required?: string; optional?: string }>()(validator);
+        });
+        test('optional property missing', () => {
+          // @ts-expect-error `optional` is missing from the expected type
+          assertValidatorType<{ required: string }>()(validator);
+        });
+        test('optional has wrong type', () => {
+          // @ts-expect-error `optional` must be a string
+          assertValidatorType<{ required: string; optional?: number }>()(validator);
+        });
+        test('optional property is required', () => {
+          // @ts-expect-error `optional` must be optional, not required
+          assertValidatorType<{ required: string; optional: string }>()(validator);
+        });
       });
-      test('required property is optional', () => {
-        // @ts-ignore
-        type v = EqualTypes<
-          // @ts-expect-error
-          ComparableType<VType<typeof validator>>,
-          ComparableType<{
-            required?: string;
-            optional?: string;
-          }>
-        >;
+
+      describe('nested type', () => {
+        const validator = V.objectType()
+          .properties({
+            required: V.objectType()
+              .properties({
+                required: V.string(),
+                optional: V.optionalStrict(V.string()),
+              })
+              .build(),
+            optional: V.optionalStrict(V.objectType()
+              .properties({
+                required: V.string(),
+                optional: V.optionalStrict(V.string()),
+              })
+              .build()),
+          })
+          .build();
+        type Inner = { required: string; optional?: string };
+
+        test('exact match compiles', () => {
+          assertValidatorType<{ required: Inner; optional?: Inner }>()(validator);
+        });
+        test('required.required property missing', () => {
+          type Expected = { required: { optional?: string }; optional?: Inner };
+          // @ts-expect-error required.required is missing
+          assertValidatorType<Expected>()(validator);
+        });
+        test('optional.required property missing', () => {
+          type Expected = { required: Inner; optional?: { optional?: string } };
+          // @ts-expect-error optional.required is missing
+          assertValidatorType<Expected>()(validator);
+        });
+        test('required.optional property missing', () => {
+          type Expected = { required: { required: string }; optional?: Inner };
+          // @ts-expect-error required.optional is missing
+          assertValidatorType<Expected>()(validator);
+        });
+        test('required.optional has wrong type', () => {
+          type Expected = { required: { required: string; optional?: number }; optional?: Inner };
+          // @ts-expect-error required.optional must be a string
+          assertValidatorType<Expected>()(validator);
+        });
+        test('required.optional is not optional', () => {
+          type Expected = { required: { required: string; optional: string }; optional?: Inner };
+          // @ts-expect-error required.optional must be optional
+          assertValidatorType<Expected>()(validator);
+        });
+        test('optional.required is not required', () => {
+          type Expected = { required: Inner; optional?: { required?: string; optional?: string } };
+          // @ts-expect-error optional.required must be required
+          assertValidatorType<Expected>()(validator);
+        });
       });
-      test('optional property missing', () => {
-        // @ts-ignore
-        type v = EqualTypes<
-          ComparableType<VType<typeof validator>>,
-          // @ts-expect-error
-          ComparableType<{
-            required: string;
-          }>
-        >;
-      });
-      test('optional has wrong type', () => {
-        // @ts-ignore
-        type v = EqualTypes<
-          // @ts-expect-error
-          ComparableType<VType<typeof validator>>,
-          ComparableType<{
-            required: string;
-            optional?: number;
-          }>
-        >;
-      });
-      test('optional property is required', () => {
-        // @ts-ignore
-        type v = EqualTypes<
-          // @ts-expect-error
-          ComparableType<VType<typeof validator>>,
-          ComparableType<{
-            required: string;
-            optional: string;
-          }>
-        >;
+
+      test('next allows conversion to string', () => {
+        const validator = V.objectType()
+          .properties({ value: V.string() })
+          .next(V.map(value => JSON.stringify(value)))
+          .build();
+        assertValidatorType<string>()(validator);
       });
     });
 
-    describe('nested type', () => {
-      const validator = V.objectType()
-        .properties({
-          required: V.objectType()
-            .properties({
-              required: V.string(),
-              optional: V.optionalStrict(V.string()),
-            })
-            .build(),
-          optional: V.optionalStrict(V.objectType()
-            .properties({
-              required: V.string(),
-              optional: V.optionalStrict(V.string()),
-            })
-            .build()),
-        })
-        .build();
+    // Backwards-compatibility coverage for the deprecated EqualTypes/ComparableType machinery.
+    // Mirrors the assertValidatorType cases above to prove the old utilities still work.
+    describe('EqualTypes / ComparableType (deprecated)', () => {
+      describe('simple type', () => {
+        const validator = V.objectType()
+          .properties({
+            required: V.string(),
+            optional: V.optionalStrict(V.string()),
+          })
+          .build();
 
-      test('required.required property missing', () => {
-        // @ts-ignore
-        type v = EqualTypes<
-          ComparableType<VType<typeof validator>>,
-          // @ts-expect-error 
-          ComparableType<{
-            required: {
-              //required: string;
+        test('exact match', () => {
+          assertType<EqualTypes<ComparableType<VType<typeof validator>>, ComparableType<{ required: string; optional?: string }>>>(true);
+        });
+        test('required property missing', () => {
+          // @ts-ignore
+          type v = EqualTypes<
+            ComparableType<VType<typeof validator>>,
+            // @ts-expect-error
+            ComparableType<{
               optional?: string;
-            }
-            optional?: {
-              required: string;
-              optional?: string;
-            }
-          }>
-        >;
-      });
-      test('optional.required property missing', () => {
-        // @ts-ignore
-        type v = EqualTypes<
-          ComparableType<VType<typeof validator>>,
-          // @ts-expect-error 
-          ComparableType<{
-            required: {
-              required: string;
-              optional?: string;
-            }
-            optional?: {
-              //required: string;
-              optional?: string;
-            }
-          }>
-        >;
-      });
-      test('required.optional property missing', () => {
-        // @ts-ignore
-        type v = EqualTypes<
-          ComparableType<VType<typeof validator>>,
-          // @ts-expect-error 
-          ComparableType<{
-            required: {
-              required: string;
-              //optional?: string;
-            }
-            optional?: {
-              required: string;
-              optional?: string;
-            }
-          }>
-        >;
-      });
-      test('required.optional has wrong type', () => {
-        // @ts-ignore
-        type v = EqualTypes<
-          // @ts-expect-error 
-          ComparableType<VType<typeof validator>>,
-          ComparableType<{
-            required: {
-              required: string;
-              optional?: number;
-            }
-            optional?: {
-              required: string;
-              optional?: string;
-            }
-          }>
-        >;
-      });
-      test('required.optional is not optional', () => {
-        // @ts-ignore
-        type v = EqualTypes<
-          // @ts-expect-error 
-          ComparableType<VType<typeof validator>>,
-          ComparableType<{
-            required: {
-              required: string;
-              optional: string;
-            }
-            optional?: {
-              required: string;
-              optional?: string;
-            }
-          }>
-        >;
-      });
-      test('optional.required is not required', () => {
-        // @ts-ignore
-        type v = EqualTypes<
-          // @ts-expect-error 
-          ComparableType<VType<typeof validator>>,
-          ComparableType<{
-            required: {
-              required: string;
-              optional?: string;
-            }
-            optional?: {
+            }>
+          >;
+        });
+        test('required property is optional', () => {
+          // @ts-ignore
+          type v = EqualTypes<
+            // @ts-expect-error
+            ComparableType<VType<typeof validator>>,
+            ComparableType<{
               required?: string;
               optional?: string;
-            }
-          }>
-        >;
+            }>
+          >;
+        });
+        test('optional property missing', () => {
+          // @ts-ignore
+          type v = EqualTypes<
+            ComparableType<VType<typeof validator>>,
+            // @ts-expect-error
+            ComparableType<{
+              required: string;
+            }>
+          >;
+        });
+        test('optional has wrong type', () => {
+          // @ts-ignore
+          type v = EqualTypes<
+            // @ts-expect-error
+            ComparableType<VType<typeof validator>>,
+            ComparableType<{
+              required: string;
+              optional?: number;
+            }>
+          >;
+        });
+        test('optional property is required', () => {
+          // @ts-ignore
+          type v = EqualTypes<
+            // @ts-expect-error
+            ComparableType<VType<typeof validator>>,
+            ComparableType<{
+              required: string;
+              optional: string;
+            }>
+          >;
+        });
       });
-    });
 
-    test('next allows conversion to string', () => {
-      const validator = V.objectType()
-        .properties({ value: V.string() })
-        .next(V.map(value => JSON.stringify(value)))
-        .build();
-      assertType<EqualTypes<VType<typeof validator>, string>>(true);
+      describe('nested type', () => {
+        const validator = V.objectType()
+          .properties({
+            required: V.objectType()
+              .properties({
+                required: V.string(),
+                optional: V.optionalStrict(V.string()),
+              })
+              .build(),
+            optional: V.optionalStrict(V.objectType()
+              .properties({
+                required: V.string(),
+                optional: V.optionalStrict(V.string()),
+              })
+              .build()),
+          })
+          .build();
+
+        test('exact match', () => {
+          assertType<
+            EqualTypes<
+              ComparableType<VType<typeof validator>>,
+              ComparableType<{
+                required: { required: string; optional?: string };
+                optional?: { required: string; optional?: string };
+              }>
+            >
+          >(true);
+        });
+        test('required.required property missing', () => {
+          // @ts-ignore
+          type v = EqualTypes<
+            ComparableType<VType<typeof validator>>,
+            // @ts-expect-error
+            ComparableType<{
+              required: {
+                //required: string;
+                optional?: string;
+              }
+              optional?: {
+                required: string;
+                optional?: string;
+              }
+            }>
+          >;
+        });
+        test('optional.required property missing', () => {
+          // @ts-ignore
+          type v = EqualTypes<
+            ComparableType<VType<typeof validator>>,
+            // @ts-expect-error
+            ComparableType<{
+              required: {
+                required: string;
+                optional?: string;
+              }
+              optional?: {
+                //required: string;
+                optional?: string;
+              }
+            }>
+          >;
+        });
+        test('required.optional property missing', () => {
+          // @ts-ignore
+          type v = EqualTypes<
+            ComparableType<VType<typeof validator>>,
+            // @ts-expect-error
+            ComparableType<{
+              required: {
+                required: string;
+                //optional?: string;
+              }
+              optional?: {
+                required: string;
+                optional?: string;
+              }
+            }>
+          >;
+        });
+        test('required.optional has wrong type', () => {
+          // @ts-ignore
+          type v = EqualTypes<
+            // @ts-expect-error
+            ComparableType<VType<typeof validator>>,
+            ComparableType<{
+              required: {
+                required: string;
+                optional?: number;
+              }
+              optional?: {
+                required: string;
+                optional?: string;
+              }
+            }>
+          >;
+        });
+        test('required.optional is not optional', () => {
+          // @ts-ignore
+          type v = EqualTypes<
+            // @ts-expect-error
+            ComparableType<VType<typeof validator>>,
+            ComparableType<{
+              required: {
+                required: string;
+                optional: string;
+              }
+              optional?: {
+                required: string;
+                optional?: string;
+              }
+            }>
+          >;
+        });
+        test('optional.required is not required', () => {
+          // @ts-ignore
+          type v = EqualTypes<
+            // @ts-expect-error
+            ComparableType<VType<typeof validator>>,
+            ComparableType<{
+              required: {
+                required: string;
+                optional?: string;
+              }
+              optional?: {
+                required?: string;
+                optional?: string;
+              }
+            }>
+          >;
+        });
+      });
+
+      test('next allows conversion to string', () => {
+        const validator = V.objectType()
+          .properties({ value: V.string() })
+          .next(V.map(value => JSON.stringify(value)))
+          .build();
+        assertType<EqualTypes<VType<typeof validator>, string>>(true);
+      });
     });
   });
 
@@ -844,7 +958,9 @@ describe('objects', () => {
       })
       .build();
     recursion = validator;
-    assertType<EqualTypes<ComparableType<VType<typeof validator>>, ComparableType<RecursiveModel>>>(true);
+    // Equivalent to the verbose form, which still works:
+    // assertType<EqualTypes<ComparableType<VType<typeof validator>>, ComparableType<RecursiveModel>>>(true);
+    assertValidatorType<RecursiveModel>()(validator);
 
     test('recursive type', () => expectValid(({ first: 'first', next: { first: 'second', next: { first: 'third' } } }) satisfies VType<typeof validator>, validator));
 
@@ -1032,8 +1148,9 @@ describe('objects', () => {
       expectViolations({}, V.object({ properties: protoModel() }), defaultViolations.notNull(Path.property('__proto__'))));
 
     test('optional missing __proto__', async () => {
+      // Untyped `V.object` infers `unknown`; the result is an object at runtime.
       const result = await V.object({ properties: { ['__proto__']: V.optional(V.any()) } }).getValid({});
-      expect(Object.keys(result)).toEqual([]);
+      expect(Object.keys(result as object)).toEqual([]);
     });
 
     test('additional __proto__ property', async () => expectOwnProto(await V.object({ additionalProperties: true }).getValid(JSON.parse(protoJson))));

@@ -2,7 +2,7 @@ import { setOwnProperty } from "@finnair/path";
 import { V } from "./V.js";
 import { Validator } from "./validators.js";
 import { MapEntryModel, ObjectValidator, PropertyModel, strictUnknownPropertyValidator } from "./objectValidator.js";
-import { UndefinedAsOptionalProperties } from "./typing.js";
+import { CombineOutput, Simplify, UndefinedAsOptionalProperties } from "./typing.js";
 
 export class ObjectValidatorBuilder<Props, Next, LocalProps, LocalNext> {
   private _extends: ObjectValidator[] = [];
@@ -89,8 +89,8 @@ export class ObjectValidatorBuilder<Props, Next, LocalProps, LocalNext> {
   }
   build() {
     return new ObjectValidator<
-        (Next extends {} ? Next : Props) & (LocalNext extends {} ? LocalNext : LocalProps), 
-        (Next extends {} ? Next : Props)
+        Simplify<CombineOutput<Next extends {} ? Next : Props, LocalNext extends {} ? LocalNext : LocalProps>>,
+        Simplify<Next extends {} ? Next : Props>
       >({
       extends: this._extends,
       properties: this._properties,
