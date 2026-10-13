@@ -50,16 +50,18 @@ export type ComparableType<T> = T extends object
 export type EqualTypes<Inferred extends Custom, Custom extends T, T = Inferred> = true;
 
 /**
- * Verify that two types are deeply equal including optionality. TypeScript itself only checks
- * required properties for compatibility.
- * 
+ * Tie a type-level assertion to a statement so the compiler checks it (a bare `type _ = ...` would
+ * otherwise be flagged as unused). Pass the expected value of the computed type, typically `true`.
+ *
  * Usage:
  * ```ts
- * assertType<EqualTypes<ComparableType<VType<typeof validator>>, ComparableType<RecursiveModel>>>(true);
+ * assertType<Equals<VType<typeof validator>, MyInterface>>(true);
  * ```
- * 
- * @param _ 
- * @returns 
+ *
+ * For validators, prefer the dedicated {@link assertValidatorType}.
+ *
+ * @param _
+ * @returns
  */
 export const assertType = <Type>(_: Type): void => void 0;
 
@@ -89,7 +91,7 @@ export const assertValidatorType =
   <V extends Validator<any>>(
     _validator: Equals<VType<V>, Expected> extends true
       ? V
-      : { 'validator output does not match expected type': Expected },
+      : 'a validator whose output type matches the asserted type',
   ): void => void 0;
 
 /**
