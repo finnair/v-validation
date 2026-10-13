@@ -144,8 +144,8 @@ type AtExpected<B, K extends PropertyKey> = K extends keyof B ? B[K] : 'UNEXPECT
 /**
  * A structural, per-property diff of `Actual` against `Expected`. Resolves to `never` when they are
  * strictly equal (so it can gate an assertion), otherwise to an object that keeps only the mismatching
- * keys - recursively - with `{ expected; actual }` at each offending leaf. Surfaced in a type error, it
- * points at the exact property path (e.g. `{ address: { zip: { expected: string; actual: number } } }`).
+ * keys - recursively - with `{ EXPECTED; ACTUAL }` at each offending leaf. Surfaced in a type error, it
+ * points at the exact property path (e.g. `{ address: { zip: { EXPECTED: string; ACTUAL: number } } }`).
  */
 export type OutputTypeMismatch<Actual, Expected> = StructurallyEquals<Actual, Expected> extends true
   ? never
@@ -155,7 +155,7 @@ export type OutputTypeMismatch<Actual, Expected> = StructurallyEquals<Actual, Ex
           ? never
           : K]: OutputTypeMismatch<AtActual<Actual, K>, AtExpected<Expected, K>>;
       }
-    : { expected: Expected; actual: Actual };
+    : { EXPECTED: Expected; ACTUAL: Actual };
 
 /**
  * Assert at compile time that a validator's inferred output type is *exactly* `Expected`.
