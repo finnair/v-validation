@@ -73,6 +73,7 @@ export const assertType = <Type>(_: Type): void => void 0;
 export type Equals<A, B> =
   (<T>() => T extends A ? 1 : 2) extends (<T>() => T extends B ? 1 : 2) ? true : false;
 
+// If you can assign both 0 and 1 to the type, it can only be any because no other type can accept an intersection of two literals
 type IsAny<T> = 0 extends 1 & T ? true : false;
 
 // Enum members become their literal values and intersections are flattened; ?, readonly and tuples are kept.
