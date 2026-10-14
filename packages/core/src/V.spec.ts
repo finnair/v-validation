@@ -31,14 +31,16 @@ import {
 } from './validators.js';
 import { ObjectValidator, VInheritableType, lenientUnknownPropertyValidator } from './objectValidator.js';
 import { V } from './V.js';
-import { jsonClone, Path, JsonValue as PathJsonValue, JsonValue } from '@finnair/path';
+import { jsonClone, Path, JsonValue } from '@finnair/path';
 import { expectUndefined, expectValid, expectViolations, verifyValid } from './testUtil.spec.js';
 import { fail } from 'assert';
-import { EqualTypes, ComparableType, assertType, assertValidatorType, OptionalKeys, VType, StructurallyEquals, OutputTypeMismatch, Equals } from './typing.js';
+import { EqualTypes, ComparableType, assertType, assertValidatorType, OptionalKeys, VType, StructurallyEquals, OutputTypeMismatch, Equals, AbsentProperty } from './typing.js';
 
 const ROOT = Path.ROOT,
   index = Path.index,
   property = Path.property;
+
+type OtherJsonValue = string | boolean | number | null | OtherJsonValue[] | { [key: string]: OtherJsonValue };
 
 async function expectGroupViolations(value: any, group: Group, validator: Validator, ...violations: Violation[]) {
   const result = await validator.validate(value, { group });
@@ -461,16 +463,16 @@ describe('objects', () => {
           .build();
 
         test('equal aliases compile', () => {
-          assertValidatorType<{ value?: PathJsonValue }>()(entryValidator);
+          assertValidatorType<{ value?: OtherJsonValue }>()(entryValidator);
         });
         test('alias with an enum in an intersection compiles', () => {
           const validator = V.objectType().extends(entryValidator).properties({ kind: V.enum(Kind, 'Kind') }).build();
-          assertValidatorType<{ value?: PathJsonValue; kind: Kind }>()(validator);
+          assertValidatorType<{ value?: OtherJsonValue; kind: Kind }>()(validator);
           // @ts-expect-error kind has a wrong enum type
-          assertValidatorType<{ value?: PathJsonValue; kind: OtherKind }>()(validator);
+          assertValidatorType<{ value?: OtherJsonValue; kind: OtherKind }>()(validator);
         });
         test('recursive tree with an alias leaf compiles', () => {
-          type Tree = { [key: string]: { value?: PathJsonValue } | Tree };
+          type Tree = { [key: string]: { value?: OtherJsonValue } | Tree };
           const treeValidator: Validator<Tree> = V.properties(
             V.string(),
             V.if((value: any) => 'value' in value, entryValidator).else(V.proxy(() => treeValidator, true)),
@@ -482,22 +484,22 @@ describe('objects', () => {
         test('StructurallyEquals', () => {
           // Kind as an indexed access type is not Equals to Kind, so the comparison walks into the alias
           type KindValue = VType<EnumValidator<typeof Kind>>;
-          assertType<StructurallyEquals<JsonValue, PathJsonValue>>(true);
-          assertType<StructurallyEquals<{ a: JsonValue; kind: KindValue }, { a: PathJsonValue; kind: Kind }>>(true);
-          assertType<StructurallyEquals<JsonValue[], PathJsonValue[]>>(true);
-          assertType<StructurallyEquals<JsonValue | Kind, PathJsonValue | Kind>>(true);
-          assertType<StructurallyEquals<{ a: JsonValue } & { kind: Kind }, { a: PathJsonValue; kind: Kind }>>(true);
+          assertType<StructurallyEquals<JsonValue, OtherJsonValue>>(true);
+          assertType<StructurallyEquals<{ a: JsonValue; kind: KindValue }, { a: OtherJsonValue; kind: Kind }>>(true);
+          assertType<StructurallyEquals<JsonValue[], OtherJsonValue[]>>(true);
+          assertType<StructurallyEquals<JsonValue | Kind, OtherJsonValue | Kind>>(true);
+          assertType<StructurallyEquals<{ a: JsonValue } & { kind: Kind }, { a: OtherJsonValue; kind: Kind }>>(true);
           assertType<StructurallyEquals<{ a: JsonValue }, { a: string }>>(false);
-          assertType<StructurallyEquals<{ a: JsonValue }, { a?: PathJsonValue }>>(false);
-          assertType<StructurallyEquals<{ a: JsonValue; kind: Kind }, { a: PathJsonValue; kind: OtherKind }>>(false);
-          assertType<StructurallyEquals<JsonValue, PathJsonValue | undefined>>(false);
-          assertType<StructurallyEquals<readonly JsonValue[], PathJsonValue[]>>(false);
+          assertType<StructurallyEquals<{ a: JsonValue }, { a?: OtherJsonValue }>>(false);
+          assertType<StructurallyEquals<{ a: JsonValue; kind: Kind }, { a: OtherJsonValue; kind: OtherKind }>>(false);
+          assertType<StructurallyEquals<JsonValue, OtherJsonValue | undefined>>(false);
+          assertType<StructurallyEquals<readonly JsonValue[], OtherJsonValue[]>>(false);
         });
       });
 
       describe('tuples', () => {
         test('recursive aliases inside a tuple compare element by element', () => {
-          assertType<StructurallyEquals<[{ a: JsonValue } & { b: 1 }, string], [{ a: PathJsonValue; b: 1 }, string]>>(true);
+          assertType<StructurallyEquals<[{ a: JsonValue } & { b: 1 }, string], [{ a: OtherJsonValue; b: 1 }, string]>>(true);
           assertType<StructurallyEquals<[{ a: JsonValue } & { b: 1 }], [{ a: string; b: 1 }]>>(false);
         });
         test('length, optional elements and readonly must match', () => {
@@ -531,10 +533,12 @@ describe('objects', () => {
         const modifier = 'optional or readonly modifier differs';
         test('classes differing only in private or protected members', () => {
           class First {
+            // @ts-ignore
             private id = 1;
             protected kind = 1;
           }
           class Second {
+            // @ts-ignore
             private id = 1;
             protected kind = 1;
           }
@@ -555,6 +559,10 @@ describe('objects', () => {
         test('property mismatch has no reason', () => {
           type Mismatch = OutputTypeMismatch<{ value: { a: string } }, { value: { a: number } }>;
           assertType<Equals<Mismatch, { value: { a: { EXPECTED: number; ACTUAL: string } } }>>(true);
+        });
+        test('a literal equal to a marker string is still reported at its path', () => {
+          type Mismatch = OutputTypeMismatch<{}, { b: 'MISSING: property is absent' }>;
+          assertType<Equals<Mismatch, { b: { EXPECTED: 'MISSING: property is absent'; ACTUAL: AbsentProperty<'MISSING: property is absent'> } }>>(true);
         });
         test('tuples are diffed by index', () => {
           assertType<Equals<OutputTypeMismatch<[string, number], [string, string]>, { 1: { EXPECTED: string; ACTUAL: number } }>>(true);
@@ -611,7 +619,7 @@ describe('objects', () => {
         test('never typed properties', () => {
           assertType<StructurallyEquals<{ a: never } & { b: 1 }, { a: never; b: 1 }>>(true);
           assertType<StructurallyEquals<{ a: never }, { a: string }>>(false);
-          assertType<Equals<OutputTypeMismatch<{ a: string }, { a: string; b: never }>['b']['ACTUAL'], 'MISSING: property is absent'>>(true);
+          assertType<Equals<OutputTypeMismatch<{ a: string }, { a: string; b: never }>['b']['ACTUAL'], AbsentProperty<'MISSING: property is absent'>>>(true);
         });
       });
     });

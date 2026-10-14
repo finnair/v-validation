@@ -179,8 +179,18 @@ type At<T, K extends PropertyKey, Absent> = K extends keyof T
   : K extends number
     ? string extends keyof T ? T[string & keyof T] : Absent
     : Absent;
-type AtActual<A, K extends PropertyKey> = At<A, K, 'MISSING: property is absent'>;
-type AtExpected<B, K extends PropertyKey> = At<B, K, 'UNEXPECTED: property not allowed'>;
+declare const absentMarker: unique symbol;
+
+/**
+ * Stands in for a property that is missing from one side of a diff. Branded with a symbol that is not
+ * exported, so no user type can equal it; `Label` only makes the error message readable.
+ */
+export interface AbsentProperty<Label extends string> {
+  readonly [absentMarker]: Label;
+}
+
+type AtActual<A, K extends PropertyKey> = At<A, K, AbsentProperty<'MISSING: property is absent'>>;
+type AtExpected<B, K extends PropertyKey> = At<B, K, AbsentProperty<'UNEXPECTED: property not allowed'>>;
 
 /**
  * A structural, per-property diff of `Actual` against `Expected`. Resolves to `never` when they are
