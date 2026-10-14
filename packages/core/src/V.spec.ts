@@ -31,11 +31,10 @@ import {
 } from './validators.js';
 import { ObjectValidator, VInheritableType, lenientUnknownPropertyValidator } from './objectValidator.js';
 import { V } from './V.js';
-import { jsonClone, Path, JsonValue as PathJsonValue } from '@finnair/path';
+import { jsonClone, Path, JsonValue as PathJsonValue, JsonValue } from '@finnair/path';
 import { expectUndefined, expectValid, expectViolations, verifyValid } from './testUtil.spec.js';
 import { fail } from 'assert';
 import { EqualTypes, ComparableType, assertType, assertValidatorType, OptionalKeys, VType, StructurallyEquals, OutputTypeMismatch, Equals } from './typing.js';
-import { JsonValue } from './jsonValue.js';
 
 const ROOT = Path.ROOT,
   index = Path.index,

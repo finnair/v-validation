@@ -62,7 +62,7 @@ import {ObjectModel, ObjectValidator, ObjectNormalizer } from './objectValidator
 import { ObjectValidatorBuilder } from './objectValidatorBuilder.js';
 import { MemoizeValidator, MemoizeValidatorOptions } from './memoizeValidator.js';
 import { ProxyValidator, ProxyValidatorFactory } from './proxyValidator.js';
-import { jsonValue } from './jsonValue.js';
+import { jsonValue } from './jsonValueValidator.js';
 
 interface AllOfParameters {
   <In, Out1, Out2>(v1: Validator<Out1, In>, v2: Validator<Out2, In>): Validator<Out1 & Out2, In>;

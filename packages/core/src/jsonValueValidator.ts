@@ -1,12 +1,6 @@
-import { Path } from "@finnair/path";
+import { Path, JsonValue, JsonObject } from "@finnair/path";
 import { ArrayValidator, FailureCallback, StringValidator, SuccessCallback, TypeMismatch, ValidationContext, Validator } from "./validators.js";
 import { ObjectValidator } from "./objectValidator.js";
-
-export type JsonPrimitive = string | boolean | number | null;
-export type JsonValue = JsonPrimitive | JsonValue[] | JsonObject;
-export type JsonObject = {
-    [key: string]: JsonValue;
-};
 
 export type JsonValueType = "string" | "boolean" | "number" | "null" | "array" | "object";
 
