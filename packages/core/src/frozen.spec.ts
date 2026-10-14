@@ -60,6 +60,16 @@ describe('V.frozen', () => {
     expect(() => result.tags.push('another')).toThrow(TypeError);
   });
 
+  test('freezes tuples and their items', async () => {
+    const validator = V.frozen(V.tuple(V.string(), V.object({ properties: { v: V.string() } })));
+    const result: any = await validator.getValid(['a', { v: '1' }]);
+
+    expect(Object.isFrozen(result)).toBe(true);
+    expect(Object.isFrozen(result[1])).toBe(true);
+    expect(Object.isFrozen(await V.frozen(V.tuple()).getValid([]))).toBe(true);
+    expect(Object.isFrozen(await V.tuple(V.string()).getValid(['a']))).toBe(false);
+  });
+
   test('freezes arrays, their items and the empty array', async () => {
     const validator = V.frozen(V.array(V.object({ properties: { v: V.string() } })));
     const result: any = await validator.getValid([{ v: '1' }, { v: '2' }]);
@@ -379,6 +389,7 @@ describe('supportsFreeze classification', () => {
       ['V.number()', V.number()],
       ['V.object(...)', V.object({ properties: { a: V.string() } })],
       ['V.array(V.string())', V.array(V.string())],
+      ['V.tuple(V.string(), V.number())', V.tuple(V.string(), V.number())],
       ['V.toMapType(...)', V.toMapType(V.string(), V.string(), true)],
       ['V.setType(...)', V.setType(V.string(), true)],
     ])('%s supports freeze', (_name, validator) => expect(validator.supportsFreeze()).toBe(true));
@@ -428,6 +439,7 @@ describe('supportsFreeze classification', () => {
       ['V.date()', V.date()],
       ['V.proxy(() => V.notEmpty())', V.proxy(() => V.notEmpty())],
       ['V.array(V.notEmpty())', V.array(V.notEmpty())],
+      ['V.tuple(V.string(), V.notEmpty())', V.tuple(V.string(), V.notEmpty())],
     ])('%s can produce a new unfrozen value', (_name, validator) => expect(validator.preservesFreeze()).toBe(false));
 
     test('branches and wrappers preserve when every child does', () => {
@@ -577,6 +589,7 @@ describe('supportsFreeze classification', () => {
     test.each([
       ['V.object(...)', object()],
       ['V.array(...)', V.array(V.string())],
+      ['V.tuple(...)', V.tuple(V.string())],
       ['V.toMapType(...)', V.toMapType(V.string(), V.string(), true)],
       ['V.setType(...)', V.setType(V.string(), true)],
       ['V.schema(...)', V.schema(() => ({ discriminator: 'type', models: { A: {} } }))],
@@ -877,6 +890,7 @@ describe('ValidatorVisitor traversal', () => {
       ['V.if/else', V.if(() => true, V.string()).else(V.number()), '(else: 2/2)'],
       ['V.whenGroup', V.whenGroup('g', V.string()).otherwise(V.number()), '(otherwise)'],
       ['V.array', V.array(V.string()), '$["*"]'],
+      ['V.tuple', V.tuple(V.string(), V.number()), '$[1]: NumberValidator'],
       ['V.mapType', V.mapType(V.string(), V.string(), true), '(value)'],
       ['V.setType', V.setType(V.string(), true), 'StringValidator'],
       ['V.string().notEmpty()', V.string().notEmpty(), 'NextStringValidator'],
@@ -1022,6 +1036,18 @@ describe('ValidatorVisitor traversal', () => {
       await nested.validate([[]]);
 
       expect(walk(nested)).toEqual(['$: ArrayValidator', '$["*"]: ProxyValidator', '$["*"]: ArrayValidator (proxy)']);
+    });
+
+    test('a tuple stops at its own re-entry', async () => {
+      const nested: Validator<any> = V.tuple(V.optionalStrict(V.proxy(() => nested)));
+      await nested.validate([[undefined]]);
+
+      expect(walk(nested)).toEqual([
+        '$: TupleValidator',
+        '$[0]: OptionalUndefinedValidator',
+        '$[0]: ProxyValidator',
+        '$[0]: TupleValidator (proxy)',
+      ]);
     });
 
     test('a map stops at its own re-entry', async () => {
