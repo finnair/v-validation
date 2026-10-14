@@ -564,6 +564,12 @@ describe('objects', () => {
           type Mismatch = OutputTypeMismatch<{}, { b: 'MISSING: property is absent' }>;
           assertType<Equals<Mismatch, { b: { EXPECTED: 'MISSING: property is absent'; ACTUAL: AbsentProperty<'MISSING: property is absent'> } }>>(true);
         });
+        test('an absent object-typed property is one leaf', () => {
+          type Missing = OutputTypeMismatch<{ a: 1 }, { a: 1; o: { z: string } }>;
+          assertType<Equals<Missing, { o: { EXPECTED: { z: string }; ACTUAL: AbsentProperty<'MISSING: property is absent'> } }>>(true);
+          type Unexpected = OutputTypeMismatch<{ a: 1; o: { z: string } }, { a: 1 }>;
+          assertType<Equals<Unexpected, { o: { EXPECTED: AbsentProperty<'UNEXPECTED: property not allowed'>; ACTUAL: { z: string } } }>>(true);
+        });
         test('tuples are diffed by index', () => {
           assertType<Equals<OutputTypeMismatch<[string, number], [string, string]>, { 1: { EXPECTED: string; ACTUAL: number } }>>(true);
           type Length = OutputTypeMismatch<[string, number], [string]>;
@@ -2181,6 +2187,26 @@ describe('tuples', () => {
       assertValidatorType<[string?]>()(V.tuple(V.optionalStrict(V.string())));
       // Only trailing items can be optional
       assertValidatorType<[string | undefined, number]>()(V.tuple(V.optionalStrict(V.string()), V.number()));
+    });
+
+    test('only V.optional and V.optionalStrict items are optional, in type and at runtime', async () => {
+      const unknownItem = V.tuple(V.string(), V.unknown());
+      assertValidatorType<[string, unknown]>()(unknownItem);
+      expect(unknownItem.minLength).toBe(2);
+      await expectViolations(['a'], unknownItem, defaultViolations.size(2, 2, ROOT));
+
+      const mapped = V.tuple(V.string(), V.map((value: unknown) => value as string | undefined));
+      assertValidatorType<[string, string | undefined]>()(mapped);
+      expect(mapped.minLength).toBe(2);
+
+      // A wrapper passes skipUndefined on, but is not an optional item
+      const memoized = V.tuple(V.string(), V.memoize(V.optionalStrict(V.string())));
+      assertValidatorType<[string, string | undefined]>()(memoized);
+      expect(memoized.minLength).toBe(2);
+
+      const nullable = V.tuple(V.string(), V.nullable(V.string()));
+      assertValidatorType<[string, string | null]>()(nullable);
+      expect(nullable.minLength).toBe(2);
     });
 
     test('an absent item is left out of the output', () => expectValid(['a'], range, ['a']));

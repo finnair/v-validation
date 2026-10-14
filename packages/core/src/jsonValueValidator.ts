@@ -2,6 +2,9 @@ import { Path, JsonValue, JsonObject } from "@finnair/path";
 import { ArrayValidator, FailureCallback, StringValidator, SuccessCallback, TypeMismatch, ValidationContext, Validator } from "./validators.js";
 import { ObjectValidator } from "./objectValidator.js";
 
+// Re-exported for backwards compatibility
+export type { JsonValue, JsonObject, JsonPrimitive } from "@finnair/path";
+
 export type JsonValueType = "string" | "boolean" | "number" | "null" | "array" | "object";
 
 const ALL_JSON_VALUE_TYPES: readonly JsonValueType[] = ["string", "boolean", "number", "null", "array", "object"];

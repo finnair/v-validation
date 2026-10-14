@@ -574,7 +574,7 @@ A tuple is an array whose items are validated by the validator in the same posit
 V.tuple(V.string(), V.toInteger()); // Validator<[string, number]>
 ```
 
-As with object properties, trailing items wrapped in `V.optional` or `V.optionalStrict` are optional elements. They may be absent, and an absent item is left out of the output. For example a single date or a range of dates:
+Trailing items validated by `V.optional` or `V.optionalStrict` directly are optional elements. They may be absent, and an absent item is left out of the output. For example a single date or a range of dates:
 
 ```typescript
 V.tuple(Vluxon.dateTime(), V.optionalStrict(Vluxon.dateTime())); // Validator<[DateTimeLuxon, DateTimeLuxon?]>
@@ -582,7 +582,7 @@ V.tuple(Vluxon.dateTime(), V.optionalStrict(Vluxon.dateTime())); // Validator<[D
 
 Only the trailing run of such items is optional, as in TypeScript. An optional item before a required one must be present, but may be `undefined`. An input that is shorter than its required items or longer than the tuple fails with a `SizeViolation` (min: required items, max: all items) without validating its items. Rest elements are not supported.
 
-NOTE: At runtime an item is optional when its validator skips `undefined` (`V.optional`, `V.optionalStrict`), but in the output type whenever its output includes `undefined`. A trailing `V.any()` or `V.unknown()` is thus typed optional but required at runtime.
+NOTE: Unlike an object property, an item is not optional just because its output includes `undefined`: a trailing `V.unknown()`, or `V.optionalStrict(...)` wrapped in e.g. `V.memoize`, is a required item, both in the type and at runtime.
 
 ## <a name="schema">Schema</a>
 

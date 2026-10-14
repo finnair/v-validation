@@ -923,26 +923,31 @@ export class ArrayNormalizer<T> extends ArrayValidator<T> {
 
 type ItemType<V> = V extends Validator<infer Out> ? Out : never;
 type ItemTypes<V extends readonly Validator<any>[]> = { -readonly [K in keyof V]: ItemType<V[K]> };
-type AllAcceptUndefined<V extends readonly unknown[]> = V extends readonly [infer Head, ...infer Rest]
-  ? undefined extends ItemType<Head> ? AllAcceptUndefined<Rest> : false
+// Classes are nominal here, as both have a private member
+type AllOptional<V extends readonly unknown[]> = V extends readonly [infer Head, ...infer Rest]
+  ? Head extends OptionalValidator<any, any> | OptionalUndefinedValidator<any, any> ? AllOptional<Rest> : false
   : true;
 
 /**
- * Output of {@link TupleValidator}: the output type of each item validator in position. Like an object
- * property, an item whose output includes `undefined` (e.g. `V.optionalStrict(...)`) is optional - but
- * only in the trailing run of such items, as optional elements cannot precede required ones.
+ * Output of {@link TupleValidator}: the output type of each item validator in position. An item
+ * validated by `V.optional` or `V.optionalStrict` directly is optional - but only in the trailing run of
+ * such items, as optional elements cannot precede required ones. Matches {@link isOptionalItem}.
  */
 export type TupleType<V extends readonly Validator<any>[]> =
-  AllAcceptUndefined<V> extends true
+  AllOptional<V> extends true
     ? Partial<ItemTypes<V>>
     : V extends readonly [infer Head, ...infer Rest extends readonly Validator<any>[]]
       ? [ItemType<Head>, ...TupleType<Rest>]
       : ItemTypes<V>;
 
+function isOptionalItem(validator: Validator<any>): boolean {
+  return validator instanceof OptionalValidator || validator instanceof OptionalUndefinedValidator;
+}
+
 /**
- * An array whose items are validated by the validator in the same position. Trailing items whose
- * validator skips `undefined` (`V.optional`, `V.optionalStrict`) may be absent, and absent items are
- * left out of the output. An input of any other length fails with a size violation, without validating
+ * An array whose items are validated by the validator in the same position. Trailing items validated
+ * by `V.optional` or `V.optionalStrict` directly may be absent, and absent items are left out of the
+ * output. An input of any other length fails with a size violation, without validating
  * its items.
  */
 export class TupleValidator<Out extends unknown[] = unknown[]> extends Validator<Out> {
@@ -952,7 +957,7 @@ export class TupleValidator<Out extends unknown[] = unknown[]> extends Validator
     super();
     this.itemValidators = Object.freeze([...itemValidators]);
     let minLength = itemValidators.length;
-    while (minLength > 0 && itemValidators[minLength - 1].skipUndefined()) {
+    while (minLength > 0 && isOptionalItem(itemValidators[minLength - 1])) {
       minLength--;
     }
     this.minLength = minLength;

@@ -202,7 +202,9 @@ type AtExpected<B, K extends PropertyKey> = At<B, K, AbsentProperty<'UNEXPECTED:
  */
 export type OutputTypeMismatch<Actual, Expected> = StructurallyEquals<Actual, Expected> extends true
   ? never
-  : [Actual, Expected] extends [infer A extends readonly unknown[], infer B extends readonly unknown[]]
+  : [Actual, Expected] extends [AbsentProperty<string>, unknown] | [unknown, AbsentProperty<string>]
+    ? Leaf<Actual, Expected> // Before the object branch, which would walk into the marker's brand
+    : [Actual, Expected] extends [infer A extends readonly unknown[], infer B extends readonly unknown[]]
     ? ArrayMismatch<A, B>
     : [Actual, Expected] extends [Function | readonly unknown[], unknown] | [unknown, Function | readonly unknown[]]
       ? Leaf<Actual, Expected>
