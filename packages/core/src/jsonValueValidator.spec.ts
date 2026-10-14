@@ -2,7 +2,7 @@ import { describe, test, expect } from 'vitest';
 import { V } from './V.js';
 import { Path } from '@finnair/path';
 import { defaultViolations } from './validators.js';
-import { isPlainObject, JsonValueValidator } from './jsonValue.js';
+import { isPlainObject, JsonValueValidator } from './jsonValueValidator.js';
 
 describe('isPlainObject', () => {
   test.each([[null], [undefined], ['a'], [1]])('rejects %s', value => expect(isPlainObject(value)).toBe(false));

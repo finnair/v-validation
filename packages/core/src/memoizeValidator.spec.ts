@@ -5,7 +5,7 @@ import { defaultViolations, Validator } from './validators.js';
 import { DEFAULT_MEMOIZE_MAX_SIZE, MemoizeStatsLogger } from './memoizeValidator.js';
 import { BasicMemoizeStatsLogger, MemoizeStats } from './basicMemoizeStatsLogger.js';
 import { Groups, ValidatorConfigurationError } from './validators.js';
-import { JsonValueValidator } from './jsonValue.js';
+import { JsonValueValidator } from './jsonValueValidator.js';
 
 const ROOT = Path.ROOT;
 

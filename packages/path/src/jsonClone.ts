@@ -2,8 +2,8 @@ import { setOwnProperty } from './properties.js';
 
 export type JsonReplacer = ((this: any, key: string, value: any) => any) | (number | string)[] | null;
 
-export type JsonValue = string | boolean | number | JsonValue[] | null | JsonObject;
-
+export type JsonPrimitive = string | boolean | number | null;
+export type JsonValue = JsonPrimitive | JsonValue[] | JsonObject;
 export type JsonObject = {
   [key: string]: JsonValue;
 }
