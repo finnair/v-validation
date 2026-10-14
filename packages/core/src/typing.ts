@@ -69,6 +69,8 @@ export const assertType = <Type>(_: Type): void => void 0;
  * Strict, bidirectional type identity. Unlike plain assignability (which ignores optional and excess
  * properties), this distinguishes optional vs. required properties, missing properties and wrong
  * property types - so it needs no `ComparableType` wrapping. Resolves to `true` or `false`.
+ * This works because T is unknown so it stays deferred and deferred conditionals have a strict 
+ * comparison rule, ensuring accurate type equality checks.
  */
 export type Equals<A, B> =
   (<T>() => T extends A ? 1 : 2) extends (<T>() => T extends B ? 1 : 2) ? true : false;
@@ -85,6 +87,14 @@ type Normalize<T> =
   : T extends object ? { [K in keyof T]: Normalize<T[K]> }
   : T;
 
+// Comparing tuples prevent two side effects of a plain A extends B:
+// 1. No distribution over unions. In A extends B ? … : …, when A is a naked type parameter, the 
+//    conditional is applied to each union member separately. string | number extends string would 
+//    evaluate as true | false, i.e. boolean. Wrapping A in [A] stops this, so the union is compared 
+//    as one type.
+// 2. never behaves as a type. A plain never extends X distributes over zero members and yields 
+//    never, which is not a clean boolean. With the tuple, [never] extends [X] is true, since never
+//    is assignable to everything.
 type MutuallyAssignable<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
 
 // Identity, not assignability: a union may repeat structurally identical members, e.g. `[X, ...X[]][number]`
