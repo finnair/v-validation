@@ -496,6 +496,89 @@ describe('objects', () => {
         });
       });
 
+      describe('tuples', () => {
+        test('recursive aliases inside a tuple compare element by element', () => {
+          assertType<StructurallyEquals<[{ a: JsonValue } & { b: 1 }, string], [{ a: PathJsonValue; b: 1 }, string]>>(true);
+          assertType<StructurallyEquals<[{ a: JsonValue } & { b: 1 }], [{ a: string; b: 1 }]>>(false);
+        });
+        test('length, optional elements and readonly must match', () => {
+          type AB = { a: 1 } & { b: 2 };
+          assertType<StructurallyEquals<[AB, AB?], [{ a: 1; b: 2 }, { a: 1; b: 2 }?]>>(true);
+          assertType<StructurallyEquals<[AB, AB?], [{ a: 1; b: 2 }, { a: 1; b: 2 } | undefined]>>(false);
+          assertType<StructurallyEquals<[AB], [{ a: 1; b: 2 }, { a: 1; b: 2 }]>>(false);
+          assertType<StructurallyEquals<readonly [AB], [{ a: 1; b: 2 }]>>(false);
+          assertType<StructurallyEquals<[AB, ...AB[]], [{ a: 1; b: 2 }, ...{ a: 1; b: 2 }[]]>>(true);
+          assertType<StructurallyEquals<[AB], { a: 1; b: 2 }[]>>(false);
+        });
+        test('repeated identical members in an element union', () => {
+          // [X, ...X[]][number] with two inline literals is the union X | X of distinct but identical types
+          type Rest = [{ a: 1; b: 2 }, ...{ a: 1; b: 2 }[]];
+          assertType<StructurallyEquals<{ a: 1 } & { b: 2 }, Rest[number]>>(true);
+          assertType<StructurallyEquals<{ a: 1 }, Rest[number]>>(false);
+        });
+      });
+
+      test('large unions are compared without pairwise matching of primitive members', () => {
+        type Digit = '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9';
+        type Code = `${Digit}${Digit}${Digit}`;
+        // The object member makes the unions differ under Equals; 1000 primitive members matched
+        // pairwise would exceed the compiler's instantiation limit (TS2589)
+        assertType<StructurallyEquals<Code | ({ a: 1 } & { b: 2 }), Code | { a: 1; b: 2 }>>(true);
+        assertType<StructurallyEquals<Code | ({ a: 1 } & { b: 2 }), Exclude<Code, '123'> | { a: 1; b: 2 }>>(false);
+      });
+
+      describe('mismatch diff', () => {
+        const nominal = 'types differ nominally (e.g. private or protected members) or in their key types';
+        const modifier = 'optional or readonly modifier differs';
+        test('classes differing only in private or protected members', () => {
+          class First {
+            private id = 1;
+            protected kind = 1;
+          }
+          class Second {
+            private id = 1;
+            protected kind = 1;
+          }
+          type Mismatch = OutputTypeMismatch<{ value: First }, { value: Second }>;
+          assertType<Equals<Mismatch['value']['REASON'], typeof nominal>>(true);
+        });
+        test('readonly modifier is reported at the property', () => {
+          type Mismatch = OutputTypeMismatch<{ value: { readonly a: string; b: 1 } }, { value: { a: string; b: 2 } }>;
+          type Expected = {
+            value: { a: { EXPECTED: { a: string }; ACTUAL: { readonly a: string }; REASON: typeof modifier }; b: { EXPECTED: 2; ACTUAL: 1 } };
+          };
+          assertType<Equals<Mismatch, Expected>>(true);
+        });
+        test('optional vs undefined is reported at the property', () => {
+          type Mismatch = OutputTypeMismatch<{ a?: string }, { a: string | undefined }>;
+          assertType<Equals<Mismatch, { a: { EXPECTED: { a: string | undefined }; ACTUAL: { a?: string }; REASON: typeof modifier } }>>(true);
+        });
+        test('property mismatch has no reason', () => {
+          type Mismatch = OutputTypeMismatch<{ value: { a: string } }, { value: { a: number } }>;
+          assertType<Equals<Mismatch, { value: { a: { EXPECTED: number; ACTUAL: string } } }>>(true);
+        });
+        test('tuples are diffed by index', () => {
+          assertType<Equals<OutputTypeMismatch<[string, number], [string, string]>, { 1: { EXPECTED: string; ACTUAL: number } }>>(true);
+          type Length = OutputTypeMismatch<[string, number], [string]>;
+          assertType<Equals<Length, { EXPECTED: [string]; ACTUAL: [string, number]; REASON: 'tuple length differs' }>>(true);
+          type Optional = OutputTypeMismatch<[string, number?], [string, number]>;
+          assertType<Equals<Optional, { EXPECTED: [string, number]; ACTUAL: [string, number?]; REASON: 'optional element differs' }>>(true);
+          type TupleVsArray = OutputTypeMismatch<[string], string[]>;
+          assertType<Equals<TupleVsArray, { EXPECTED: string[]; ACTUAL: [string]; REASON: 'tuple vs array' }>>(true);
+        });
+        test('arrays are diffed by element', () => {
+          type Mismatch = OutputTypeMismatch<{ list: { a: string }[] }, { list: { a: number }[] }>;
+          assertType<Equals<Mismatch, { list: { [index: number]: { a: { EXPECTED: number; ACTUAL: string } } } }>>(true);
+          type Readonly = OutputTypeMismatch<readonly string[], string[]>;
+          assertType<Equals<Readonly, { EXPECTED: string[]; ACTUAL: readonly string[]; REASON: 'readonly array differs' }>>(true);
+          assertType<Equals<OutputTypeMismatch<string[], { a: 1 }>, { EXPECTED: { a: 1 }; ACTUAL: string[] }>>(true);
+        });
+        test('functions are a leaf without a reason', () => {
+          type Mismatch = OutputTypeMismatch<{ fn: (x: string) => void }, { fn: (x: number) => void }>;
+          assertType<Equals<Mismatch, { fn: { EXPECTED: (x: number) => void; ACTUAL: (x: string) => void } }>>(true);
+        });
+      });
+
       // Only reached when the values differ under strict Equals, e.g. intersection vs flattened object
       describe('object keys', () => {
         enum Source {
