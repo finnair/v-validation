@@ -39,6 +39,8 @@ import {
   MapValidator,
   MapNormalizer,
   ArrayValidator,
+  TupleValidator,
+  TupleType,
   SizeValidator,
   AllOfValidator,
   AnyOfValidator,
@@ -210,6 +212,12 @@ export const V = {
 
   toArray: <Out, In, T1, T2, T3, T4, T5>(...items: CompositionParameters<Out, In, T1, T2, T3, T4, T5>) => 
     new ArrayNormalizer<Out>(maybeCompositionOf(...items)),
+
+  /**
+   * An array validated item by item, e.g. `V.tuple(V.string(), V.number())` for `[string, number]`.
+   * Trailing `V.optional`/`V.optionalStrict` items are optional elements: `[string, number?]`.
+   */
+  tuple: <V extends Validator<any>[]>(...items: V) => new TupleValidator<TupleType<V>>(items),
 
   size: <T extends { length: number }>(min: number, max: number) => new SizeValidator<T>(min, max),
 

@@ -921,6 +921,129 @@ export class ArrayNormalizer<T> extends ArrayValidator<T> {
   }
 }
 
+type ItemType<V> = V extends Validator<infer Out> ? Out : never;
+type ItemTypes<V extends readonly Validator<any>[]> = { -readonly [K in keyof V]: ItemType<V[K]> };
+// Classes are nominal here, as both have a private member
+type AllOptional<V extends readonly unknown[]> = V extends readonly [infer Head, ...infer Rest]
+  ? Head extends OptionalValidator<any, any> | OptionalUndefinedValidator<any, any> ? AllOptional<Rest> : false
+  : true;
+
+/**
+ * Output of {@link TupleValidator}: the output type of each item validator in position. An item
+ * validated by `V.optional` or `V.optionalStrict` directly is optional - but only in the trailing run of
+ * such items, as optional elements cannot precede required ones. Matches {@link isOptionalItem}.
+ */
+export type TupleType<V extends readonly Validator<any>[]> =
+  AllOptional<V> extends true
+    ? Partial<ItemTypes<V>>
+    : V extends readonly [infer Head, ...infer Rest extends readonly Validator<any>[]]
+      ? [ItemType<Head>, ...TupleType<Rest>]
+      : ItemTypes<V>;
+
+function isOptionalItem(validator: Validator<any>): boolean {
+  return validator instanceof OptionalValidator || validator instanceof OptionalUndefinedValidator;
+}
+
+/**
+ * An array whose items are validated by the validator in the same position. Trailing items validated
+ * by `V.optional` or `V.optionalStrict` directly may be absent, and absent items are left out of the
+ * output. An input of any other length fails with a size violation, without validating
+ * its items.
+ */
+export class TupleValidator<Out extends unknown[] = unknown[]> extends Validator<Out> {
+  public readonly itemValidators: readonly Validator<any>[];
+  public readonly minLength: number;
+  constructor(itemValidators: readonly Validator<any>[]) {
+    super();
+    this.itemValidators = Object.freeze([...itemValidators]);
+    let minLength = itemValidators.length;
+    while (minLength > 0 && isOptionalItem(itemValidators[minLength - 1])) {
+      minLength--;
+    }
+    this.minLength = minLength;
+    Object.freeze(this);
+  }
+
+  supportsFreeze(): boolean {
+    return this.itemValidators.every(validator => validator.supportsFreeze());
+  }
+
+  dependsOnFreezeContext(): boolean {
+    return true;
+  }
+
+  visit(visitor: ValidatorVisitor, path: Path = Path.ROOT, context?: ValidatorVisitorContext, stack: Validator<any, any>[] = []): void {
+    if (visitor.accept(this, path, context)) {
+      if (stack.includes(this)) {
+        return;
+      }
+      stack.push(this);
+      for (let i = 0; i < this.itemValidators.length; i++) {
+        this.itemValidators[i].visit(visitor, path.index(i), undefined, stack);
+      }
+      stack.pop();
+    }
+  }
+
+  validatePathV2(value: unknown, path: Path, ctx: ValidationContext, success: SuccessCallback<Out>, failure: FailureCallback): void {
+    // See ArrayValidator: freeze for effect, keeping the declared output type.
+    const successFn = ctx.freeze
+      ? (result: Out) => {
+          Object.freeze(result);
+          success(result);
+        }
+      : success;
+    if (isNullOrUndefined(value)) {
+      return failure([defaultViolations.notNull(path)]);
+    }
+    if (!Array.isArray(value)) {
+      return failure([new TypeMismatch(path, 'array', value)]);
+    }
+    const length = value.length;
+    if (length < this.minLength || length > this.itemValidators.length) {
+      return failure([defaultViolations.size(this.minLength, this.itemValidators.length, path)]);
+    }
+    const convertedTuple = [] as unknown[] as Out;
+    if (length === 0) {
+      return successFn(convertedTuple);
+    }
+    if (ctx.enterValidation(value, path)) {
+      return failure([defaultViolations.cycle(path)]);
+    }
+    let expectedResponses = length;
+    let violations: Violation[] = [];
+
+    const reportResult = () => {
+      if (--expectedResponses === 0) {
+        ctx.leaveValidation(value, path);
+        if (violations.length > 0) {
+          failure(violations);
+        } else {
+          successFn(convertedTuple);
+        }
+      }
+    };
+
+    for (let i = 0; i < length; i++) {
+      const itemPath = path.index(i);
+      try {
+        this.itemValidators[i].validatePathV2(value[i], itemPath, ctx,
+          (convertedItem) => {
+            convertedTuple[i] = convertedItem;
+            reportResult();
+          },
+          (error) => {
+            violations = violations.concat(error);
+            reportResult();
+          });
+      } catch (error) {
+        violations = violations.concat(violationsOf(error, itemPath));
+        reportResult();
+      }
+    }
+  }
+}
+
 export class CheckValidator<In> extends Validator<In, In> {
   constructor(public readonly validator: Validator<any, In>, private readonly _supportsFreeze: boolean = false) {
     super();

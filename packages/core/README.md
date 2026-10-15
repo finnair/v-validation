@@ -566,6 +566,24 @@ Note that basic validators do not handle polymoprhism even though they support i
 V.array(vehicle);
 ```
 
+### Tuples
+
+A tuple is an array whose items are validated by the validator in the same position:
+
+```typescript
+V.tuple(V.string(), V.toInteger()); // Validator<[string, number]>
+```
+
+Trailing items validated by `V.optional` or `V.optionalStrict` directly are optional elements. They may be absent, and an absent item is left out of the output. For example a single date or a range of dates:
+
+```typescript
+V.tuple(Vluxon.dateTime(), V.optionalStrict(Vluxon.dateTime())); // Validator<[DateTimeLuxon, DateTimeLuxon?]>
+```
+
+Only the trailing run of such items is optional, as in TypeScript. An optional item before a required one must be present, but may be `undefined`. An input that is shorter than its required items or longer than the tuple fails with a `SizeViolation` (min: required items, max: all items) without validating its items. Rest elements are not supported.
+
+NOTE: Unlike an object property, an item is not optional just because its output includes `undefined`: a trailing `V.unknown()`, or `V.optionalStrict(...)` wrapped in e.g. `V.memoize`, is a required item, both in the type and at runtime.
+
 ## <a name="schema">Schema</a>
 
 Polymorphims requires that objects are somehow tagged with a type used to validate it. Since plain JSON/JavaScript objects do not have type information attached to them
@@ -1350,6 +1368,7 @@ Unless otherwise stated, all validators require non-null and non-undefined value
 | setType                 | values: Validator, jsonSafeMap: boolean                          | [Set validator](#set). JSON safe set (JsonSet) serializes into an array of values.                                                        |
 | array                   | ...items: Validator[]                                            | [Array validator](#array)                                                                                                                 |
 | toArray                 | items: Validator                                                 | Converts undefined to an empty array and non-arrays to single-valued arrays.                                                              |
+| tuple                   | ...items: Validator[]                                            | [Array](#tuples) validated item by item; trailing `V.optional`/`V.optionalStrict` items are optional. Type: the tuple of item types.      |
 | size                    | min: number, max: number                                         | Asserts that input's numeric `length` property is between min and max (both inclusive).                                                   |
 | allOf                   | ...validators: Validator[]                                       | Requires that all given validators match. All child validators must result in the same output, otherwise throws `ValidatorConfigurationError`. |
 | anyOf                   | ...validators: Validator[]                                       | Requires minimum one of given validators matches. All matching validators must result in the same output, otherwise throws `ValidatorConfigurationError`. |

@@ -564,6 +564,12 @@ describe('objects', () => {
           type Mismatch = OutputTypeMismatch<{}, { b: 'MISSING: property is absent' }>;
           assertType<Equals<Mismatch, { b: { EXPECTED: 'MISSING: property is absent'; ACTUAL: AbsentProperty<'MISSING: property is absent'> } }>>(true);
         });
+        test('an absent object-typed property is one leaf', () => {
+          type Missing = OutputTypeMismatch<{ a: 1 }, { a: 1; o: { z: string } }>;
+          assertType<Equals<Missing, { o: { EXPECTED: { z: string }; ACTUAL: AbsentProperty<'MISSING: property is absent'> } }>>(true);
+          type Unexpected = OutputTypeMismatch<{ a: 1; o: { z: string } }, { a: 1 }>;
+          assertType<Equals<Unexpected, { o: { EXPECTED: AbsentProperty<'UNEXPECTED: property not allowed'>; ACTUAL: { z: string } } }>>(true);
+        });
         test('tuples are diffed by index', () => {
           assertType<Equals<OutputTypeMismatch<[string, number], [string, string]>, { 1: { EXPECTED: string; ACTUAL: number } }>>(true);
           type Length = OutputTypeMismatch<[string, number], [string]>;
@@ -2129,6 +2135,121 @@ describe('anyOf', () => {
     expect(result.isSuccess()).toBe(false);
     expect(result.getViolations().map(v => v.type)).toEqual(['Error']);
   }, 1000);
+});
+
+describe('tuples', () => {
+  const pair = V.tuple(V.string(), V.toInteger());
+
+  describe('typing', () => {
+    test('output is the tuple of item outputs', () => {
+      assertValidatorType<[string, number]>()(pair);
+      assertValidatorType<[]>()(V.tuple());
+      assertValidatorType<[{ a: string }, string?]>()(V.tuple(V.objectType().properties({ a: V.string() }).build(), V.optionalStrict(V.string())));
+      // @ts-expect-error the second item is a number
+      assertValidatorType<[string, string]>()(pair);
+      // @ts-expect-error the tuple has two items
+      assertValidatorType<[string]>()(pair);
+    });
+  });
+
+  test('items are validated and converted in position', () => expectValid(['a', '1'], pair, ['a', 1]));
+
+  test('empty tuple', () => expectValid([], V.tuple(), []));
+
+  test('input is not modified', async () => {
+    const input = ['a', '1'];
+    const output = await pair.getValid(input);
+    expect(output).not.toBe(input);
+    expect(input).toEqual(['a', '1']);
+  });
+
+  test('item violations are reported at their index', () =>
+    expectViolations([1, 'x'], pair, defaultViolations.string(1, index(0)), defaultViolations.number('x', NumberFormat.integer, index(1))));
+
+  test('undefined is not allowed', () => expectViolations(undefined, pair, defaultViolations.notNull(ROOT)));
+
+  test('null is not allowed', () => expectViolations(null, pair, defaultViolations.notNull(ROOT)));
+
+  test('non-array is not allowed', () => expectViolations({}, pair, new TypeMismatch(ROOT, 'array', {})));
+
+  test.each([[['a']], [['a', '1', 'b']], [[]]])('length %j is a size violation', input => expectViolations(input, pair, defaultViolations.size(2, 2, ROOT)));
+
+  test('items are not validated when the length is wrong', () => expectViolations([1], pair, defaultViolations.size(2, 2, ROOT)));
+
+  describe('optional items', () => {
+    const range = V.tuple(V.string(), V.optionalStrict(V.string()));
+
+    test('typing', () => {
+      assertValidatorType<[string, string?]>()(range);
+      // @ts-expect-error the second item is optional
+      assertValidatorType<[string, string]>()(range);
+      assertValidatorType<[string, string?, (number | null)?]>()(V.tuple(V.string(), V.optionalStrict(V.string()), V.optional(V.number())));
+      assertValidatorType<[string?]>()(V.tuple(V.optionalStrict(V.string())));
+      // Only trailing items can be optional
+      assertValidatorType<[string | undefined, number]>()(V.tuple(V.optionalStrict(V.string()), V.number()));
+    });
+
+    test('only V.optional and V.optionalStrict items are optional, in type and at runtime', async () => {
+      const unknownItem = V.tuple(V.string(), V.unknown());
+      assertValidatorType<[string, unknown]>()(unknownItem);
+      expect(unknownItem.minLength).toBe(2);
+      await expectViolations(['a'], unknownItem, defaultViolations.size(2, 2, ROOT));
+
+      const mapped = V.tuple(V.string(), V.map((value: unknown) => value as string | undefined));
+      assertValidatorType<[string, string | undefined]>()(mapped);
+      expect(mapped.minLength).toBe(2);
+
+      // A wrapper passes skipUndefined on, but is not an optional item
+      const memoized = V.tuple(V.string(), V.memoize(V.optionalStrict(V.string())));
+      assertValidatorType<[string, string | undefined]>()(memoized);
+      expect(memoized.minLength).toBe(2);
+
+      const nullable = V.tuple(V.string(), V.nullable(V.string()));
+      assertValidatorType<[string, string | null]>()(nullable);
+      expect(nullable.minLength).toBe(2);
+    });
+
+    test('an absent item is left out of the output', () => expectValid(['a'], range, ['a']));
+
+    test('a present item is validated', async () => {
+      await expectValid(['a', 'b'], range, ['a', 'b']);
+      await expectViolations(['a', 1], range, defaultViolations.string(1, index(1)));
+    });
+
+    test('a present undefined item is kept', () => expectValid(['a', undefined], range, ['a', undefined]));
+
+    test.each([[[]], [['a', 'b', 'c']]])('length %j is a size violation', input => expectViolations(input, range, defaultViolations.size(1, 2, ROOT)));
+
+    test('minLength stops at the last required item', () => {
+      expect(range.minLength).toBe(1);
+      expect(V.tuple(V.string(), V.optionalStrict(V.string()), V.optional(V.number())).minLength).toBe(1);
+      expect(V.tuple(V.optionalStrict(V.string()), V.number()).minLength).toBe(2);
+      expect(V.tuple(V.optionalStrict(V.string())).minLength).toBe(0);
+    });
+
+    test('an optional item before a required one must be present', async () => {
+      const validator = V.tuple(V.optionalStrict(V.string()), V.number());
+      await expectValid([undefined, 1], validator, [undefined, 1]);
+      await expectViolations([1], validator, defaultViolations.size(2, 2, ROOT));
+    });
+
+    test('all items optional', async () => {
+      const validator = V.tuple(V.optionalStrict(V.string()));
+      await expectValid([], validator, []);
+      await expectValid(['a'], validator, ['a']);
+    });
+  });
+
+  test('a throwing item validator is reported at its index', () =>
+    expectViolations(['a', 'b'], V.tuple(V.string(), new ThrowingValidator()), new ErrorViolation(index(1), ThrowingValidator.error)));
+
+  test('cyclic data is invalid', async () => {
+    const node: Validator<any> = V.tuple(V.string(), V.optionalStrict(V.proxy(() => node)));
+    const input: any[] = ['a', undefined];
+    input[1] = input;
+    const result = await node.validate(input);
+    expect(result.getViolations()).toEqual([defaultViolations.cycle(index(1))]);
+  });
 });
 
 describe('arrays', () => {

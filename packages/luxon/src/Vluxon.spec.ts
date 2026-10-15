@@ -1,5 +1,5 @@
 import { describe, beforeAll, afterAll, test, expect } from 'vitest'
-import { Validator, ValidatorOptions, ValidationResult, V, Violation, defaultViolations, TypeMismatch, ValidationContext, violationsOf } from '@finnair/v-validation';
+import { Validator, ValidatorOptions, ValidationResult, V, Violation, defaultViolations, TypeMismatch, ValidationContext, violationsOf, assertValidatorType } from '@finnair/v-validation';
 import { LuxonValidator, Vluxon } from './Vluxon.js';
 import {
   LocalDateLuxon,
@@ -826,5 +826,27 @@ describe('Vluxon', () => {
         ));
       test('invalid input', async () => expectViolations('foo', Vluxon.dateTimeFromSeconds(), new TypeMismatch(Path.ROOT, 'SecondsDateTime', 'foo')));
     });
+  });
+});
+
+describe('date range tuple', () => {
+  // A single date or a range of dates
+  const range = V.tuple(Vluxon.dateTime(), V.optionalStrict(Vluxon.dateTime()));
+  assertValidatorType<[DateTimeLuxon, DateTimeLuxon?]>()(range);
+
+  test('single date', async () => {
+    const result = await range.getValid(['2026-10-14T10:00:00Z']);
+    expect(result).toHaveLength(1);
+    expect(result[0]).toBeInstanceOf(DateTimeLuxon);
+  });
+
+  test('range of dates', async () => {
+    const result = await range.getValid(['2026-10-14T10:00:00Z', '2026-10-15T10:00:00Z']);
+    expect(result.map(value => value?.toJSON())).toEqual(['2026-10-14T10:00:00Z', '2026-10-15T10:00:00Z']);
+  });
+
+  test('empty or longer input is a size violation', async () => {
+    await expectViolations([], range, defaultViolations.size(1, 2));
+    await expectViolations(['2026-10-14T10:00:00Z', '2026-10-15T10:00:00Z', '2026-10-16T10:00:00Z'], range, defaultViolations.size(1, 2));
   });
 });
