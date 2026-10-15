@@ -922,11 +922,11 @@ export class ArrayNormalizer<T> extends ArrayValidator<T> {
 }
 
 type ItemType<V> = V extends Validator<infer Out> ? Out : never;
-type ItemTypes<V extends readonly Validator<any>[]> = { -readonly [K in keyof V]: ItemType<V[K]> };
-// Classes are nominal here, as both have a private member
+// True for an empty tuple, false for an array of unknown length
 type AllOptional<V extends readonly unknown[]> = V extends readonly [infer Head, ...infer Rest]
-  ? Head extends OptionalValidator<any, any> | OptionalUndefinedValidator<any, any> ? AllOptional<Rest> : false
-  : true;
+  ? // Classes are nominal here, as both have a private member
+    Head extends OptionalValidator<any, any> | OptionalUndefinedValidator<any, any> ? AllOptional<Rest> : false
+  : V extends readonly [] ? true : false;
 
 /**
  * Output of {@link TupleValidator}: the output type of each item validator in position. An item
@@ -934,11 +934,13 @@ type AllOptional<V extends readonly unknown[]> = V extends readonly [infer Head,
  * such items, as optional elements cannot precede required ones. Matches {@link isOptionalItem}.
  */
 export type TupleType<V extends readonly Validator<any>[]> =
-  AllOptional<V> extends true
-    ? Partial<ItemTypes<V>>
-    : V extends readonly [infer Head, ...infer Rest extends readonly Validator<any>[]]
-      ? [ItemType<Head>, ...TupleType<Rest>]
-      : ItemTypes<V>;
+  V extends readonly [infer Head, ...infer Rest extends readonly Validator<any>[]]
+    ? AllOptional<V> extends true
+      ? [ItemType<Head>?, ...TupleType<Rest>]
+      : [ItemType<Head>, ...TupleType<Rest>]
+    : V extends readonly []
+      ? []
+      : ItemType<V[number]>[]; // An array of unknown length, e.g. V.tuple(...validators)
 
 function isOptionalItem(validator: Validator<any>): boolean {
   return validator instanceof OptionalValidator || validator instanceof OptionalUndefinedValidator;

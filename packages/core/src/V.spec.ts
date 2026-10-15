@@ -2150,6 +2150,16 @@ describe('tuples', () => {
       // @ts-expect-error the tuple has two items
       assertValidatorType<[string]>()(pair);
     });
+
+    test('spread items of unknown length are required', async () => {
+      const items: Validator<string>[] = [V.string(), V.string()];
+      const spread = V.tuple(...items);
+      assertValidatorType<string[]>()(spread);
+      assertValidatorType<[number, ...string[]]>()(V.tuple(V.number(), ...items));
+      assertValidatorType<[string, number?]>()(V.tuple(...([V.string(), V.optionalStrict(V.number())] as const)));
+      expect(spread.minLength).toBe(2);
+      await expectViolations(['a'], spread, defaultViolations.size(2, 2, ROOT));
+    });
   });
 
   test('items are validated and converted in position', () => expectValid(['a', '1'], pair, ['a', 1]));
