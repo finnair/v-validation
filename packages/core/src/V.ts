@@ -46,6 +46,7 @@ import {
   AnyOfValidator,
   OneOfValidator,
   EnumValidator,
+  LenientEnumValidator,
   FreezeValidator,
   HasValueValidator,
   JsonValidator,
@@ -239,6 +240,12 @@ export const V = {
   date: () => dateValidator,
 
   enum: <Out extends Record<string, string | number>>(enumType: Out, name: string) => new EnumValidator<Out>(enumType, name),
+
+  /**
+   * The v12 `V.enum`: also accepts the name of a numeric member, passed on unchanged (not converted to
+   * its value). Typed as {@link LenientEnum}. Prefer the strict `V.enum` where the data allows it.
+   */
+  lenientEnum: <Out extends Record<string, string | number>>(enumType: Out, name: string) => new LenientEnumValidator<Out>(enumType, name),
 
   /** @param supportsFreeze See {@link V.fn}; needed only on its own, since an assertion preserves a frozen input in a chain. */
   assertTrue: <In>(fn: AssertTrue<In>, type: string = 'AssertTrue', path?: Path, supportsFreeze?: boolean) =>

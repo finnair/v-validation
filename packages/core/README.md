@@ -584,6 +584,23 @@ Only the trailing run of such items is optional, as in TypeScript. An optional i
 
 NOTE: Unlike an object property, an item is not optional just because its output includes `undefined`: a trailing `V.unknown()`, or `V.optionalStrict(...)` wrapped in e.g. `V.memoize`, is a required item, both in the type and at runtime.
 
+## <a name="enums">Enums</a>
+
+`V.enum` accepts only the values of an enum, and its output is typed as the enum:
+
+```typescript
+enum E { A = 1, B = 2 }
+V.enum(E, 'E'); // Validator<E>, accepts 1 and 2
+```
+
+NOTE: Version 13.2.0 made `V.enum` stricter without a major version. Before it, `V.enum` also accepted the name of a numeric member, because a numeric enum's object also has a reverse mapping from value to name: `enum E { A = 1 }` is `{ A: 1, '1': 'A' }`. The name was passed on unchanged, although the output was typed `E`.
+
+If your data contains such names, use `V.lenientEnum` to restore the earlier behaviour. It accepts the same values as `V.enum` did before 13.2.0, passes them on unchanged, and is typed honestly as `LenientEnum<typeof E>`, a member or the name of a numeric member:
+
+```typescript
+V.lenientEnum(E, 'E'); // Validator<E | 'A' | 'B'>, accepts 1, 2, 'A' and 'B'
+```
+
 ## <a name="schema">Schema</a>
 
 Polymorphims requires that objects are somehow tagged with a type used to validate it. Since plain JSON/JavaScript objects do not have type information attached to them
@@ -1356,6 +1373,7 @@ Unless otherwise stated, all validators require non-null and non-undefined value
 | jsonBigInt              |                                                                  | Converts bigints, integer numbers and strings to `JsonBigInt` wrapper for `BigInt` with `toJSON()` serialization as string.               |
 | date                    |                                                                  | Reqruires a valid date. Converts string to Date.                                                                                          |
 | enum                    | enumType: object, name: string                                   | Requires that the input is one of given enumType. Name of the enum provided for error message.                                            |
+| lenientEnum             | enumType: object, name: string                                   | Like `enum`, but also accepts the name of a numeric member, passed on unchanged. Type: `LenientEnum<typeof enumType>`. See [enums](#enums). |
 | assertTrue              | fn: AssertTrue, type: string = 'AssertTrue', path?: Path         | Requires that the input passes `fn`. Type can be provided for error messages and path to target a sub property                            |
 | hasValue                | expectedValue: any                                               | Requires that the input matches `expectedValue`. Uses `node-deep-equal` library.                                                          |
 | object                  | model: Model                                                     | Defines an [Object validator](#object) based on provided Model.                                                                           |

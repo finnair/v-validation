@@ -2257,6 +2257,41 @@ export class EnumValidator<Out extends Record<string, string | number>> extends 
   }
 }
 
+/**
+ * Output of {@link LenientEnumValidator}: a member of the enum, or the name of a numeric member. Takes
+ * the enum object's type, e.g. `LenientEnum<typeof MyEnum>`.
+ */
+export type LenientEnum<E extends Record<string, string | number>> =
+  | E[keyof E]
+  | { [K in keyof E]: E[K] extends number ? K : never }[keyof E];
+
+/**
+ * The v12 `V.enum`: accepts any value of the enum object, including the reverse mapping of numeric
+ * members, so the name of a numeric member is accepted too. Valid input is passed on unchanged - a
+ * name is not converted to its value.
+ */
+export class LenientEnumValidator<Out extends Record<string, string | number>> extends Validator<LenientEnum<Out>> {
+  private readonly _values: Set<string | number>;
+  constructor(public readonly enumType: Out, public readonly name: string) {
+    super();
+    this._values = new Set(Object.values(enumType));
+    Object.freeze(this);
+  }
+  supportsFreeze(): boolean {
+    return true;
+  }
+
+  validatePathV2(value: unknown, path: Path, ctx: ValidationContext, success: SuccessCallback<LenientEnum<Out>>, failure: FailureCallback): void {
+    if (isNullOrUndefined(value)) {
+      return failure([defaultViolations.notNull(path)]);
+    }
+    if ((typeof value === 'string' || typeof value === 'number') && this._values.has(value)) {
+      return success(value as LenientEnum<Out>);
+    }
+    ctx.failure<LenientEnum<Out>>(defaultViolations.enum(this.name, value, path), value).then(success, failure);
+  }
+}
+
 export class AssertTrueValidator<In> extends Validator<In, In> {
   constructor(public readonly fn: AssertTrue<In>, public readonly type: string, public readonly path?: Path, private readonly _supportsFreeze: boolean = false) {
     super();
