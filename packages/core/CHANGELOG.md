@@ -3,6 +3,14 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [13.2.0](https://github.com/finnair/v-validation/compare/v13.1.0...v13.2.0) (2026-10-15)
+
+### Features
+
+- **core:** readable object validator types and assertValidatorType type guard ([#162](https://github.com/finnair/v-validation/issues/162)) ([8c3c8d7](https://github.com/finnair/v-validation/commit/8c3c8d788eaf9b4f10e236607c0902c31a7a90b5))
+- **core:** structural assertValidatorType with path-level mismatch diffs ([#163](https://github.com/finnair/v-validation/issues/163)) ([eb22003](https://github.com/finnair/v-validation/commit/eb22003f30914f4428be4d34b7c101cbcecf4bc2))
+- **core:** V.tuple validator ([#164](https://github.com/finnair/v-validation/issues/164)) ([e8e2333](https://github.com/finnair/v-validation/commit/e8e2333992417b75994b42432e84d85ad75b551e))
+
 # [13.1.0](https://github.com/finnair/v-validation/compare/v13.0.1...v13.1.0) (2026-10-07)
 
 **Note:** Version bump only for package @finnair/v-validation
