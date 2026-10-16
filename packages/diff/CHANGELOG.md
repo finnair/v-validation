@@ -3,6 +3,10 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [13.3.0](https://github.com/finnair/v-validation/compare/v13.2.0...v13.3.0) (2026-10-16)
+
+**Note:** Version bump only for package @finnair/diff
+
 # [13.2.0](https://github.com/finnair/v-validation/compare/v13.1.0...v13.2.0) (2026-10-15)
 
 **Note:** Version bump only for package @finnair/diff

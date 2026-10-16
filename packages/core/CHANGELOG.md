@@ -3,6 +3,16 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [13.3.0](https://github.com/finnair/v-validation/compare/v13.2.0...v13.3.0) (2026-10-16)
+
+### Bug Fixes
+
+- **core:** simplify TupleType and keep spread items required ([84e4089](https://github.com/finnair/v-validation/commit/84e40899266b09b9b85653b4e9389f13f6036b09))
+
+### Features
+
+- **core:** add V.lenientEnum to restore pre-13.2.0 enum validation ([#166](https://github.com/finnair/v-validation/issues/166)) ([b07534f](https://github.com/finnair/v-validation/commit/b07534fdc38df074da14fa6b61b290d14cd305d5))
+
 # [13.2.0](https://github.com/finnair/v-validation/compare/v13.1.0...v13.2.0) (2026-10-15)
 
 ### Features
