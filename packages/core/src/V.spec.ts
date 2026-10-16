@@ -2,6 +2,7 @@ import { describe, test, expect } from 'vitest'
 import {
   Validator,
   EnumValidator,
+  LenientEnum,
   Violation,
   ValidationResult,
   defaultViolations,
@@ -1955,6 +1956,64 @@ describe('enum', () => {
     });
     expect(warnings).toEqual([defaultViolations.enum('StrEnum', 'C')]);
   });
+});
+
+describe('lenientEnum', () => {
+  enum StrEnum {
+    A = 'a',
+    B = 'b',
+  }
+  enum IntEnum {
+    A,
+    B,
+  }
+  enum MixedEnum {
+    A = 1,
+    B = 'A',
+  }
+
+  describe('typing', () => {
+    test('a member, or the name of a numeric member', () => {
+      assertType<Equals<LenientEnum<typeof IntEnum>, IntEnum | 'A' | 'B'>>(true);
+      assertType<StructurallyEquals<LenientEnum<typeof StrEnum>, StrEnum>>(true);
+      assertType<StructurallyEquals<LenientEnum<typeof MixedEnum>, MixedEnum | 'A'>>(true);
+      assertValidatorType<LenientEnum<typeof IntEnum>>()(V.lenientEnum(IntEnum, 'IntEnum'));
+      assertValidatorType<{ value: LenientEnum<typeof IntEnum> }>()(V.objectType().properties({ value: V.lenientEnum(IntEnum, 'IntEnum') }).build());
+      // @ts-expect-error the output may be a member name
+      assertValidatorType<IntEnum>()(V.lenientEnum(IntEnum, 'IntEnum'));
+    });
+  });
+
+  describe('int', () => {
+    const validator = V.lenientEnum(IntEnum, 'IntEnum');
+    test('valid value', () => expectValid(1, validator, IntEnum.B));
+    test('member name is valid and passed on unchanged', () => expectValid('B', validator, 'B'));
+    test('numeric string is invalid', () => expectViolations('1', validator, defaultViolations.enum('IntEnum', '1')));
+    test('invalid', () => expectViolations(2, validator, defaultViolations.enum('IntEnum', 2)));
+  });
+
+  describe('string', () => {
+    const validator = V.lenientEnum(StrEnum, 'StrEnum');
+    test('valid value', () => expectValid('a', validator, StrEnum.A));
+    test('member name is invalid', () => expectViolations('A', validator, defaultViolations.enum('StrEnum', 'A')));
+  });
+
+  test('mixed: a string equal to a numeric member name is passed on unchanged', async () => {
+    const validator = V.lenientEnum(MixedEnum, 'MixedEnum');
+    await expectValid('A', validator, 'A');
+    await expectValid(1, validator, MixedEnum.A);
+  });
+
+  test('null is not allowed', () => expectViolations(null, V.lenientEnum(IntEnum, 'IntEnum'), defaultViolations.notNull()));
+
+  test('accepts what the strict V.enum rejects', async () => {
+    await expectViolations('A', V.enum(IntEnum, 'IntEnum'), defaultViolations.enum('IntEnum', 'A'));
+    await expectValid('A', V.lenientEnum(IntEnum, 'IntEnum'), 'A');
+  });
+
+  test('ignoreUnknownEnumValues', () => expectValid('C', V.lenientEnum(StrEnum, 'StrEnum'), 'C' as any, { ignoreUnknownEnumValues: true }));
+
+  test('supports freeze', () => expect(V.lenientEnum(IntEnum, 'IntEnum').supportsFreeze()).toBe(true));
 });
 
 describe('oneOf', () => {

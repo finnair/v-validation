@@ -2232,28 +2232,57 @@ function enumValues(enumType: Record<string, string | number>) {
     .map(([, value]) => value);
 }
 
-export class EnumValidator<Out extends Record<string, string | number>> extends Validator<Out[keyof Out]> {
+/**
+ * Validates that the input is one of the allowed values of an enum and passes it on unchanged.
+ * Subclasses decide which values are allowed, and thereby the output type.
+ *
+ * NOTE: The constructor freezes the instance, so subclasses must not declare fields of their own.
+ */
+abstract class EnumValidatorBase<E extends Record<string, string | number>, Out> extends Validator<Out> {
   private readonly _values: Set<string | number>;
-  constructor(public readonly enumType: Out, public readonly name: string) {
+  constructor(public readonly enumType: E, public readonly name: string, values: Iterable<string | number>) {
     super();
-    this._values = new Set(enumValues(enumType));
+    this._values = new Set(values);
     Object.freeze(this);
   }
   supportsFreeze(): boolean {
     return true;
   }
 
-  validatePathV2(value: unknown, path: Path, ctx: ValidationContext, success: SuccessCallback<Out[keyof Out]>, failure: FailureCallback): void {
+  validatePathV2(value: unknown, path: Path, ctx: ValidationContext, success: SuccessCallback<Out>, failure: FailureCallback): void {
     if (isNullOrUndefined(value)) {
       return failure([defaultViolations.notNull(path)]);
     }
-    if (typeof value === 'string' || typeof value === 'number') {
-      const isValid = this._values.has(value);
-      if (isValid) {
-        return success(value as Out[keyof Out]);
-      }
+    if ((typeof value === 'string' || typeof value === 'number') && this._values.has(value)) {
+      return success(value as Out);
     }
-    ctx.failure<Out[keyof Out]>(defaultViolations.enum(this.name, value, path), value).then(success, failure);
+    ctx.failure<Out>(defaultViolations.enum(this.name, value, path), value).then(success, failure);
+  }
+}
+
+/** Accepts only the values of the enum. */
+export class EnumValidator<Out extends Record<string, string | number>> extends EnumValidatorBase<Out, Out[keyof Out]> {
+  constructor(enumType: Out, name: string) {
+    super(enumType, name, enumValues(enumType));
+  }
+}
+
+/**
+ * Output of {@link LenientEnumValidator}: a member of the enum, or the name of a numeric member. Takes
+ * the enum object's type, e.g. `LenientEnum<typeof MyEnum>`.
+ */
+export type LenientEnum<E extends Record<string, string | number>> =
+  | E[keyof E]
+  | { [K in keyof E]: E[K] extends number ? K : never }[keyof E];
+
+/**
+ * The v12 `V.enum`: accepts any value of the enum object, including the reverse mapping of numeric
+ * members, so the name of a numeric member is accepted too. Valid input is passed on unchanged - a
+ * name is not converted to its value.
+ */
+export class LenientEnumValidator<Out extends Record<string, string | number>> extends EnumValidatorBase<Out, LenientEnum<Out>> {
+  constructor(enumType: Out, name: string) {
+    super(enumType, name, Object.values(enumType));
   }
 }
 
