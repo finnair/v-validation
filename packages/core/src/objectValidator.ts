@@ -1,3 +1,4 @@
+import { default as deepEqual } from 'fast-deep-equal';
 import { Path, getProperty, setOwnProperty } from "@finnair/path";
 import {
   AnyValidator,
@@ -53,6 +54,15 @@ export interface ObjectModel<LocalType = unknown, InheritableType = unknown> {
    */
   readonly additionalProperties?: boolean | MapEntryModel | MapEntryModel[];
   /**
+   * Preprocessing of the whole input object before its properties are validated, e.g. to migrate old
+   * data by renaming properties. Inherited: parents' `pre` validators run first, in inheritance order,
+   * and each one only once even when inherited through several parents.
+   *
+   * NOTE: A `pre` validator must not modify its input; return a new object instead. Violations of the
+   * properties validated after it refer to the preprocessed object, e.g. to a renamed property.
+   */
+  readonly pre?: Validator | Validator[];
+  /**
    * Next validator to be executed after all properties are validated successfully. 
    * Use this to define additional rules or conversions for the ObjectValidator. 
    * Using the `next` function returns a `NextValidator` that cannot be further extended. 
@@ -100,6 +110,9 @@ export class ObjectValidator<LocalType = unknown, InheritableType = LocalType, I
 
   public readonly nextValidator?: Validator;
 
+  /** Own and inherited `pre` validators in execution order, without duplicates. */
+  public readonly preValidators: readonly Validator[];
+
   public readonly propertyOrder?: string[];
 
   private readonly validator: Validator<LocalType, In>;
@@ -110,12 +123,19 @@ export class ObjectValidator<LocalType = unknown, InheritableType = LocalType, I
     let additionalProperties: MapEntryValidator[] = [];
     let parentNextValidators: Validator[] = [];
     let nextValidators: Validator[] = [];
+    const preValidators: Validator[] = [];
+    const addPreValidator = (validator: Validator) => {
+      if (!preValidators.includes(validator)) {
+        preValidators.push(validator);
+      }
+    };
 
     this.parentValidators = model.extends ? ([] as ObjectValidator[]).concat(model.extends) : [];
     for (let i = 0; i < this.parentValidators.length; i++) {
       const parent = this.parentValidators[i];
       additionalProperties = additionalProperties.concat(parent.additionalProperties);
       properties = mergeProperties(parent.properties, properties);
+      parent.preValidators.forEach(addPreValidator);
       if (parent.nextValidator) {
         parentNextValidators.push(parent.nextValidator);
       }
@@ -131,7 +151,18 @@ export class ObjectValidator<LocalType = unknown, InheritableType = LocalType, I
     this.localProperties = getPropertyValidators(model.localProperties);
     this.propertyOrder = model.propertyOrder ? [...model.propertyOrder] : undefined;
 
-    let validator: Validator = new PropertiesValidator<LocalType, In>(this.properties, this.localProperties, this.additionalProperties, this.propertyOrder);
+    if (model.pre) {
+      ([] as Validator[]).concat(model.pre).forEach(addPreValidator);
+    }
+    this.preValidators = preValidators;
+
+    const propertiesValidator = new PropertiesValidator<LocalType, In>(this.properties, this.localProperties, this.additionalProperties, this.propertyOrder);
+    let validator: Validator;
+    if (preValidators.length > 0) {
+      validator = maybeCompositionOf(...preValidators as CompositionParameters).next(propertiesValidator);
+    } else {
+      validator = propertiesValidator;
+    }
     const next = nextValidators.length > 0 ? maybeCompositionOf(...(nextValidators as CompositionParameters)) : undefined;
     if (next) {
       this.nextValidator = next;
@@ -151,6 +182,7 @@ export class ObjectValidator<LocalType = unknown, InheritableType = LocalType, I
     this.validator = validator as Validator<LocalType, In>;
     Object.freeze(this.propertyOrder);
     Object.freeze(this.parentValidators);
+    Object.freeze(this.preValidators);
     Object.freeze(this);
   }
 
@@ -183,8 +215,17 @@ export class ObjectValidator<LocalType = unknown, InheritableType = LocalType, I
     this.validator.validatePathV2(value, path, ctx, successFn, failure);
   }
 
+  /**
+   * A copy of this validator with `validators` appended to its own `pre` validators, see {@link ObjectModel.pre}.
+   */
+  pre(...validators: Validator[]): ObjectValidator<LocalType, InheritableType, In> {
+    const pre = this.model.pre === undefined ? [] : ([] as Validator[]).concat(this.model.pre);
+    return new ObjectValidator<LocalType, InheritableType, In>({ ...this.model, pre: [...pre, ...validators] });
+  }
+
   omit<T, K extends keyof (any & (InheritableType | LocalType))>(...keys: K[]) {
     return new ObjectValidator<Omit<LocalType, K extends keyof LocalType ? K : never>, Omit<InheritableType, K extends keyof InheritableType ? K : never>>({
+      pre: [...this.preValidators],
       properties: pick(this.properties, key => !keys.includes(key as any)),
       localProperties: pick(this.localProperties, key => !keys.includes(key as any)),
       propertyOrder: this.propertyOrder?.filter(key => !keys.includes(key as any)),
@@ -193,6 +234,7 @@ export class ObjectValidator<LocalType = unknown, InheritableType = LocalType, I
 
   pick<T, K extends keyof (any & (InheritableType | LocalType))>(...keys: K[]) {
     return new ObjectValidator<Pick<LocalType, K extends keyof LocalType ? K : never>, Pick<InheritableType, K extends keyof InheritableType ? K : never>>({
+      pre: [...this.preValidators],
       properties: pick(this.properties, key => keys.includes(key as any)),
       localProperties: pick(this.localProperties, key => keys.includes(key as any)),
       propertyOrder: this.propertyOrder?.filter(key => keys.includes(key as any)),
@@ -429,6 +471,73 @@ export class ObjectNormalizer<InOut> extends Validator<undefined | InOut | {}> {
       return success(object);
     }
     return success(value);
+  }
+}
+
+/**
+ * Renames or drops properties of an object, e.g. in `ObjectModel.pre` to migrate deprecated keys of a
+ * `Record<Enum, Value>`. A property whose key maps to `undefined` is dropped, and properties not in
+ * `mapping` are kept. A renamed property keeps its position. Non-objects are passed on unchanged, as
+ * is an object without any property to rename.
+ *
+ * Renaming into a key that is kept, or several keys into the same key, merges them when their values
+ * are deepEqual (e.g. old and new key written together during a migration), keeping the kept property,
+ * or the first renamed one, and is otherwise a `PropertyConflict` violation at the renamed key. Keys renamed into each
+ * other (a swap) do not conflict.
+ */
+export class RenamePropertiesValidator extends Validator {
+  public readonly mapping: Readonly<Record<string, string | number | undefined>>;
+  constructor(mapping: Record<string, string | number | undefined>) {
+    super();
+    this.mapping = Object.freeze({ ...mapping });
+    Object.freeze(this);
+  }
+
+  validatePathV2(value: unknown, path: Path, ctx: ValidationContext, success: SuccessCallback<unknown>, failure: FailureCallback): void {
+    if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+      return success(value);
+    }
+    const anyValue = value as any;
+    const keys: string[] = [];
+    let renames = false;
+    for (const key in anyValue) {
+      keys.push(key);
+      renames ||= Object.hasOwn(this.mapping, key);
+    }
+    if (!renames) {
+      return success(value);
+    }
+    const inputKeys = new Set(keys);
+    const renamedFrom = new Map<string, string>();
+    const violations: Violation[] = [];
+    const result: any = {};
+    for (const key of keys) {
+      if (!Object.hasOwn(this.mapping, key)) {
+        setOwnProperty(result, key, getProperty(anyValue, key));
+        continue;
+      }
+      const target = this.mapping[key];
+      if (target === undefined) {
+        continue;
+      }
+      const targetKey = String(target);
+      const propertyValue = getProperty(anyValue, key);
+      const keptTarget = inputKeys.has(targetKey) && !Object.hasOwn(this.mapping, targetKey);
+      if (keptTarget || renamedFrom.has(targetKey)) {
+        // The kept property, or the first property renamed into the same key
+        const otherValue = keptTarget ? getProperty(anyValue, targetKey) : getProperty(anyValue, renamedFrom.get(targetKey)!);
+        if (!deepEqual(propertyValue, otherValue)) {
+          violations.push(defaultViolations.propertyConflict(path.property(key)));
+        }
+        continue;
+      }
+      renamedFrom.set(targetKey, key);
+      setOwnProperty(result, targetKey, propertyValue);
+    }
+    if (violations.length > 0) {
+      return failure(violations);
+    }
+    success(result);
   }
 }
 

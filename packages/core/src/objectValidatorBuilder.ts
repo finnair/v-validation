@@ -9,6 +9,7 @@ export class ObjectValidatorBuilder<Props, Next, LocalProps, LocalNext> {
   private _properties: PropertyModel = {};
   private _localProperties: PropertyModel = {};
   private _additionalProperties: MapEntryModel[] = [];
+  private _pre: Validator[] = [];
   private _next?: Validator[] = [];
   private _localNext?: Validator[] = [];
   private _propertyOrder: undefined | string[];
@@ -55,6 +56,13 @@ export class ObjectValidatorBuilder<Props, Next, LocalProps, LocalNext> {
     this._additionalProperties.push({ keys, values });
     return this as ObjectValidatorBuilder<Props & { [key in K]?: V }, Next, LocalProps, LocalNext>;
   }
+  /**
+   * Preprocess the whole input object before its properties are validated, see {@link ObjectModel.pre}.
+   */
+  pre(...validators: Validator[]) {
+    this._pre.push(...validators);
+    return this;
+  }
   next<NextOut extends {}>(validator: Validator<NextOut, Next extends {} ? Next : Props>) {
     this._next?.push(validator);
     return this as unknown as ObjectValidatorBuilder<Props, NextOut, LocalProps, LocalNext>;
@@ -93,6 +101,7 @@ export class ObjectValidatorBuilder<Props, Next, LocalProps, LocalNext> {
         Simplify<Next extends {} ? Next : Props>
       >({
       extends: this._extends,
+      pre: this._pre,
       properties: this._properties,
       additionalProperties: this._additionalProperties,
       next: this._next,
