@@ -552,6 +552,38 @@ An object may define inheritable cross-property rules with `ObjectModel.next` an
 `Next` validation rules are run after all the properties are validated successfully and `localNext`
 is the last step in the validation chain. Inherited `next` rules are executed before child's own.
 
+With multiple parents, the parents' `next` rules are combined with `V.allOf`: each parent's rules get the same input, so independent cross-property rules of different parents are all checked, and all their violations reported. As `V.allOf` requires all of them to produce the same output, parents' `next` rules cannot convert the value differently.
+
+### Pre
+
+`ObjectModel.pre` preprocesses the whole input object before its properties are validated, e.g. to migrate old data on the fly by renaming a property. As the rest of the object's rules see the preprocessed object, a renamed property is validated by its own validator and placed according to `propertyOrder`:
+
+```typescript
+const rename = (from: string, to: string) =>
+  V.map((value: any) => {
+    if (value === null || typeof value !== 'object' || !Object.hasOwn(value, from)) {
+      return value;
+    }
+    const { [from]: renamed, ...rest } = value;
+    return { ...rest, [to]: renamed };
+  });
+
+const person = V.object({
+  pre: rename('fullName', 'name'),
+  properties: { name: V.string() },
+});
+// or V.objectType().pre(rename('fullName', 'name')).properties({ name: V.string() }).build()
+// or an existing validator: personValidator.pre(rename('fullName', 'name'))
+```
+
+`pre` is inherited: parents' `pre` validators run first, in inheritance order, and each only once even when inherited through several parents.
+
+Unlike parents' `next` rules, parents' `pre` validators are run in sequence, each on the output of the previous one, not combined with `V.allOf`. Preprocessing is about converting the input, e.g. each parent migrating its own properties, and `V.allOf` cannot combine different conversions of the same input. For the same reason a `pre` validator inherited through several parents runs only once: run twice in sequence, a migration could be applied twice.
+
+`ObjectValidator.pre(...)` returns a new, still extendable validator with the given validators appended to its own `pre`.
+
+NOTE: A `pre` validator must not modify its input; return a new object instead. Violations of the properties refer to the preprocessed object, e.g. to the renamed property.
+
 ## <a name="array">Arrays</a>
 
 Arrays are defined in terms of their element type:

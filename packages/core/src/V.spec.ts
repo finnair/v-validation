@@ -1825,6 +1825,140 @@ describe('object localNext', () => {
   });
 });
 
+describe('object pre', () => {
+  // Renames an old property to its new name, without modifying the input
+  const rename = (from: string, to: string) =>
+    V.map((value: any) => {
+      if (value === null || typeof value !== 'object' || !Object.hasOwn(value, from)) {
+        return value;
+      }
+      const { [from]: renamed, ...rest } = value;
+      return { ...rest, [to]: renamed };
+    });
+
+  test('old data is migrated before its properties are validated', async () => {
+    const validator = V.object({ pre: rename('oldName', 'name'), properties: { name: V.required(V.string()) } });
+    const input = { oldName: 'a' };
+    await expectValid(input, validator, { name: 'a' });
+    expect(input).toEqual({ oldName: 'a' });
+    await expectValid({ name: 'b' }, validator, { name: 'b' });
+  });
+
+  test('without pre the old property is unknown and the renamed one missing', () =>
+    expectViolations(
+      { oldName: 'a' },
+      V.object({ properties: { name: V.required(V.string()) } }),
+      defaultViolations.notNull(property('name')),
+      defaultViolations.unknownProperty(property('oldName')),
+    ));
+
+  test('a renamed property is validated by its own validator and placed by propertyOrder', async () => {
+    const validator = V.object({
+      pre: rename('old', 'b'),
+      properties: { a: V.string(), b: V.toInteger(), c: V.string() },
+      propertyOrder: ['a', 'b', 'c'],
+    });
+    const result = await validator.getValid({ c: 'c', old: '1', a: 'a' });
+    expect(result).toEqual({ a: 'a', b: 1, c: 'c' });
+    expect(Object.keys(result as object)).toEqual(['a', 'b', 'c']);
+    await expectViolations({ a: 'a', old: 'x', c: 'c' }, validator, defaultViolations.number('x', NumberFormat.integer, property('b')));
+  });
+
+  test('pre violations fail validation before properties are validated', () =>
+    expectViolations(
+      { name: 1 },
+      V.object({ pre: V.assertTrue((value: any) => !('legacy' in value), 'Migratable'), properties: { name: V.string() } }),
+      defaultViolations.string(1, property('name')),
+    ).then(() =>
+      expectViolations(
+        { legacy: true, name: 1 },
+        V.object({ pre: V.assertTrue((value: any) => !('legacy' in value), 'Migratable'), properties: { name: V.string() } }),
+        new Violation(ROOT, 'Migratable'),
+      ),
+    ));
+
+  test('multiple pre validators run in order', () =>
+    expectValid({ a: 1 }, V.object({ pre: [rename('a', 'b'), rename('b', 'c')], properties: { c: V.number() } }), { c: 1 }));
+
+  describe('inheritance', () => {
+    const calls: string[] = [];
+    const record = (name: string) =>
+      V.map((value: any) => {
+        calls.push(name);
+        return value;
+      });
+    const grandParent = V.object({ pre: record('grandParent'), additionalProperties: true });
+    const parent1 = V.object({ extends: grandParent, pre: record('parent1') });
+    const parent2 = V.object({ extends: grandParent, pre: record('parent2') });
+
+    test('parents run first, in inheritance order', async () => {
+      calls.length = 0;
+      await V.object({ extends: parent1, pre: record('child') }).validate({});
+      expect(calls).toEqual(['grandParent', 'parent1', 'child']);
+    });
+
+    test('a pre validator inherited through several parents runs once', async () => {
+      calls.length = 0;
+      const child = V.object({ extends: [parent1, parent2], pre: record('child') });
+      await child.validate({});
+      expect(calls).toEqual(['grandParent', 'parent1', 'parent2', 'child']);
+      expect(child.preValidators).toHaveLength(4);
+      expect(Object.isFrozen(child.preValidators)).toBe(true);
+    });
+
+    test('a migration inherited from the parent applies to the child', () =>
+      expectValid(
+        { oldName: 'a', age: 1 },
+        V.object({ extends: V.object({ pre: rename('oldName', 'name'), properties: { name: V.string() } }), properties: { age: V.number() } }),
+        { name: 'a', age: 1 },
+      ));
+  });
+
+  describe('ObjectValidator.pre', () => {
+    const base = V.objectType().properties({ name: V.string() }).build();
+    const migrated = base.pre(rename('oldName', 'name'));
+
+    test('returns a new validator, leaving the original unchanged', async () => {
+      expect(migrated).toBeInstanceOf(ObjectValidator);
+      expect(migrated).not.toBe(base);
+      assertValidatorType<{ name: string }>()(migrated);
+      await expectValid({ oldName: 'a' }, migrated, { name: 'a' });
+      await expectViolations({ oldName: 'a' }, base, defaultViolations.notNull(property('name')), defaultViolations.unknownProperty(property('oldName')));
+    });
+
+    test('appends after the own pre validators', async () => {
+      const chained = migrated.pre(rename('name', 'title'));
+      expect(chained.preValidators).toHaveLength(2);
+      await expectViolations({ oldName: 'a' }, chained, defaultViolations.notNull(property('name')), defaultViolations.unknownProperty(property('title')));
+    });
+
+    test('works on a model without pre', () =>
+      expectValid({ oldName: 'a' }, V.object({ properties: { name: V.string() } }).pre(rename('oldName', 'name')), { name: 'a' }));
+
+    test('the result can be extended', () =>
+      expectValid({ oldName: 'a', age: 1 }, V.objectType().extends(migrated).properties({ age: V.number() }).build(), { name: 'a', age: 1 }));
+  });
+
+  test('builder', async () => {
+    const validator = V.objectType().pre(rename('oldName', 'name')).properties({ name: V.string() }).build();
+    assertValidatorType<{ name: string }>()(validator);
+    await expectValid({ oldName: 'a' }, validator, { name: 'a' });
+  });
+
+  test('pick and omit keep pre', async () => {
+    const validator = V.object({ pre: rename('oldName', 'name'), properties: { name: V.string(), age: V.number() } });
+    await expectValid({ oldName: 'a' }, validator.pick('name'), { name: 'a' });
+    await expectValid({ oldName: 'a' }, validator.omit('age'), { name: 'a' });
+  });
+
+  test('V.frozen freezes the output of a validator with pre', async () => {
+    const validator = V.frozen(V.object({ pre: rename('oldName', 'name'), properties: { name: V.string() } }));
+    const result = await validator.getValid({ oldName: 'a' });
+    expect(result).toEqual({ name: 'a' });
+    expect(Object.isFrozen(result)).toBe(true);
+  });
+});
+
 describe('Date', () => {
   const validator = V.objectType()
     .properties({

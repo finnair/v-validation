@@ -8,9 +8,7 @@ export interface ValidatorFn<Out = unknown, In = unknown> {
   (value: In, path: Path, ctx: ValidationContext): Out | PromiseLike<Out>;
 }
 
-export interface MappingFn<Out = unknown, In = unknown> {
-  (value: In, path: Path, ctx: ValidationContext): Out | PromiseLike<Out>;
-}
+export type MappingFn<Out = unknown, In = unknown> = ValidatorFn<Out, In>;
 
 export interface ValidatorOptions {
   readonly group?: Group;
