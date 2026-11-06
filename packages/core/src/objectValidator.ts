@@ -1,3 +1,4 @@
+import { default as deepEqual } from 'fast-deep-equal';
 import { Path, getProperty, setOwnProperty } from "@finnair/path";
 import {
   AnyValidator,
@@ -470,6 +471,73 @@ export class ObjectNormalizer<InOut> extends Validator<undefined | InOut | {}> {
       return success(object);
     }
     return success(value);
+  }
+}
+
+/**
+ * Renames or drops properties of an object, e.g. in `ObjectModel.pre` to migrate deprecated keys of a
+ * `Record<Enum, Value>`. A property whose key maps to `undefined` is dropped, and properties not in
+ * `mapping` are kept. A renamed property keeps its position. Non-objects are passed on unchanged, as
+ * is an object without any property to rename.
+ *
+ * Renaming into a key that is kept, or several keys into the same key, merges them when their values
+ * are deepEqual (e.g. old and new key written together during a migration), keeping the kept property,
+ * or the first renamed one, and is otherwise a `PropertyConflict` violation at the renamed key. Keys renamed into each
+ * other (a swap) do not conflict.
+ */
+export class RenamePropertiesValidator extends Validator {
+  public readonly mapping: Readonly<Record<string, string | number | undefined>>;
+  constructor(mapping: Record<string, string | number | undefined>) {
+    super();
+    this.mapping = Object.freeze({ ...mapping });
+    Object.freeze(this);
+  }
+
+  validatePathV2(value: unknown, path: Path, ctx: ValidationContext, success: SuccessCallback<unknown>, failure: FailureCallback): void {
+    if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+      return success(value);
+    }
+    const anyValue = value as any;
+    const keys: string[] = [];
+    let renames = false;
+    for (const key in anyValue) {
+      keys.push(key);
+      renames ||= Object.hasOwn(this.mapping, key);
+    }
+    if (!renames) {
+      return success(value);
+    }
+    const inputKeys = new Set(keys);
+    const renamedFrom = new Map<string, string>();
+    const violations: Violation[] = [];
+    const result: any = {};
+    for (const key of keys) {
+      if (!Object.hasOwn(this.mapping, key)) {
+        setOwnProperty(result, key, getProperty(anyValue, key));
+        continue;
+      }
+      const target = this.mapping[key];
+      if (target === undefined) {
+        continue;
+      }
+      const targetKey = String(target);
+      const propertyValue = getProperty(anyValue, key);
+      const keptTarget = inputKeys.has(targetKey) && !Object.hasOwn(this.mapping, targetKey);
+      if (keptTarget || renamedFrom.has(targetKey)) {
+        // The kept property, or the first property renamed into the same key
+        const otherValue = keptTarget ? getProperty(anyValue, targetKey) : getProperty(anyValue, renamedFrom.get(targetKey)!);
+        if (!deepEqual(propertyValue, otherValue)) {
+          violations.push(defaultViolations.propertyConflict(path.property(key)));
+        }
+        continue;
+      }
+      renamedFrom.set(targetKey, key);
+      setOwnProperty(result, targetKey, propertyValue);
+    }
+    if (violations.length > 0) {
+      return failure(violations);
+    }
+    success(result);
   }
 }
 

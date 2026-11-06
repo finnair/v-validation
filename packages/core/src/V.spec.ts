@@ -1959,6 +1959,113 @@ describe('object pre', () => {
   });
 });
 
+describe('renameProperties', () => {
+  const rename = V.renameProperties({ old: 'renamed', removed: undefined });
+
+  test('renames and drops properties, keeping the others and their order', async () => {
+    const result = await rename.getValid({ a: 1, old: 2, removed: 3, b: 4 });
+    expect(result).toEqual({ a: 1, renamed: 2, b: 4 });
+    expect(Object.keys(result as object)).toEqual(['a', 'renamed', 'b']);
+  });
+
+  test('input is not modified', async () => {
+    const input = { old: 1 };
+    const result = await rename.getValid(input);
+    expect(result).not.toBe(input);
+    expect(input).toEqual({ old: 1 });
+  });
+
+  test('an object without properties to rename is passed on as is', async () => {
+    const input = { a: 1 };
+    expect(await rename.getValid(input)).toBe(input);
+  });
+
+  test.each([[null], [undefined], ['old'], [1], [['old']]])('non-object %j is passed on as is', async input => {
+    expect(await rename.getValid(input)).toBe(input);
+  });
+
+  test('renaming into a kept property is a conflict', () =>
+    expectViolations({ old: 1, renamed: 2 }, rename, defaultViolations.propertyConflict(property('old'))));
+
+  test('renaming several properties into the same one is a conflict', () =>
+    expectViolations({ a: 1, b: 2 }, V.renameProperties({ a: 'c', b: 'c' }), defaultViolations.propertyConflict(property('b'))));
+
+  describe('agreeing values are merged', () => {
+    test('a renamed property equal to the kept one', async () => {
+      await expectValid({ renamed: 1, old: 1 }, rename, { renamed: 1 });
+      const result = await rename.getValid({ old: 1, a: 2, renamed: 1 });
+      expect(Object.keys(result as object)).toEqual(['a', 'renamed']);
+    });
+
+    test('several equal properties renamed into the same one, keeping the first', async () => {
+      const result = await V.renameProperties({ a: 'c', b: 'c' }).getValid({ x: 0, a: 1, y: 0, b: 1 });
+      expect(result).toEqual({ x: 0, c: 1, y: 0 });
+      expect(Object.keys(result as object)).toEqual(['x', 'c', 'y']);
+    });
+
+    test('values are compared deeply', async () => {
+      await expectValid({ old: { n: [1] }, renamed: { n: [1] } }, rename, { renamed: { n: [1] } });
+      await expectViolations({ old: { n: [1] }, renamed: { n: [2] } }, rename, defaultViolations.propertyConflict(property('old')));
+    });
+
+    test('raw input values are compared, before validation', () =>
+      expectViolations({ old: '1', renamed: 1 }, rename, defaultViolations.propertyConflict(property('old'))));
+  });
+
+  test('renaming into a dropped or renamed property is not a conflict', async () => {
+    await expectValid({ a: 1, b: 2 }, V.renameProperties({ a: 'b', b: 'a' }), { b: 1, a: 2 });
+    await expectValid({ a: 1, b: 2 }, V.renameProperties({ a: 'b', b: undefined }), { b: 1 });
+  });
+
+  test('a numeric target is a property key', () => expectValid({ old: 1 }, V.renameProperties({ old: 2 }), { 2: 1 }));
+
+  test('the mapping is copied', async () => {
+    const mapping: Record<string, string | undefined> = { old: 'renamed' };
+    const validator = V.renameProperties(mapping);
+    mapping.old = 'other';
+    await expectValid({ old: 1 }, validator, { renamed: 1 });
+    expect(Object.isFrozen(validator.mapping)).toBe(true);
+  });
+
+  test('does not support freeze on its own', () => expect(rename.supportsFreeze()).toBe(false));
+
+  describe('migrating deprecated keys of a Record<Enum, Value>', () => {
+    enum Status {
+      ACTIVE = 'ACTIVE',
+      INACTIVE = 'INACTIVE',
+      /** @deprecated use INACTIVE */
+      CLOSED = 'CLOSED',
+    }
+    // CLOSED is kept but deprecated; SUSPENDED and DRAFT are no longer in the enum
+    const counts = V.optionalProperties(V.enum(Status, 'Status'), V.number()).pre(
+      V.renameProperties({ [Status.CLOSED]: Status.INACTIVE, SUSPENDED: Status.INACTIVE, DRAFT: undefined }),
+    );
+
+    test('typing', () => assertValidatorType<Partial<Record<Status, number>>>()(counts));
+
+    test('deprecated, removed and current keys', () =>
+      expectValid({ ACTIVE: 1, CLOSED: 2, DRAFT: 3 }, counts, { ACTIVE: 1, INACTIVE: 2 }).then(() =>
+        expectValid({ SUSPENDED: 1 }, counts, { INACTIVE: 1 }),
+      ));
+
+    test('old and new key together are merged when they agree, and otherwise a conflict', async () => {
+      await expectValid({ INACTIVE: 1, CLOSED: 1, SUSPENDED: 1 }, counts, { INACTIVE: 1 });
+      await expectViolations({ INACTIVE: 1, CLOSED: 2 }, counts, defaultViolations.propertyConflict(property('CLOSED')));
+    });
+
+    test('without migration the old keys are invalid', async () => {
+      const result = await V.optionalProperties(V.enum(Status, 'Status'), V.number()).validate({ SUSPENDED: 1 });
+      expect(result.isSuccess()).toBe(false);
+    });
+
+    test('V.frozen freezes the migrated output', async () => {
+      const result = await V.frozen(counts).getValid({ CLOSED: 1 });
+      expect(result).toEqual({ INACTIVE: 1 });
+      expect(Object.isFrozen(result)).toBe(true);
+    });
+  });
+});
+
 describe('Date', () => {
   const validator = V.objectType()
     .properties({
@@ -2148,6 +2255,64 @@ describe('lenientEnum', () => {
   test('ignoreUnknownEnumValues', () => expectValid('C', V.lenientEnum(StrEnum, 'StrEnum'), 'C' as any, { ignoreUnknownEnumValues: true }));
 
   test('supports freeze', () => expect(V.lenientEnum(IntEnum, 'IntEnum').supportsFreeze()).toBe(true));
+});
+
+describe('enumKey', () => {
+  enum IntEnum {
+    A = 1,
+    B = 2,
+    /** @deprecated use B */
+    OLD = 3,
+  }
+  enum StrEnum {
+    A = 'a',
+    B = 'b',
+  }
+  const counts = V.optionalProperties(V.enumKey(IntEnum, 'IntEnum'), V.number());
+
+  test('typing', () => {
+    assertValidatorType<IntEnum>()(V.enumKey(IntEnum, 'IntEnum'));
+    assertValidatorType<Partial<Record<IntEnum, number>>>()(counts);
+  });
+
+  test('numeric enum keys of a record', async () => {
+    const result = await counts.getValid({ 1: 10, 2: 20 });
+    expect(result).toEqual({ 1: 10, 2: 20 });
+    expect(result[IntEnum.A]).toBe(10);
+  });
+
+  test.each(['01', ' 1', '1.0', '+1', '1e0', '0x1', 'A', '9'])('key %j is invalid', key =>
+    expectViolations({ [key]: 1 }, counts, defaultViolations.enum('IntEnum', key, property(key))));
+
+  test('V.enum rejects numeric enum keys', () =>
+    expectViolations({ 1: 10 }, V.optionalProperties(V.enum(IntEnum, 'IntEnum'), V.number()), defaultViolations.enum('IntEnum', '1', property('1'))));
+
+  test('converts a key string to the enum value', () => expectValid('1', V.enumKey(IntEnum, 'IntEnum'), IntEnum.A));
+
+  test('accepts an enum value', () => expectValid(2, V.enumKey(IntEnum, 'IntEnum'), IntEnum.B));
+
+  test('string enum', async () => {
+    await expectValid({ a: 1 }, V.optionalProperties(V.enumKey(StrEnum, 'StrEnum'), V.number()), { a: 1 });
+    await expectViolations('A', V.enumKey(StrEnum, 'StrEnum'), defaultViolations.enum('StrEnum', 'A'));
+  });
+
+  test('an exact string value wins over the key string of a numeric value', async () => {
+    enum MixedEnum {
+      A = 1,
+      B = '1',
+    }
+    await expectValid('1', V.enumKey(MixedEnum, 'MixedEnum'), MixedEnum.B);
+    await expectValid(1, V.enumKey(MixedEnum, 'MixedEnum'), MixedEnum.A);
+  });
+
+  test('migrating deprecated numeric keys', () =>
+    expectValid({ 3: 30, 4: 40, 1: 40 }, counts.pre(V.renameProperties({ [IntEnum.OLD]: IntEnum.B, 4: IntEnum.A })), { 1: 40, 2: 30 }));
+
+  test('null is not allowed', () => expectViolations(null, V.enumKey(IntEnum, 'IntEnum'), defaultViolations.notNull()));
+
+  test('ignoreUnknownEnumValues', () => expectValid('9', V.enumKey(IntEnum, 'IntEnum'), '9' as any, { ignoreUnknownEnumValues: true }));
+
+  test('supports freeze', () => expect(V.enumKey(IntEnum, 'IntEnum').supportsFreeze()).toBe(true));
 });
 
 describe('oneOf', () => {

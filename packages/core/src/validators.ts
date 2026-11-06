@@ -680,6 +680,7 @@ export enum ValidatorType {
   NotUndefined = "NotUndefined",
   Cycle = 'Cycle',
   Async = 'Async',
+  PropertyConflict = 'PropertyConflict',
 }
 
 export const defaultViolations = {
@@ -702,6 +703,7 @@ export const defaultViolations = {
   unknownPropertyDenied: (path: Path) => new Violation(path, ValidatorType.UnknownPropertyDenied),
   cycle: (path: Path = ROOT) => new Violation(path, ValidatorType.Cycle),
   async: (path: Path = ROOT) => new Violation(path, ValidatorType.Async),
+  propertyConflict: (path: Path) => new Violation(path, ValidatorType.PropertyConflict),
 };
 
 export interface AssertTrue<In = unknown> {
@@ -2281,6 +2283,41 @@ export type LenientEnum<E extends Record<string, string | number>> =
 export class LenientEnumValidator<Out extends Record<string, string | number>> extends EnumValidatorBase<Out, LenientEnum<Out>> {
   constructor(enumType: Out, name: string) {
     super(enumType, name, Object.values(enumType));
+  }
+}
+
+/**
+ * Validates a property key of a `Record<Enum, Value>`. Property keys are strings, so a key is accepted
+ * only when it is exactly `String(value)` of an enum value, e.g. `'1'` for `A = 1` but not `'01'` -
+ * that way `record[Enum.A]` finds it. The key is converted to the enum value, so used for a value the
+ * output is a member of the enum. A number that is an enum value is accepted as such.
+ */
+export class EnumKeyValidator<Out extends Record<string, string | number>> extends Validator<Out[keyof Out]> {
+  private readonly _values: Map<string | number, string | number>;
+  constructor(public readonly enumType: Out, public readonly name: string) {
+    super();
+    const values = new Map<string | number, string | number>();
+    for (const value of enumValues(enumType)) {
+      values.set(value, value);
+      if (!values.has(String(value))) {
+        values.set(String(value), value);
+      }
+    }
+    this._values = values;
+    Object.freeze(this);
+  }
+  supportsFreeze(): boolean {
+    return true;
+  }
+
+  validatePathV2(value: unknown, path: Path, ctx: ValidationContext, success: SuccessCallback<Out[keyof Out]>, failure: FailureCallback): void {
+    if (isNullOrUndefined(value)) {
+      return failure([defaultViolations.notNull(path)]);
+    }
+    if ((typeof value === 'string' || typeof value === 'number') && this._values.has(value)) {
+      return success(this._values.get(value) as Out[keyof Out]);
+    }
+    ctx.failure<Out[keyof Out]>(defaultViolations.enum(this.name, value, path), value).then(success, failure);
   }
 }
 
