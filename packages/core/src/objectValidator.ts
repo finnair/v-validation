@@ -548,11 +548,13 @@ export class RenamePropertiesValidator extends Validator {
     const inputKeys = new Set(keys);
     const violations: Violation[] = [];
     const result: any = {};
+    let renames = false;
     for (const key of keys) {
       if (!Object.hasOwn(this.mapping, key)) {
         setOwnProperty(result, key, getProperty(anyValue, key));
         continue;
       }
+      renames = true;
       const target = this.mapping[key];
       if (target === undefined) {
         continue;
@@ -568,6 +570,10 @@ export class RenamePropertiesValidator extends Validator {
         continue;
       }
       setOwnProperty(result, targetKey, propertyValue);
+    }
+    if (!renames) {
+      // The quick check above also matches non-enumerable properties, e.g. an inherited toString
+      return success(value);
     }
     if (violations.length > 0) {
       return failure(violations);
@@ -606,7 +612,7 @@ function snapshotModel<LocalType, InheritableType>(model: ObjectModel<LocalType,
     }
     return Object.freeze(copy);
   };
-  const copyMapEntry = (entry: MapEntryModel) => Object.freeze({ ...entry });
+  const copyMapEntry = (entry: MapEntryModel) => Object.freeze({ keys: entry.keys, values: entry.values });
   const { additionalProperties } = model;
   return Object.freeze({
     ...model,

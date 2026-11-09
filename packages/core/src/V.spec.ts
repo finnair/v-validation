@@ -2152,6 +2152,16 @@ describe('renameProperties', () => {
       await expectValid(input, person, { name: 'name' });
     });
 
+    test('an object whose only mapped properties are not enumerable is passed on as is', async () => {
+      const validator = V.renameProperties({ toString: 'id', name: 'title' });
+      const plain = { a: 1 };
+      expect(await validator.getValid(plain)).toBe(plain);
+      const instance = new Person();
+      expect(Object.hasOwn(instance, 'old')).toBe(true);
+      expect(await validator.getValid(instance)).toBe(instance);
+      await expectValid(instance, V.object({ pre: validator, properties: { name: V.string(), old: V.optionalStrict(V.string()) } }), { name: 'name' });
+    });
+
     test('a non-enumerable property is not kept', async () => {
       const input: any = { old: 'x' };
       Object.defineProperty(input, 'name', { value: 'hidden', enumerable: false });
