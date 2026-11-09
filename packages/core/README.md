@@ -582,7 +582,7 @@ Unlike parents' `next` rules, parents' `pre` validators are run in sequence, eac
 
 `ObjectValidator.pre(...)` returns a new, still extendable validator with the given validators appended to its own `pre`.
 
-NOTE: A `pre` validator must not modify its input; return a new object instead. Violations of the properties refer to the preprocessed object, e.g. to the renamed property.
+NOTE: A `pre` validator must not modify its input; return a new object instead. Violations of the properties refer to the preprocessed object, e.g. to the renamed property. Cycle detection works on the original input, so cyclic data is reported as a `Cycle` even though `pre` returns a new object.
 
 #### Renaming and dropping properties
 
@@ -602,7 +602,9 @@ const counts = V.optionalProperties(V.enum(Status, 'Status'), V.number()).pre(
 // { ACTIVE: 1, CLOSED: 2, DRAFT: 3 } -> { ACTIVE: 1, INACTIVE: 2 }
 ```
 
-Renaming into a property that is kept, or several properties into the same one, is allowed when their values are deepEqual, e.g. old and new key written together during a migration: `{ INACTIVE: 1, CLOSED: 1 }` above becomes `{ INACTIVE: 1 }`, keeping the kept property, or the first renamed one. Values that differ, e.g. `{ INACTIVE: 1, CLOSED: 2 }`, are a `PropertyConflict` violation at the renamed property. The raw input values are compared, before they are validated. Properties renamed into each other do not conflict.
+Renaming into a property that is kept, or several properties into the same one, is allowed when their values are deepEqual, e.g. old and new key written together during a migration: `{ INACTIVE: 1, CLOSED: 1 }` above becomes `{ INACTIVE: 1 }`, keeping the kept property, or the first renamed one. Values that differ, e.g. `{ INACTIVE: 1, CLOSED: 2 }`, are a `PropertyConflict` violation at the renamed property. The raw input values are compared, before they are validated.
+
+As migrated data is validated again, e.g. after it has been written back, renaming must be idempotent: a key cannot be both renamed and renamed into. `V.renameProperties` throws an `Error` for e.g. `{ a: 'b', b: 'a' }`, which would swap the properties on every validation, or `{ a: 'b', b: 'c' }`, which would move a value one step further each time.
 
 ## <a name="array">Arrays</a>
 

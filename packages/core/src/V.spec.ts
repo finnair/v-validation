@@ -1951,6 +1951,35 @@ describe('object pre', () => {
     await expectValid({ oldName: 'a' }, validator.omit('age'), { name: 'a' });
   });
 
+  describe('cycle detection', () => {
+    // The renamed copy still references the original input, which would be renamed into a new copy again
+    const node: Validator<any> = V.object({
+      pre: V.renameProperties({ oldName: 'name' }),
+      properties: { name: V.string(), child: V.optionalStrict(V.proxy(() => node)), other: V.optionalStrict(V.proxy(() => node)) },
+    });
+
+    test('cyclic input with properties to rename is a cycle', async () => {
+      const input: any = { oldName: 'a' };
+      input.child = input;
+      await expectViolations(input, node, defaultViolations.cycle(property('child')));
+    });
+
+    test('a shared, non-cyclic object is not a cycle', () => {
+      const shared = { oldName: 'shared' };
+      return expectValid({ oldName: 'a', child: shared, other: shared }, node, { name: 'a', child: { name: 'shared' }, other: { name: 'shared' } });
+    });
+
+    test('a shared invalid object is reported at both paths, not as a cycle', () => {
+      const shared = { oldName: 1 };
+      return expectViolations(
+        { oldName: 'a', child: shared, other: shared },
+        node,
+        defaultViolations.string(1, Path.of('child', 'name')),
+        defaultViolations.string(1, Path.of('other', 'name')),
+      );
+    });
+  });
+
   test('V.frozen freezes the output of a validator with pre', async () => {
     const validator = V.frozen(V.object({ pre: rename('oldName', 'name'), properties: { name: V.string() } }));
     const result = await validator.getValid({ oldName: 'a' });
@@ -2012,9 +2041,23 @@ describe('renameProperties', () => {
       expectViolations({ old: '1', renamed: 1 }, rename, defaultViolations.propertyConflict(property('old'))));
   });
 
-  test('renaming into a dropped or renamed property is not a conflict', async () => {
-    await expectValid({ a: 1, b: 2 }, V.renameProperties({ a: 'b', b: 'a' }), { b: 1, a: 2 });
-    await expectValid({ a: 1, b: 2 }, V.renameProperties({ a: 'b', b: undefined }), { b: 1 });
+  test.each<[string, Record<string, string | number | undefined>]>([
+    ['a swap', { a: 'b', b: 'a' }],
+    ['a chain', { a: 'b', b: 'c' }],
+    ['renaming into a dropped key', { a: 'b', b: undefined }],
+    ['renaming into itself', { a: 'a' }],
+    ['a numeric target that is renamed', { a: 1, 1: 'b' }],
+  ])('%s is not idempotent and rejected', (_name, mapping) => expect(() => V.renameProperties(mapping)).toThrow(/not idempotent/));
+
+  test('migrated data is not renamed again', async () => {
+    const migrated = await rename.getValid({ old: 1 });
+    expect(await rename.getValid(migrated)).toBe(migrated);
+  });
+
+  test('a key inherited from the prototype that is not enumerable is not renamed', async () => {
+    const result = await V.renameProperties({ toString: 'name' }).getValid({ a: 1 });
+    expect(result).toEqual({ a: 1 });
+    expect(Object.hasOwn(result as object, 'name')).toBe(false);
   });
 
   test('a numeric target is a property key', () => expectValid({ old: 1 }, V.renameProperties({ old: 2 }), { 2: 1 }));

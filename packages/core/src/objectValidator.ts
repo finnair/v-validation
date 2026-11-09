@@ -212,6 +212,22 @@ export class ObjectValidator<LocalType = unknown, InheritableType = LocalType, I
           success(result);
         }
       : success;
+    if (this.preValidators.length > 0 && value !== null && typeof value === 'object') {
+      // A pre validator may return a new object whose properties still reference the original input,
+      // so cycle detection must register the original: PropertiesValidator only sees the new object.
+      if (ctx.enterValidation(value, path)) {
+        return failure([defaultViolations.cycle(path)]);
+      }
+      return this.validator.validatePathV2(value, path, ctx,
+        (result) => {
+          ctx.leaveValidation(value, path);
+          successFn(result);
+        },
+        (violations) => {
+          ctx.leaveValidation(value, path);
+          failure(violations);
+        });
+    }
     this.validator.validatePathV2(value, path, ctx, successFn, failure);
   }
 
@@ -480,16 +496,30 @@ export class ObjectNormalizer<InOut> extends Validator<undefined | InOut | {}> {
  * `mapping` are kept. A renamed property keeps its position. Non-objects are passed on unchanged, as
  * is an object without any property to rename.
  *
- * Renaming into a key that is kept, or several keys into the same key, merges them when their values
- * are deepEqual (e.g. old and new key written together during a migration), keeping the kept property,
- * or the first renamed one, and is otherwise a `PropertyConflict` violation at the renamed key. Keys renamed into each
- * other (a swap) do not conflict.
+ * Renaming into a property that exists, or several properties into the same one, merges them when their
+ * values are deepEqual (e.g. old and new key written together during a migration), keeping the existing
+ * property, or the first renamed one, and is otherwise a `PropertyConflict` violation at the renamed key.
+ *
+ * Renaming must be idempotent, as migrated data is validated again, e.g. after it has been written
+ * back. So a key cannot be both renamed and renamed into: `a -> b, b -> a` would swap the properties on
+ * every validation, and `a -> b, b -> c` move a value one step further.
+ *
+ * NOTE: Use it as `ObjectModel.pre`, which keeps cycle detection working on the original input. In e.g.
+ * `V.compositionOf` before an object validator, cyclic input would be renamed into a new copy over and over.
  */
 export class RenamePropertiesValidator extends Validator {
   public readonly mapping: Readonly<Record<string, string | number | undefined>>;
+  private readonly sources: readonly string[];
   constructor(mapping: Record<string, string | number | undefined>) {
     super();
     this.mapping = Object.freeze({ ...mapping });
+    this.sources = Object.freeze(Object.keys(this.mapping));
+    for (const source of this.sources) {
+      const target = this.mapping[source];
+      if (target !== undefined && Object.hasOwn(this.mapping, String(target))) {
+        throw new Error(`renameProperties: '${target}' is both renamed and renamed into, which is not idempotent`);
+      }
+    }
     Object.freeze(this);
   }
 
@@ -498,17 +528,15 @@ export class RenamePropertiesValidator extends Validator {
       return success(value);
     }
     const anyValue = value as any;
-    const keys: string[] = [];
-    let renames = false;
-    for (const key in anyValue) {
-      keys.push(key);
-      renames ||= Object.hasOwn(this.mapping, key);
-    }
-    if (!renames) {
+    // Typically the mapping has far fewer keys than the object
+    if (!this.sources.some(source => source in anyValue)) {
       return success(value);
     }
+    const keys: string[] = [];
+    for (const key in anyValue) {
+      keys.push(key);
+    }
     const inputKeys = new Set(keys);
-    const renamedFrom = new Map<string, string>();
     const violations: Violation[] = [];
     const result: any = {};
     for (const key of keys) {
@@ -522,16 +550,14 @@ export class RenamePropertiesValidator extends Validator {
       }
       const targetKey = String(target);
       const propertyValue = getProperty(anyValue, key);
-      const keptTarget = inputKeys.has(targetKey) && !Object.hasOwn(this.mapping, targetKey);
-      if (keptTarget || renamedFrom.has(targetKey)) {
-        // The kept property, or the first property renamed into the same key
-        const otherValue = keptTarget ? getProperty(anyValue, targetKey) : getProperty(anyValue, renamedFrom.get(targetKey)!);
+      // A target is never renamed itself, so it is either kept from the input or set by an earlier rename
+      if (inputKeys.has(targetKey) || Object.hasOwn(result, targetKey)) {
+        const otherValue = inputKeys.has(targetKey) ? getProperty(anyValue, targetKey) : result[targetKey];
         if (!deepEqual(propertyValue, otherValue)) {
           violations.push(defaultViolations.propertyConflict(path.property(key)));
         }
         continue;
       }
-      renamedFrom.set(targetKey, key);
       setOwnProperty(result, targetKey, propertyValue);
     }
     if (violations.length > 0) {
