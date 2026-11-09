@@ -1907,6 +1907,34 @@ describe('object pre', () => {
       expect(Object.isFrozen(child.preValidators)).toBe(true);
     });
 
+    test('own pre validators are always appended as listed, even when inherited or repeated', async () => {
+      const a = record('a');
+      const parent = V.object({ pre: a, additionalProperties: true });
+      const child = V.object({ extends: parent, pre: [record('b'), a] });
+      calls.length = 0;
+      await child.validate({});
+      expect(calls).toEqual(['a', 'b', 'a']);
+
+      calls.length = 0;
+      await V.object({ pre: [a, a], additionalProperties: true }).validate({});
+      expect(calls).toEqual(['a', 'a']);
+    });
+
+    test('a grandchild keeps the repeated own pre validators of its parent', async () => {
+      const a = record('a');
+      const child = V.object({ extends: V.object({ pre: a, additionalProperties: true }), pre: [record('b'), a] });
+      calls.length = 0;
+      await V.object({ extends: child }).validate({});
+      expect(calls).toEqual(['a', 'b', 'a']);
+    });
+
+    test('the same validator listed by two parents runs for each', async () => {
+      const a = record('a');
+      calls.length = 0;
+      await V.object({ extends: [V.object({ pre: a, additionalProperties: true }), V.object({ pre: a })] }).validate({});
+      expect(calls).toEqual(['a', 'a']);
+    });
+
     test('a migration inherited from the parent applies to the child', () =>
       expectValid(
         { oldName: 'a', age: 1 },
@@ -2022,6 +2050,22 @@ describe('object pre', () => {
     test('a shared, non-cyclic object is not a cycle', () => {
       const shared = { oldName: 'shared' };
       return expectValid({ oldName: 'a', child: shared, other: shared }, node, { name: 'a', child: { name: 'shared' }, other: { name: 'shared' } });
+    });
+
+    describe('pre putting the input itself into an envelope', () => {
+      const payload: Validator<any> = V.object({ properties: { name: V.string(), self: V.optionalStrict(V.proxy(() => payload)) } });
+      const envelope = V.object({
+        pre: V.map((value: any) => ('payload' in value ? value : { version: 1, payload: value })),
+        properties: { version: V.number(), payload },
+      });
+
+      test('is not a cycle', () => expectValid({ name: 'a' }, envelope, { version: 1, payload: { name: 'a' } }));
+
+      test('a cycle within the input is still a cycle', async () => {
+        const input: any = { name: 'a' };
+        input.self = input;
+        await expectViolations(input, envelope, defaultViolations.cycle(Path.of('payload', 'self')));
+      });
     });
 
     test('a shared invalid object is reported at both paths, not as a cycle', () => {

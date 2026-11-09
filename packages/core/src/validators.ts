@@ -18,6 +18,45 @@ export interface ValidatorOptions {
   readonly warnLogger?: WarnLogger;
 }
 
+function enterPath(inProgress: Map<object, Path | Path[]>, value: object, path: Path): boolean {
+  const existing = inProgress.get(value);
+  if (existing === undefined) {
+    inProgress.set(value, path);
+  } else if (Array.isArray(existing)) {
+    for (let i = 0; i < existing.length; i++) {
+      const existingPath = existing[i];
+      if (existingPath.length < path.length && path.startsWith(existingPath)) {
+        return true;
+      }
+    }
+    existing.push(path);
+  } else {
+    if (existing.length < path.length && path.startsWith(existing)) {
+      return true;
+    }
+    inProgress.set(value, [existing, path]);
+  }
+  return false;
+}
+
+function leavePath(inProgress: Map<object, Path | Path[]>, value: object, path: Path): void {
+  const existing = inProgress.get(value);
+  if (existing === undefined) {
+    return;
+  }
+  if (Array.isArray(existing)) {
+    const i = existing.findIndex(existingPath => existingPath.equals(path));
+    if (i >= 0) {
+      existing.splice(i, 1);
+    }
+    if (existing.length === 0) {
+      inProgress.delete(value);
+    }
+  } else {
+    inProgress.delete(value);
+  }
+}
+
 export class ValidationContext {
   constructor(public readonly options: ValidatorOptions) {
     Object.freeze(this.options);
@@ -40,6 +79,12 @@ export class ValidationContext {
    * cycle and memory stays bounded by nesting depth, not object count.
    */
   private readonly inProgress = new Map<object, Path | Path[]>();
+
+  /**
+   * Like `inProgress`, but per scope, see `enterValidation`. Created on first use, as only objects
+   * with `ObjectModel.pre` use it.
+   */
+  private scopedInProgress?: Map<object, Map<object, Path | Path[]>>;
 
   /** Not readonly: `withFreeze` sets it on a derived context. Private, so it stays an internal. */
   private _freeze = false;
@@ -69,44 +114,36 @@ export class ValidationContext {
    * Marks validation of `value` at `path` as in progress. Returns `true` if `value` is already
    * being validated at an ancestor of `path` - i.e. a reference cycle - in which case the caller
    * must not descend and must not call `leaveValidation`. Only called for object values.
+   *
+   * With a `scope`, only an earlier registration with the same scope counts, e.g. the same validator
+   * re-entering the same value: that is enough to stop an endless descent, as any endless one repeats
+   * some validator and value, while the same value may legitimately be validated by another validator
+   * at a descendant path. `leaveValidation` must then be called with the same scope.
    */
-  enterValidation(value: object, path: Path): boolean {
-    const existing = this.inProgress.get(value);
-    if (existing === undefined) {
-      this.inProgress.set(value, path);
-    } else if (Array.isArray(existing)) {
-      for (let i = 0; i < existing.length; i++) {
-        const existingPath = existing[i];
-        if (existingPath.length < path.length && path.startsWith(existingPath)) {
-          return true;
-        }
-      }
-      existing.push(path);
-    } else {
-      if (existing.length < path.length && path.startsWith(existing)) {
-        return true;
-      }
-      this.inProgress.set(value, [existing, path]);
+  enterValidation(value: object, path: Path, scope?: object): boolean {
+    if (scope === undefined) {
+      return enterPath(this.inProgress, value, path);
     }
-    return false;
+    this.scopedInProgress ??= new Map();
+    let inProgress = this.scopedInProgress.get(scope);
+    if (inProgress === undefined) {
+      inProgress = new Map();
+      this.scopedInProgress.set(scope, inProgress);
+    }
+    return enterPath(inProgress, value, path);
   }
 
   /** Clears the `path` registered by a successful `enterValidation` of `value`. */
-  leaveValidation(value: object, path: Path): void {
-    const existing = this.inProgress.get(value);
-    if (existing === undefined) {
-      return;
+  leaveValidation(value: object, path: Path, scope?: object): void {
+    if (scope === undefined) {
+      return leavePath(this.inProgress, value, path);
     }
-    if (Array.isArray(existing)) {
-      const i = existing.findIndex(existingPath => existingPath.equals(path));
-      if (i >= 0) {
-        existing.splice(i, 1);
+    const inProgress = this.scopedInProgress?.get(scope);
+    if (inProgress !== undefined) {
+      leavePath(inProgress, value, path);
+      if (inProgress.size === 0) {
+        this.scopedInProgress!.delete(scope);
       }
-      if (existing.length === 0) {
-        this.inProgress.delete(value);
-      }
-    } else {
-      this.inProgress.delete(value);
     }
   }
 

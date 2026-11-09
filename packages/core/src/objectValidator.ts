@@ -55,8 +55,9 @@ export interface ObjectModel<LocalType = unknown, InheritableType = unknown> {
   readonly additionalProperties?: boolean | MapEntryModel | MapEntryModel[];
   /**
    * Preprocessing of the whole input object before its properties are validated, e.g. to migrate old
-   * data by renaming properties. Inherited: parents' `pre` validators run first, in inheritance order,
-   * and each one only once even when inherited through several parents.
+   * data by renaming properties. Inherited: parents' `pre` validators run first, in inheritance order.
+   * An ancestor's `pre` validators run only once, even when the ancestor is inherited through several
+   * parents, while the model's own `pre` validators are always appended as listed.
    *
    * NOTE: A `pre` validator must not modify its input; return a new object instead. Violations of the
    * properties validated after it refer to the preprocessed object, e.g. to a renamed property.
@@ -110,8 +111,14 @@ export class ObjectValidator<LocalType = unknown, InheritableType = LocalType, I
 
   public readonly nextValidator?: Validator;
 
-  /** Own and inherited `pre` validators in execution order, without duplicates. */
+  /**
+   * Inherited and own `pre` validators in execution order. Each ancestor's own `pre` validators are
+   * included once, even when the ancestor is inherited through several parents.
+   */
   public readonly preValidators: readonly Validator[];
+
+  /** This and the ancestors that have own `pre` validators, in execution order, each once. */
+  private readonly preOwners: readonly ObjectValidator<any, any, any>[];
 
   public readonly propertyOrder?: string[];
 
@@ -128,19 +135,18 @@ export class ObjectValidator<LocalType = unknown, InheritableType = LocalType, I
     let additionalProperties: MapEntryValidator[] = [];
     let parentNextValidators: Validator[] = [];
     let nextValidators: Validator[] = [];
-    const preValidators: Validator[] = [];
-    const addPreValidator = (validator: Validator) => {
-      if (!preValidators.includes(validator)) {
-        preValidators.push(validator);
-      }
-    };
+    const preOwners: ObjectValidator<any, any, any>[] = [];
 
     this.parentValidators = model.extends ? ([] as ObjectValidator[]).concat(model.extends) : [];
     for (let i = 0; i < this.parentValidators.length; i++) {
       const parent = this.parentValidators[i];
       additionalProperties = additionalProperties.concat(parent.additionalProperties);
       properties = mergeProperties(parent.properties, properties);
-      parent.preValidators.forEach(addPreValidator);
+      for (const owner of parent.preOwners) {
+        if (!preOwners.includes(owner)) {
+          preOwners.push(owner);
+        }
+      }
       if (parent.nextValidator) {
         parentNextValidators.push(parent.nextValidator);
       }
@@ -156,9 +162,13 @@ export class ObjectValidator<LocalType = unknown, InheritableType = LocalType, I
     this.localProperties = getPropertyValidators(model.localProperties);
     this.propertyOrder = model.propertyOrder ? [...model.propertyOrder] : undefined;
 
-    if (model.pre) {
-      ([] as Validator[]).concat(model.pre).forEach(addPreValidator);
+    // Own pre validators are always appended, as listed
+    const ownPre = ownPreValidators(model);
+    if (ownPre.length > 0) {
+      preOwners.push(this);
     }
+    const preValidators = [...preOwners.filter(owner => owner !== this).flatMap(owner => ownPreValidators(owner.model)), ...ownPre];
+    this.preOwners = preOwners;
     this.preValidators = preValidators;
 
     const propertiesValidator = new PropertiesValidator<LocalType, In>(this.properties, this.localProperties, this.additionalProperties, this.propertyOrder);
@@ -188,6 +198,7 @@ export class ObjectValidator<LocalType = unknown, InheritableType = LocalType, I
     Object.freeze(this.propertyOrder);
     Object.freeze(this.parentValidators);
     Object.freeze(this.preValidators);
+    Object.freeze(this.preOwners);
     Object.freeze(this);
   }
 
@@ -220,16 +231,18 @@ export class ObjectValidator<LocalType = unknown, InheritableType = LocalType, I
     if (this.preValidators.length > 0 && value !== null && typeof value === 'object') {
       // A pre validator may return a new object whose properties still reference the original input,
       // so cycle detection must register the original: PropertiesValidator only sees the new object.
-      if (ctx.enterValidation(value, path)) {
+      // Scoped to this validator, as pre may also put the original itself at a descendant path, e.g.
+      // into an envelope, where another validator validates it.
+      if (ctx.enterValidation(value, path, this)) {
         return failure([defaultViolations.cycle(path)]);
       }
       return this.validator.validatePathV2(value, path, ctx,
         (result) => {
-          ctx.leaveValidation(value, path);
+          ctx.leaveValidation(value, path, this);
           successFn(result);
         },
         (violations) => {
-          ctx.leaveValidation(value, path);
+          ctx.leaveValidation(value, path, this);
           failure(violations);
         });
     }
@@ -240,8 +253,7 @@ export class ObjectValidator<LocalType = unknown, InheritableType = LocalType, I
    * A copy of this validator with `validators` appended to its own `pre` validators, see {@link ObjectModel.pre}.
    */
   pre(...validators: Validator[]): ObjectValidator<LocalType, InheritableType, In> {
-    const pre = this.model.pre === undefined ? [] : ([] as Validator[]).concat(this.model.pre);
-    return new ObjectValidator<LocalType, InheritableType, In>({ ...this.model, pre: [...pre, ...validators] });
+    return new ObjectValidator<LocalType, InheritableType, In>({ ...this.model, pre: [...ownPreValidators(this.model), ...validators] });
   }
 
   omit<T, K extends keyof (any & (InheritableType | LocalType))>(...keys: K[]) {
@@ -621,12 +633,16 @@ function snapshotModel<LocalType, InheritableType>(model: ObjectModel<LocalType,
     localProperties: copyProperties(model.localProperties),
     additionalProperties: Array.isArray(additionalProperties)
       ? Object.freeze(additionalProperties.map(copyMapEntry)) as MapEntryModel[]
-      : typeof additionalProperties === 'object' ? copyMapEntry(additionalProperties) : additionalProperties,
+      : typeof additionalProperties === 'object' && additionalProperties !== null ? copyMapEntry(additionalProperties) : additionalProperties,
     pre: copyArray(model.pre),
     next: copyArray(model.next),
     localNext: copyArray(model.localNext),
     propertyOrder: copyArray(model.propertyOrder),
   });
+}
+
+function ownPreValidators(model: ObjectModel<any, any>): Validator[] {
+  return model.pre === undefined ? [] : ([] as Validator[]).concat(model.pre);
 }
 
 function getPropertyValidators(properties?: PropertyModel): Properties {

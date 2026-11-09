@@ -576,9 +576,9 @@ const person = V.object({
 // or an existing validator: personValidator.pre(rename('fullName', 'name'))
 ```
 
-`pre` is inherited: parents' `pre` validators run first, in inheritance order, and each only once even when inherited through several parents.
+`pre` is inherited: parents' `pre` validators run first, in inheritance order. An ancestor's `pre` validators run only once, even when the ancestor is inherited through several parents. A model's own `pre` validators are always appended as listed, even when one of them is also inherited or listed twice.
 
-Unlike parents' `next` rules, parents' `pre` validators are run in sequence, each on the output of the previous one, not combined with `V.allOf`. Preprocessing is about converting the input, e.g. each parent migrating its own properties, and `V.allOf` cannot combine different conversions of the same input. For the same reason a `pre` validator inherited through several parents runs only once: run twice in sequence, a migration could be applied twice.
+Unlike parents' `next` rules, parents' `pre` validators are run in sequence, each on the output of the previous one, not combined with `V.allOf`. Preprocessing is about converting the input, e.g. each parent migrating its own properties, and `V.allOf` cannot combine different conversions of the same input. For the same reason an ancestor inherited through several parents contributes its `pre` validators only once: run twice in sequence, a migration could be applied twice.
 
 `ObjectValidator.pre(...)` returns a new, still extendable validator with the given validators appended to its own `pre`.
 
