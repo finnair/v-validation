@@ -657,6 +657,36 @@ If your data contains such names, use `V.lenientEnum` to restore the earlier beh
 V.lenientEnum(E, 'E'); // Validator<E | 'A' | 'B'>, accepts 1, 2, 'A' and 'B'
 ```
 
+### Enum aliases
+
+To read old data after enum values have been renamed, `options.aliases` of `V.enum` and `V.lenientEnum` converts old values to current ones. An old value may be removed from the enum, or kept and marked `@deprecated`:
+
+```typescript
+enum Status {
+  ACTIVE = 'ACTIVE',
+  INACTIVE = 'INACTIVE',
+  /** @deprecated use INACTIVE */
+  CLOSED = 'CLOSED',
+}
+// SUSPENDED is no longer in the enum
+const statusAliases = { [Status.CLOSED]: Status.INACTIVE, SUSPENDED: Status.INACTIVE };
+V.enum(Status, 'Status', { aliases: statusAliases }); // 'CLOSED' and 'SUSPENDED' -> Status.INACTIVE
+```
+
+The aliases are checked when the validator is constructed:
+- A target must be a value of the enum.
+- Renaming must be idempotent, as migrated data is validated again: an old value cannot also be a target.
+- A value cannot be dropped by mapping it to `undefined`, as that would e.g. leave a gap in an array of enum values. To drop record keys, use [`V.renameProperties`](#renaming-and-dropping-properties).
+
+Keys of a `Record` are strings, so they match string values only. Use a `Map` to rename old numeric values: `new Map([[3, Example.B]])`.
+
+The same aliases can migrate both the keys and the values of a `Record<Enum, Enum>`:
+
+```typescript
+V.optionalProperties(V.enumKey(Status, 'Status'), V.enum(Status, 'Status', { aliases: statusAliases }))
+  .pre(V.renameProperties(statusAliases));
+```
+
 ### Enum keys
 
 Use `V.enumKey` for the keys of a `Record<Enum, Value>`. Property keys are always strings, so `V.enum` rejects the keys of a numeric enum: the key of `{ 1: 'x' }` is `'1'`, not `1`. `V.enumKey` accepts the key string of an enum value, but only in its canonical form `String(value)` - e.g. `'1'` but not `'01'` or `'1.0'` - so that `record[E.A]` finds it:
@@ -1440,9 +1470,9 @@ Unless otherwise stated, all validators require non-null and non-undefined value
 | max                     | max: number, inclusive = true                                    | Asserts that numeric input is less than or equal (if inclusive = true) than `max`.                                                        |
 | jsonBigInt              |                                                                  | Converts bigints, integer numbers and strings to `JsonBigInt` wrapper for `BigInt` with `toJSON()` serialization as string.               |
 | date                    |                                                                  | Reqruires a valid date. Converts string to Date.                                                                                          |
-| enum                    | enumType: object, name: string                                   | Requires that the input is one of given enumType. Name of the enum provided for error message.                                            |
+| enum                    | enumType: object, name: string, options?: EnumOptions            | Requires that the input is one of given enumType. Name of the enum provided for error message. See [enum aliases](#enum-aliases).         |
 | enumKey                 | enumType: object, name: string                                   | A property key of a `Record<Enum, Value>`: accepts the canonical key string of an enum value, e.g. `'1'` for `A = 1`. See [enum keys](#enum-keys). |
-| lenientEnum             | enumType: object, name: string                                   | Like `enum`, but also accepts the name of a numeric member, passed on unchanged. Type: `LenientEnum<typeof enumType>`. See [enums](#enums). |
+| lenientEnum             | enumType: object, name: string, options?: EnumOptions            | Like `enum`, but also accepts the name of a numeric member, passed on unchanged. Type: `LenientEnum<typeof enumType>`. See [enums](#enums). |
 | assertTrue              | fn: AssertTrue, type: string = 'AssertTrue', path?: Path         | Requires that the input passes `fn`. Type can be provided for error messages and path to target a sub property                            |
 | hasValue                | expectedValue: any                                               | Requires that the input matches `expectedValue`. Uses `node-deep-equal` library.                                                          |
 | object                  | model: Model                                                     | Defines an [Object validator](#object) based on provided Model.                                                                           |

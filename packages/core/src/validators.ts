@@ -2233,16 +2233,53 @@ function enumValues(enumType: Record<string, string | number>) {
 }
 
 /**
- * Validates that the input is one of the allowed values of an enum and passes it on unchanged.
- * Subclasses decide which values are allowed, and thereby the output type.
+ * Old values of an enum renamed to its current values, e.g. `{ OLD: MyEnum.NEW }`. A `Map` matches
+ * values exactly, so it also supports old numeric values: `new Map([[3, MyEnum.NEW]])`.
+ */
+export type EnumAliases<E extends Record<string, string | number>> =
+  | Readonly<Record<string, E[keyof E]>>
+  | ReadonlyMap<string | number, E[keyof E]>;
+
+export interface EnumOptions<E extends Record<string, string | number>> {
+  /**
+   * Old values that are accepted and converted to their current value. A target must be a value of the
+   * enum, and the renaming must be idempotent: an old value cannot be a target. An old value may still
+   * be in the enum, e.g. a `@deprecated` member. Values cannot be dropped, i.e. mapped to `undefined`.
+   */
+  readonly aliases?: EnumAliases<E>;
+}
+
+/**
+ * Validates that the input is one of the allowed values of an enum and passes it on unchanged, or
+ * converts an alias to its current value. Subclasses decide which values are allowed, and thereby the
+ * output type.
  *
  * NOTE: The constructor freezes the instance, so subclasses must not declare fields of their own.
  */
 abstract class EnumValidatorBase<E extends Record<string, string | number>, Out> extends Validator<Out> {
   private readonly _values: Set<string | number>;
-  constructor(public readonly enumType: E, public readonly name: string, values: Iterable<string | number>) {
+  private readonly _aliases?: Map<string | number, string | number>;
+  constructor(public readonly enumType: E, public readonly name: string, values: Iterable<string | number>, options?: EnumOptions<E>) {
     super();
     this._values = new Set(values);
+    if (options?.aliases) {
+      const aliases = new Map<string | number, string | number>(
+        options.aliases instanceof Map ? options.aliases : Object.entries(options.aliases),
+      );
+      const targets = new Set(enumValues(enumType));
+      for (const [alias, target] of aliases) {
+        if (target === undefined) {
+          throw new Error(`${name}: alias ${String(alias)} cannot drop a value by mapping it to undefined`);
+        }
+        if (!targets.has(target)) {
+          throw new Error(`${name}: alias target ${String(target)} of ${String(alias)} is not a value of the enum`);
+        }
+        if (aliases.has(target)) {
+          throw new Error(`${name}: ${String(target)} is both an alias and an alias target, which is not idempotent`);
+        }
+      }
+      this._aliases = aliases;
+    }
     Object.freeze(this);
   }
   supportsFreeze(): boolean {
@@ -2253,17 +2290,22 @@ abstract class EnumValidatorBase<E extends Record<string, string | number>, Out>
     if (isNullOrUndefined(value)) {
       return failure([defaultViolations.notNull(path)]);
     }
-    if ((typeof value === 'string' || typeof value === 'number') && this._values.has(value)) {
-      return success(value as Out);
+    if (typeof value === 'string' || typeof value === 'number') {
+      if (this._aliases?.has(value)) {
+        return success(this._aliases.get(value) as Out);
+      }
+      if (this._values.has(value)) {
+        return success(value as Out);
+      }
     }
     ctx.failure<Out>(defaultViolations.enum(this.name, value, path), value).then(success, failure);
   }
 }
 
-/** Accepts only the values of the enum. */
+/** Accepts only the values of the enum, and its aliases. */
 export class EnumValidator<Out extends Record<string, string | number>> extends EnumValidatorBase<Out, Out[keyof Out]> {
-  constructor(enumType: Out, name: string) {
-    super(enumType, name, enumValues(enumType));
+  constructor(enumType: Out, name: string, options?: EnumOptions<Out>) {
+    super(enumType, name, enumValues(enumType), options);
   }
 }
 
@@ -2281,8 +2323,8 @@ export type LenientEnum<E extends Record<string, string | number>> =
  * name is not converted to its value.
  */
 export class LenientEnumValidator<Out extends Record<string, string | number>> extends EnumValidatorBase<Out, LenientEnum<Out>> {
-  constructor(enumType: Out, name: string) {
-    super(enumType, name, Object.values(enumType));
+  constructor(enumType: Out, name: string, options?: EnumOptions<Out>) {
+    super(enumType, name, Object.values(enumType), options);
   }
 }
 

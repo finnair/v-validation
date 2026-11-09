@@ -3,6 +3,7 @@ import {
   Validator,
   EnumValidator,
   LenientEnum,
+  EnumAliases,
   Violation,
   ValidationResult,
   defaultViolations,
@@ -2447,6 +2448,74 @@ describe('enumKey', () => {
   test('ignoreUnknownEnumValues', () => expectValid('9', V.enumKey(IntEnum, 'IntEnum'), '9' as any, { ignoreUnknownEnumValues: true }));
 
   test('supports freeze', () => expect(V.enumKey(IntEnum, 'IntEnum').supportsFreeze()).toBe(true));
+});
+
+describe('enum aliases', () => {
+  enum Status {
+    ACTIVE = 'ACTIVE',
+    INACTIVE = 'INACTIVE',
+    /** @deprecated use INACTIVE */
+    CLOSED = 'CLOSED',
+  }
+  enum IntEnum {
+    A = 1,
+    B = 2,
+  }
+  // CLOSED is kept but deprecated; SUSPENDED is no longer in the enum
+  const statusAliases = { [Status.CLOSED]: Status.INACTIVE, SUSPENDED: Status.INACTIVE };
+  const status = V.enum(Status, 'Status', { aliases: statusAliases });
+
+  test('typing', () => assertValidatorType<Status>()(status));
+
+  test('old values are converted to the current value', async () => {
+    await expectValid('CLOSED', status, Status.INACTIVE);
+    await expectValid('SUSPENDED', status, Status.INACTIVE);
+  });
+
+  test('current values are valid', async () => {
+    await expectValid('ACTIVE', status, Status.ACTIVE);
+    await expectValid('INACTIVE', status, Status.INACTIVE);
+  });
+
+  test('other values are still invalid', () => expectViolations('OTHER', status, defaultViolations.enum('Status', 'OTHER')));
+
+  test('converted in an array without gaps', () => expectValid(['ACTIVE', 'CLOSED', 'SUSPENDED'], V.array(status), [Status.ACTIVE, Status.INACTIVE, Status.INACTIVE]));
+
+  test('a Map matches old numeric values exactly', async () => {
+    const validator = V.enum(IntEnum, 'IntEnum', { aliases: new Map([[3, IntEnum.B]]) });
+    await expectValid(3, validator, IntEnum.B);
+    await expectViolations('3', validator, defaultViolations.enum('IntEnum', '3'));
+  });
+
+  test('a Record matches string values only', async () => {
+    const validator = V.enum(IntEnum, 'IntEnum', { aliases: { 3: IntEnum.B } });
+    await expectValid('3', validator, IntEnum.B);
+    await expectViolations(3, validator, defaultViolations.enum('IntEnum', 3));
+  });
+
+  test('V.lenientEnum', async () => {
+    const validator = V.lenientEnum(IntEnum, 'IntEnum', { aliases: new Map([[3, IntEnum.B]]) });
+    await expectValid(3, validator, IntEnum.B);
+    await expectValid('A', validator, 'A');
+  });
+
+  test('the same aliases migrate the keys and values of a record', () =>
+    expectValid(
+      { ACTIVE: 'CLOSED', CLOSED: 'SUSPENDED' },
+      V.optionalProperties(V.enumKey(Status, 'Status'), status).pre(V.renameProperties(statusAliases)),
+      { ACTIVE: Status.INACTIVE, INACTIVE: Status.INACTIVE },
+    ));
+
+  test.each<[string, EnumAliases<typeof Status>, RegExp]>([
+    ['a target that is not a value', { OLD: 'NEW' as Status }, /not a value of the enum/],
+    ['an alias of a target', { ACTIVE: Status.INACTIVE, INACTIVE: Status.ACTIVE }, /not idempotent/],
+    ['an alias of itself', { ACTIVE: Status.ACTIVE }, /not idempotent/],
+    ['dropping a value', { OLD: undefined as unknown as Status }, /cannot drop/],
+  ])('%s is rejected', (_name, aliases, error) => expect(() => V.enum(Status, 'Status', { aliases })).toThrow(error));
+
+  test('ignoreUnknownEnumValues', () => expectValid('OTHER', status, 'OTHER' as any, { ignoreUnknownEnumValues: true }));
+
+  test('supports freeze', () => expect(status.supportsFreeze()).toBe(true));
 });
 
 describe('oneOf', () => {

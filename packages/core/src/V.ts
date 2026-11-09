@@ -48,6 +48,7 @@ import {
   EnumValidator,
   LenientEnumValidator,
   EnumKeyValidator,
+  EnumOptions,
   FreezeValidator,
   HasValueValidator,
   JsonValidator,
@@ -246,13 +247,14 @@ export const V = {
 
   date: () => dateValidator,
 
-  enum: <Out extends Record<string, string | number>>(enumType: Out, name: string) => new EnumValidator<Out>(enumType, name),
+  /** The values of an enum. `options.aliases` converts old values to current ones, see {@link EnumOptions}. */
+  enum: <Out extends Record<string, string | number>>(enumType: Out, name: string, options?: EnumOptions<Out>) => new EnumValidator<Out>(enumType, name, options),
 
   /**
    * The v12 `V.enum`: also accepts the name of a numeric member, passed on unchanged (not converted to
    * its value). Typed as {@link LenientEnum}. Prefer the strict `V.enum` where the data allows it.
    */
-  lenientEnum: <Out extends Record<string, string | number>>(enumType: Out, name: string) => new LenientEnumValidator<Out>(enumType, name),
+  lenientEnum: <Out extends Record<string, string | number>>(enumType: Out, name: string, options?: EnumOptions<Out>) => new LenientEnumValidator<Out>(enumType, name, options),
 
   /**
    * A property key of a `Record<Enum, Value>`, e.g. `V.properties(V.enumKey(E, 'E'), V.number())`. Unlike
