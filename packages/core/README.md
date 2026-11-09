@@ -604,6 +604,8 @@ const counts = V.optionalProperties(V.enum(Status, 'Status'), V.number()).pre(
 
 Renaming into a property that is kept, or several properties into the same one, is allowed when their values are deepEqual, e.g. old and new key written together during a migration: `{ INACTIVE: 1, CLOSED: 1 }` above becomes `{ INACTIVE: 1 }`, keeping the kept property, or the first renamed one. Values that differ, e.g. `{ INACTIVE: 1, CLOSED: 2 }`, are a `PropertyConflict` violation at the renamed property. The raw input values are compared, before they are validated.
 
+NOTE: `V.renameProperties` is meant for plain data, e.g. parsed JSON. When a property is renamed, the result is a plain object of the input's enumerable properties: class getters, non-enumerable properties and the prototype are not kept. An object without properties to rename is passed on as is.
+
 As migrated data is validated again, e.g. after it has been written back, renaming must be idempotent: a key cannot be both renamed and renamed into. `V.renameProperties` throws an `Error` for e.g. `{ a: 'b', b: 'a' }`, which would swap the properties on every validation, or `{ a: 'b', b: 'c' }`, which would move a value one step further each time.
 
 ## <a name="array">Arrays</a>

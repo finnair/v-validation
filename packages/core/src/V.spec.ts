@@ -2124,6 +2124,43 @@ describe('renameProperties', () => {
     expect(Object.isFrozen(validator.mapping)).toBe(true);
   });
 
+  describe('the result is a plain object of the enumerable properties', () => {
+    const person = V.object({ pre: V.renameProperties({ old: 'id' }), properties: { name: V.string(), id: V.optionalStrict(V.string()) } });
+    class Person {
+      constructor(public old?: string) {}
+      get name() {
+        return 'name';
+      }
+    }
+
+    test('a class getter is not kept when a property is renamed', async () => {
+      const result = await V.renameProperties({ old: 'id' }).getValid(new Person('x'));
+      expect(result).toEqual({ id: 'x' });
+      expect(Object.getPrototypeOf(result)).toBe(Object.prototype);
+      await expectViolations(new Person('x'), person, defaultViolations.notNull(property('name')));
+    });
+
+    test('but an instance without properties to rename is passed on as is', async () => {
+      class Named {
+        get name() {
+          return 'name';
+        }
+      }
+      const input = new Named();
+      expect(await V.renameProperties({ old: 'id' }).getValid(input)).toBe(input);
+      await expectValid(input, person, { name: 'name' });
+    });
+
+    test('a non-enumerable property is not kept', async () => {
+      const input: any = { old: 'x' };
+      Object.defineProperty(input, 'name', { value: 'hidden', enumerable: false });
+      expect(await V.renameProperties({ old: 'id' }).getValid(input)).toEqual({ id: 'x' });
+    });
+
+    test('an enumerable inherited property is kept, and renamed', () =>
+      expectValid(Object.assign(Object.create({ old: 'x' }), { name: 'n' }), person, { name: 'n', id: 'x' }));
+  });
+
   test('does not support freeze on its own', () => expect(rename.supportsFreeze()).toBe(false));
 
   describe('migrating deprecated keys of a Record<Enum, Value>', () => {

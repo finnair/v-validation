@@ -501,6 +501,10 @@ export class ObjectNormalizer<InOut> extends Validator<undefined | InOut | {}> {
  * `mapping` are kept. A renamed property keeps its position. Non-objects are passed on unchanged, as
  * is an object without any property to rename.
  *
+ * NOTE: When a property is renamed, the result is a plain object of the input's enumerable properties,
+ * including inherited ones. Class getters, non-enumerable properties and the prototype are not kept, so
+ * use it for plain data, e.g. parsed JSON.
+ *
  * Renaming into a property that exists, or several properties into the same one, merges them when their
  * values are deepEqual (e.g. old and new key written together during a migration), keeping the existing
  * property, or the first renamed one, and is otherwise a `PropertyConflict` violation at the renamed key.
