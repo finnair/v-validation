@@ -30,7 +30,7 @@ import {
   SyncPromise,
   ValidatorConfigurationError,
 } from './validators.js';
-import { ObjectValidator, VInheritableType, lenientUnknownPropertyValidator } from './objectValidator.js';
+import { ObjectValidator, VInheritableType, lenientUnknownPropertyValidator, PropertyModel } from './objectValidator.js';
 import { V } from './V.js';
 import { jsonClone, Path, JsonValue } from '@finnair/path';
 import { expectUndefined, expectValid, expectViolations, verifyValid } from './testUtil.spec.js';
@@ -1937,6 +1937,60 @@ describe('object pre', () => {
 
     test('the result can be extended', () =>
       expectValid({ oldName: 'a', age: 1 }, V.objectType().extends(migrated).properties({ age: V.number() }).build(), { name: 'a', age: 1 }));
+  });
+
+  describe('model snapshot', () => {
+    const identity = V.map((value: any) => value);
+
+    test('changing the builder after build() does not change the built validator, nor its pre() copy', async () => {
+      const builder = V.objectType().properties({ name: V.string() });
+      const base = builder.build();
+      builder.properties({ age: V.number() }).pre(rename('name', 'title'));
+
+      await expectValid({ name: 'a' }, base, { name: 'a' });
+      await expectValid({ name: 'a' }, base.pre(identity), { name: 'a' });
+      // The builder can still be used, with the added property and pre rule
+      await expectViolations(
+        { name: 'a' },
+        builder.build(),
+        defaultViolations.notNull(property('name')),
+        defaultViolations.notNull(property('age')),
+        defaultViolations.unknownProperty(property('title')),
+      );
+    });
+
+    test('changing the model after construction does not change the validator, and the model is not frozen', async () => {
+      const properties: PropertyModel = { name: V.string() };
+      const pre: Validator[] = [identity];
+      const model = { properties, pre, propertyOrder: ['name'] };
+      const validator = V.object(model);
+      properties.age = V.number();
+      pre.push(rename('name', 'title'));
+      model.propertyOrder.push('age');
+
+      expect(Object.isFrozen(model)).toBe(false);
+      expect(Object.isFrozen(properties)).toBe(false);
+      await expectValid({ name: 'a' }, validator.pre(identity), { name: 'a' });
+      expect(validator.model.propertyOrder).toEqual(['name']);
+    });
+
+    test('the snapshot and its containers are frozen', () => {
+      const validator = V.object({
+        extends: [V.object({})],
+        properties: { name: V.string() },
+        localProperties: { type: 'T' },
+        additionalProperties: [{ keys: V.string(), values: V.string() }],
+        pre: [identity],
+        next: [identity],
+        localNext: [identity],
+        propertyOrder: ['name'],
+      });
+      const { model } = validator;
+      for (const part of [model, model.extends, model.properties, model.localProperties, model.additionalProperties, (model.additionalProperties as any[])[0], model.pre, model.next, model.localNext, model.propertyOrder]) {
+        expect(Object.isFrozen(part)).toBe(true);
+      }
+      expect(Object.isFrozen(V.object({ additionalProperties: { keys: V.string(), values: V.string() } }).model.additionalProperties)).toBe(true);
+    });
   });
 
   test('builder', async () => {

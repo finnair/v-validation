@@ -117,8 +117,13 @@ export class ObjectValidator<LocalType = unknown, InheritableType = LocalType, I
 
   private readonly validator: Validator<LocalType, In>;
 
-  constructor(public readonly model: ObjectModel<LocalType, InheritableType>) {
+  /** A frozen snapshot of the model this validator was constructed of, see {@link snapshotModel}. */
+  public readonly model: ObjectModel<LocalType, InheritableType>;
+
+  constructor(model: ObjectModel<LocalType, InheritableType>) {
     super();
+    model = snapshotModel(model);
+    this.model = model;
     let properties: Properties = {};
     let additionalProperties: MapEntryValidator[] = [];
     let parentNextValidators: Validator[] = [];
@@ -576,6 +581,42 @@ export class MapEntryValidator {
     this.valueValidator = entryModel.values;
     Object.freeze(this);
   }
+}
+
+/**
+ * A frozen copy of `model` and its containers, so that changing the original model or e.g. a builder
+ * after constructing a validator does not change the validator's `model`, which `ObjectValidator.pre`
+ * rebuilds from. A shallow copy is enough, as the contained validators are immutable. The original
+ * objects are not frozen, as they are not the validator's own.
+ */
+function snapshotModel<LocalType, InheritableType>(model: ObjectModel<LocalType, InheritableType>): ObjectModel<LocalType, InheritableType> {
+  const copyArray = <V>(value: V): V => (Array.isArray(value) ? (Object.freeze([...value]) as V) : value);
+  const copyProperties = (properties?: PropertyModel) => {
+    if (properties === undefined) {
+      return undefined;
+    }
+    // for...in, like getPropertyValidators
+    const copy: PropertyModel = {};
+    for (const name in properties) {
+      setOwnProperty(copy, name, properties[name]);
+    }
+    return Object.freeze(copy);
+  };
+  const copyMapEntry = (entry: MapEntryModel) => Object.freeze({ ...entry });
+  const { additionalProperties } = model;
+  return Object.freeze({
+    ...model,
+    extends: copyArray(model.extends),
+    properties: copyProperties(model.properties),
+    localProperties: copyProperties(model.localProperties),
+    additionalProperties: Array.isArray(additionalProperties)
+      ? Object.freeze(additionalProperties.map(copyMapEntry)) as MapEntryModel[]
+      : typeof additionalProperties === 'object' ? copyMapEntry(additionalProperties) : additionalProperties,
+    pre: copyArray(model.pre),
+    next: copyArray(model.next),
+    localNext: copyArray(model.localNext),
+    propertyOrder: copyArray(model.propertyOrder),
+  });
 }
 
 function getPropertyValidators(properties?: PropertyModel): Properties {
