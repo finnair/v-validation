@@ -552,6 +552,62 @@ An object may define inheritable cross-property rules with `ObjectModel.next` an
 `Next` validation rules are run after all the properties are validated successfully and `localNext`
 is the last step in the validation chain. Inherited `next` rules are executed before child's own.
 
+With multiple parents, the parents' `next` rules are combined with `V.allOf`: each parent's rules get the same input, so independent cross-property rules of different parents are all checked, and all their violations reported. As `V.allOf` requires all of them to produce the same output, parents' `next` rules cannot convert the value differently.
+
+### Pre
+
+`ObjectModel.pre` preprocesses the whole input object before its properties are validated, e.g. to migrate old data on the fly by renaming a property. As the rest of the object's rules see the preprocessed object, a renamed property is validated by its own validator and placed according to `propertyOrder`:
+
+```typescript
+const rename = (from: string, to: string) =>
+  V.map((value: any) => {
+    if (value === null || typeof value !== 'object' || !Object.hasOwn(value, from)) {
+      return value;
+    }
+    const { [from]: renamed, ...rest } = value;
+    return { ...rest, [to]: renamed };
+  });
+
+const person = V.object({
+  pre: rename('fullName', 'name'),
+  properties: { name: V.string() },
+});
+// or V.objectType().pre(rename('fullName', 'name')).properties({ name: V.string() }).build()
+// or an existing validator: personValidator.pre(rename('fullName', 'name'))
+```
+
+`pre` is inherited: parents' `pre` validators run first, in inheritance order. An ancestor's `pre` validators run only once, even when the ancestor is inherited through several parents. A model's own `pre` validators are always appended as listed, even when one of them is also inherited or listed twice.
+
+Unlike parents' `next` rules, parents' `pre` validators are run in sequence, each on the output of the previous one, not combined with `V.allOf`. Preprocessing is about converting the input, e.g. each parent migrating its own properties, and `V.allOf` cannot combine different conversions of the same input. For the same reason an ancestor inherited through several parents contributes its `pre` validators only once: run twice in sequence, a migration could be applied twice.
+
+`ObjectValidator.pre(...)` returns a new, still extendable validator with the given validators appended to its own `pre`.
+
+NOTE: A `pre` validator must not modify its input; return a new object instead. Violations of the properties refer to the preprocessed object, e.g. to the renamed property. Cycle detection works on the original input, so cyclic data is reported as a `Cycle` even though `pre` returns a new object.
+
+#### Renaming and dropping properties
+
+`V.renameProperties` renames (`OLD: 'NEW'`) or drops (`OLD: undefined`) properties, keeping the others and the position of a renamed property. It is useful as `pre`, e.g. to migrate deprecated keys of a `Record<Enum, Value>`, whether the deprecated enum values are removed from the enum or kept and marked `@deprecated`:
+
+```typescript
+enum Status {
+  ACTIVE = 'ACTIVE',
+  INACTIVE = 'INACTIVE',
+  /** @deprecated use INACTIVE */
+  CLOSED = 'CLOSED',
+}
+const counts = V.optionalProperties(V.enum(Status, 'Status'), V.number()).pre(
+  // SUSPENDED and DRAFT are no longer in the enum
+  V.renameProperties({ [Status.CLOSED]: Status.INACTIVE, SUSPENDED: Status.INACTIVE, DRAFT: undefined }),
+);
+// { ACTIVE: 1, CLOSED: 2, DRAFT: 3 } -> { ACTIVE: 1, INACTIVE: 2 }
+```
+
+Renaming into a property that is kept, or several properties into the same one, is allowed when their values are deepEqual, e.g. old and new key written together during a migration: `{ INACTIVE: 1, CLOSED: 1 }` above becomes `{ INACTIVE: 1 }`, keeping the kept property, or the first renamed one. Values that differ, e.g. `{ INACTIVE: 1, CLOSED: 2 }`, are a `PropertyConflict` violation at the renamed property. The raw input values are compared, before they are validated.
+
+NOTE: `V.renameProperties` is meant for plain data, e.g. parsed JSON. When a property is renamed, the result is a plain object of the input's enumerable properties: class getters, non-enumerable properties and the prototype are not kept. An object without properties to rename is passed on as is.
+
+As migrated data is validated again, e.g. after it has been written back, renaming must be idempotent: a key cannot be both renamed and renamed into. `V.renameProperties` throws an `Error` for e.g. `{ a: 'b', b: 'a' }`, which would swap the properties on every validation, or `{ a: 'b', b: 'c' }`, which would move a value one step further each time.
+
 ## <a name="array">Arrays</a>
 
 Arrays are defined in terms of their element type:
@@ -600,6 +656,48 @@ If your data contains such names, use `V.lenientEnum` to restore the earlier beh
 ```typescript
 V.lenientEnum(E, 'E'); // Validator<E | 'A' | 'B'>, accepts 1, 2, 'A' and 'B'
 ```
+
+### Enum aliases
+
+To read old data after enum values have been renamed, `options.aliases` of `V.enum` and `V.lenientEnum` converts old values to current ones. An old value may be removed from the enum, or kept and marked `@deprecated`:
+
+```typescript
+enum Status {
+  ACTIVE = 'ACTIVE',
+  INACTIVE = 'INACTIVE',
+  /** @deprecated use INACTIVE */
+  CLOSED = 'CLOSED',
+}
+// SUSPENDED is no longer in the enum
+const statusAliases = { [Status.CLOSED]: Status.INACTIVE, SUSPENDED: Status.INACTIVE };
+V.enum(Status, 'Status', { aliases: statusAliases }); // 'CLOSED' and 'SUSPENDED' -> Status.INACTIVE
+```
+
+The aliases are checked when the validator is constructed:
+- A target must be a value of the enum.
+- Renaming must be idempotent, as migrated data is validated again: an old value cannot also be a target.
+- A value cannot be dropped by mapping it to `undefined`, as that would e.g. leave a gap in an array of enum values. To drop record keys, use [`V.renameProperties`](#renaming-and-dropping-properties).
+
+Keys of a `Record` are strings, so they match string values only. Use a `Map` to rename old numeric values: `new Map([[3, Example.B]])`.
+
+The same aliases can migrate both the keys and the values of a `Record<Enum, Enum>`:
+
+```typescript
+V.optionalProperties(V.enumKey(Status, 'Status'), V.enum(Status, 'Status', { aliases: statusAliases }))
+  .pre(V.renameProperties(statusAliases));
+```
+
+### Enum keys
+
+Use `V.enumKey` for the keys of a `Record<Enum, Value>`. Property keys are always strings, so `V.enum` rejects the keys of a numeric enum: the key of `{ 1: 'x' }` is `'1'`, not `1`. `V.enumKey` accepts the key string of an enum value, but only in its canonical form `String(value)` - e.g. `'1'` but not `'01'` or `'1.0'` - so that `record[E.A]` finds it:
+
+```typescript
+V.optionalProperties(V.enumKey(E, 'E'), V.number()); // Validator<Partial<Record<E, number>>>
+```
+
+NOTE: `V.toInteger().next(V.enum(E, 'E'))` would also accept keys such as `'01'`, which pass validation but cannot be read as `record[E.A]`.
+
+For string enums `V.enumKey` works as `V.enum`. Used for a value, it converts a key string to the enum value, e.g. `'1'` to `E.A`.
 
 ## <a name="schema">Schema</a>
 
@@ -1372,12 +1470,14 @@ Unless otherwise stated, all validators require non-null and non-undefined value
 | max                     | max: number, inclusive = true                                    | Asserts that numeric input is less than or equal (if inclusive = true) than `max`.                                                        |
 | jsonBigInt              |                                                                  | Converts bigints, integer numbers and strings to `JsonBigInt` wrapper for `BigInt` with `toJSON()` serialization as string.               |
 | date                    |                                                                  | Reqruires a valid date. Converts string to Date.                                                                                          |
-| enum                    | enumType: object, name: string                                   | Requires that the input is one of given enumType. Name of the enum provided for error message.                                            |
-| lenientEnum             | enumType: object, name: string                                   | Like `enum`, but also accepts the name of a numeric member, passed on unchanged. Type: `LenientEnum<typeof enumType>`. See [enums](#enums). |
+| enum                    | enumType: object, name: string, options?: EnumOptions            | Requires that the input is one of given enumType. Name of the enum provided for error message. See [enum aliases](#enum-aliases).         |
+| enumKey                 | enumType: object, name: string                                   | A property key of a `Record<Enum, Value>`: accepts the canonical key string of an enum value, e.g. `'1'` for `A = 1`. See [enum keys](#enum-keys). |
+| lenientEnum             | enumType: object, name: string, options?: EnumOptions            | Like `enum`, but also accepts the name of a numeric member, passed on unchanged. Type: `LenientEnum<typeof enumType>`. See [enums](#enums). |
 | assertTrue              | fn: AssertTrue, type: string = 'AssertTrue', path?: Path         | Requires that the input passes `fn`. Type can be provided for error messages and path to target a sub property                            |
 | hasValue                | expectedValue: any                                               | Requires that the input matches `expectedValue`. Uses `node-deep-equal` library.                                                          |
 | object                  | model: Model                                                     | Defines an [Object validator](#object) based on provided Model.                                                                           |
 | toObject                | property: string                                                 | Converts a primitive value to object `{ property: 'value' }`. Undefined is passed on as such.                                             |
+| renameProperties        | mapping: Record<string, string \| number \| undefined>           | Renames or drops (`undefined`) properties of an object, e.g. as [`pre`](#pre). Renames with differing values are violations.             |
 | schema                  | callback: (schema: SchemaValidator) => SchemaModel               | Defines a [SchemaValidator](#schema) for a discriminator and models.                                                                      |
 | properties              | keys: Validator<Keys>, values: Validator<Values>                 | A shortcut for object with `additionalProperties`. Type: Record<Keys, Values>                                                             |
 | optionalProperties      | keys: Validator<Keys>, values: Validator<Values>                 | A shortcut for object with `additionalProperties`. Type: Partial<Record<Keys, Values>>                                                    |
@@ -1436,6 +1536,7 @@ All `Violations` have following propertie in common:
 | Violation              | UnknownPropertyDenied |                                 | Explicitly denied additional property.                                              |
 | Violation              | Cycle                 |                                 | The value being validated contains a reference cycle (self-referential data).       |
 | Violation              | Async                 |                                 | An asynchronous validator was wrapped in `V.memoize`, which supports only sync ones. |
+| Violation              | PropertyConflict      |                                 | `V.renameProperties` would rename a property into one that exists or is renamed into already, with a different value. |
 | DiscriminatorViolation | Discriminator         | expectedOneOf: string[]         | Invalid discriminator value: `expectedOneOf` is a list of known types.              |
 
 A schema bug is not a problem with the input, so it is not reported as a `Violation`: `validate()`

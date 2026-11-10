@@ -8,9 +8,7 @@ export interface ValidatorFn<Out = unknown, In = unknown> {
   (value: In, path: Path, ctx: ValidationContext): Out | PromiseLike<Out>;
 }
 
-export interface MappingFn<Out = unknown, In = unknown> {
-  (value: In, path: Path, ctx: ValidationContext): Out | PromiseLike<Out>;
-}
+export type MappingFn<Out = unknown, In = unknown> = ValidatorFn<Out, In>;
 
 export interface ValidatorOptions {
   readonly group?: Group;
@@ -18,6 +16,45 @@ export interface ValidatorOptions {
   readonly ignoreUnknownProperties?: boolean | Validator<unknown, unknown>;
   readonly ignoreUnknownEnumValues?: boolean;
   readonly warnLogger?: WarnLogger;
+}
+
+function enterPath(inProgress: Map<object, Path | Path[]>, value: object, path: Path): boolean {
+  const existing = inProgress.get(value);
+  if (existing === undefined) {
+    inProgress.set(value, path);
+  } else if (Array.isArray(existing)) {
+    for (let i = 0; i < existing.length; i++) {
+      const existingPath = existing[i];
+      if (existingPath.length < path.length && path.startsWith(existingPath)) {
+        return true;
+      }
+    }
+    existing.push(path);
+  } else {
+    if (existing.length < path.length && path.startsWith(existing)) {
+      return true;
+    }
+    inProgress.set(value, [existing, path]);
+  }
+  return false;
+}
+
+function leavePath(inProgress: Map<object, Path | Path[]>, value: object, path: Path): void {
+  const existing = inProgress.get(value);
+  if (existing === undefined) {
+    return;
+  }
+  if (Array.isArray(existing)) {
+    const i = existing.findIndex(existingPath => existingPath.equals(path));
+    if (i >= 0) {
+      existing.splice(i, 1);
+    }
+    if (existing.length === 0) {
+      inProgress.delete(value);
+    }
+  } else {
+    inProgress.delete(value);
+  }
 }
 
 export class ValidationContext {
@@ -42,6 +79,12 @@ export class ValidationContext {
    * cycle and memory stays bounded by nesting depth, not object count.
    */
   private readonly inProgress = new Map<object, Path | Path[]>();
+
+  /**
+   * Like `inProgress`, but per scope, see `enterValidation`. Created on first use, as only objects
+   * with `ObjectModel.pre` use it.
+   */
+  private scopedInProgress?: Map<object, Map<object, Path | Path[]>>;
 
   /** Not readonly: `withFreeze` sets it on a derived context. Private, so it stays an internal. */
   private _freeze = false;
@@ -71,44 +114,36 @@ export class ValidationContext {
    * Marks validation of `value` at `path` as in progress. Returns `true` if `value` is already
    * being validated at an ancestor of `path` - i.e. a reference cycle - in which case the caller
    * must not descend and must not call `leaveValidation`. Only called for object values.
+   *
+   * With a `scope`, only an earlier registration with the same scope counts, e.g. the same validator
+   * re-entering the same value: that is enough to stop an endless descent, as any endless one repeats
+   * some validator and value, while the same value may legitimately be validated by another validator
+   * at a descendant path. `leaveValidation` must then be called with the same scope.
    */
-  enterValidation(value: object, path: Path): boolean {
-    const existing = this.inProgress.get(value);
-    if (existing === undefined) {
-      this.inProgress.set(value, path);
-    } else if (Array.isArray(existing)) {
-      for (let i = 0; i < existing.length; i++) {
-        const existingPath = existing[i];
-        if (existingPath.length < path.length && path.startsWith(existingPath)) {
-          return true;
-        }
-      }
-      existing.push(path);
-    } else {
-      if (existing.length < path.length && path.startsWith(existing)) {
-        return true;
-      }
-      this.inProgress.set(value, [existing, path]);
+  enterValidation(value: object, path: Path, scope?: object): boolean {
+    if (scope === undefined) {
+      return enterPath(this.inProgress, value, path);
     }
-    return false;
+    this.scopedInProgress ??= new Map();
+    let inProgress = this.scopedInProgress.get(scope);
+    if (inProgress === undefined) {
+      inProgress = new Map();
+      this.scopedInProgress.set(scope, inProgress);
+    }
+    return enterPath(inProgress, value, path);
   }
 
   /** Clears the `path` registered by a successful `enterValidation` of `value`. */
-  leaveValidation(value: object, path: Path): void {
-    const existing = this.inProgress.get(value);
-    if (existing === undefined) {
-      return;
+  leaveValidation(value: object, path: Path, scope?: object): void {
+    if (scope === undefined) {
+      return leavePath(this.inProgress, value, path);
     }
-    if (Array.isArray(existing)) {
-      const i = existing.findIndex(existingPath => existingPath.equals(path));
-      if (i >= 0) {
-        existing.splice(i, 1);
+    const inProgress = this.scopedInProgress?.get(scope);
+    if (inProgress !== undefined) {
+      leavePath(inProgress, value, path);
+      if (inProgress.size === 0) {
+        this.scopedInProgress!.delete(scope);
       }
-      if (existing.length === 0) {
-        this.inProgress.delete(value);
-      }
-    } else {
-      this.inProgress.delete(value);
     }
   }
 
@@ -682,6 +717,7 @@ export enum ValidatorType {
   NotUndefined = "NotUndefined",
   Cycle = 'Cycle',
   Async = 'Async',
+  PropertyConflict = 'PropertyConflict',
 }
 
 export const defaultViolations = {
@@ -704,6 +740,7 @@ export const defaultViolations = {
   unknownPropertyDenied: (path: Path) => new Violation(path, ValidatorType.UnknownPropertyDenied),
   cycle: (path: Path = ROOT) => new Violation(path, ValidatorType.Cycle),
   async: (path: Path = ROOT) => new Violation(path, ValidatorType.Async),
+  propertyConflict: (path: Path) => new Violation(path, ValidatorType.PropertyConflict),
 };
 
 export interface AssertTrue<In = unknown> {
@@ -2233,16 +2270,53 @@ function enumValues(enumType: Record<string, string | number>) {
 }
 
 /**
- * Validates that the input is one of the allowed values of an enum and passes it on unchanged.
- * Subclasses decide which values are allowed, and thereby the output type.
+ * Old values of an enum renamed to its current values, e.g. `{ OLD: MyEnum.NEW }`. A `Map` matches
+ * values exactly, so it also supports old numeric values: `new Map([[3, MyEnum.NEW]])`.
+ */
+export type EnumAliases<E extends Record<string, string | number>> =
+  | Readonly<Record<string, E[keyof E]>>
+  | ReadonlyMap<string | number, E[keyof E]>;
+
+export interface EnumOptions<E extends Record<string, string | number>> {
+  /**
+   * Old values that are accepted and converted to their current value. A target must be a value of the
+   * enum, and the renaming must be idempotent: an old value cannot be a target. An old value may still
+   * be in the enum, e.g. a `@deprecated` member. Values cannot be dropped, i.e. mapped to `undefined`.
+   */
+  readonly aliases?: EnumAliases<E>;
+}
+
+/**
+ * Validates that the input is one of the allowed values of an enum and passes it on unchanged, or
+ * converts an alias to its current value. Subclasses decide which values are allowed, and thereby the
+ * output type.
  *
  * NOTE: The constructor freezes the instance, so subclasses must not declare fields of their own.
  */
 abstract class EnumValidatorBase<E extends Record<string, string | number>, Out> extends Validator<Out> {
   private readonly _values: Set<string | number>;
-  constructor(public readonly enumType: E, public readonly name: string, values: Iterable<string | number>) {
+  private readonly _aliases?: Map<string | number, string | number>;
+  constructor(public readonly enumType: E, public readonly name: string, values: Iterable<string | number>, options?: EnumOptions<E>) {
     super();
     this._values = new Set(values);
+    if (options?.aliases) {
+      const aliases = new Map<string | number, string | number>(
+        options.aliases instanceof Map ? options.aliases : Object.entries(options.aliases),
+      );
+      const targets = new Set(enumValues(enumType));
+      for (const [alias, target] of aliases) {
+        if (target === undefined) {
+          throw new Error(`${name}: alias ${String(alias)} cannot drop a value by mapping it to undefined`);
+        }
+        if (!targets.has(target)) {
+          throw new Error(`${name}: alias target ${String(target)} of ${String(alias)} is not a value of the enum`);
+        }
+        if (aliases.has(target)) {
+          throw new Error(`${name}: ${String(target)} is both an alias and an alias target, which is not idempotent`);
+        }
+      }
+      this._aliases = aliases;
+    }
     Object.freeze(this);
   }
   supportsFreeze(): boolean {
@@ -2253,17 +2327,22 @@ abstract class EnumValidatorBase<E extends Record<string, string | number>, Out>
     if (isNullOrUndefined(value)) {
       return failure([defaultViolations.notNull(path)]);
     }
-    if ((typeof value === 'string' || typeof value === 'number') && this._values.has(value)) {
-      return success(value as Out);
+    if (typeof value === 'string' || typeof value === 'number') {
+      if (this._aliases?.has(value)) {
+        return success(this._aliases.get(value) as Out);
+      }
+      if (this._values.has(value)) {
+        return success(value as Out);
+      }
     }
     ctx.failure<Out>(defaultViolations.enum(this.name, value, path), value).then(success, failure);
   }
 }
 
-/** Accepts only the values of the enum. */
+/** Accepts only the values of the enum, and its aliases. */
 export class EnumValidator<Out extends Record<string, string | number>> extends EnumValidatorBase<Out, Out[keyof Out]> {
-  constructor(enumType: Out, name: string) {
-    super(enumType, name, enumValues(enumType));
+  constructor(enumType: Out, name: string, options?: EnumOptions<Out>) {
+    super(enumType, name, enumValues(enumType), options);
   }
 }
 
@@ -2281,8 +2360,43 @@ export type LenientEnum<E extends Record<string, string | number>> =
  * name is not converted to its value.
  */
 export class LenientEnumValidator<Out extends Record<string, string | number>> extends EnumValidatorBase<Out, LenientEnum<Out>> {
-  constructor(enumType: Out, name: string) {
-    super(enumType, name, Object.values(enumType));
+  constructor(enumType: Out, name: string, options?: EnumOptions<Out>) {
+    super(enumType, name, Object.values(enumType), options);
+  }
+}
+
+/**
+ * Validates a property key of a `Record<Enum, Value>`. Property keys are strings, so a key is accepted
+ * only when it is exactly `String(value)` of an enum value, e.g. `'1'` for `A = 1` but not `'01'` -
+ * that way `record[Enum.A]` finds it. The key is converted to the enum value, so used for a value the
+ * output is a member of the enum. A number that is an enum value is accepted as such.
+ */
+export class EnumKeyValidator<Out extends Record<string, string | number>> extends Validator<Out[keyof Out]> {
+  private readonly _values: Map<string | number, string | number>;
+  constructor(public readonly enumType: Out, public readonly name: string) {
+    super();
+    const values = new Map<string | number, string | number>();
+    for (const value of enumValues(enumType)) {
+      values.set(value, value);
+      if (!values.has(String(value))) {
+        values.set(String(value), value);
+      }
+    }
+    this._values = values;
+    Object.freeze(this);
+  }
+  supportsFreeze(): boolean {
+    return true;
+  }
+
+  validatePathV2(value: unknown, path: Path, ctx: ValidationContext, success: SuccessCallback<Out[keyof Out]>, failure: FailureCallback): void {
+    if (isNullOrUndefined(value)) {
+      return failure([defaultViolations.notNull(path)]);
+    }
+    if ((typeof value === 'string' || typeof value === 'number') && this._values.has(value)) {
+      return success(this._values.get(value) as Out[keyof Out]);
+    }
+    ctx.failure<Out[keyof Out]>(defaultViolations.enum(this.name, value, path), value).then(success, failure);
   }
 }
 

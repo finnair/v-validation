@@ -47,6 +47,8 @@ import {
   OneOfValidator,
   EnumValidator,
   LenientEnumValidator,
+  EnumKeyValidator,
+  EnumOptions,
   FreezeValidator,
   HasValueValidator,
   JsonValidator,
@@ -61,7 +63,7 @@ import {
   UnknownValidator,
 } from './validators.js';
 import { VType } from './typing.js';
-import {ObjectModel, ObjectValidator, ObjectNormalizer } from './objectValidator.js';
+import {ObjectModel, ObjectValidator, ObjectNormalizer, RenamePropertiesValidator } from './objectValidator.js';
 import { ObjectValidatorBuilder } from './objectValidatorBuilder.js';
 import { MemoizeValidator, MemoizeValidatorOptions } from './memoizeValidator.js';
 import { ProxyValidator, ProxyValidatorFactory } from './proxyValidator.js';
@@ -191,6 +193,12 @@ export const V = {
 
   toObject: (property: string) => new ObjectNormalizer(property),
 
+  /**
+   * Renames (`{ OLD: 'NEW' }`) or drops (`{ REMOVED: undefined }`) properties of an object, e.g. as
+   * `ObjectModel.pre` to migrate deprecated keys. See {@link RenamePropertiesValidator}.
+   */
+  renameProperties: <To extends string | number>(mapping: Record<string, To | undefined>) => new RenamePropertiesValidator(mapping),
+
   schema: (fn: (schema: SchemaValidator) => SchemaModel) => new SchemaValidator(fn),
 
   /** WARN: Objects as Map keys use identity hash/equals, i.e. === */
@@ -239,13 +247,20 @@ export const V = {
 
   date: () => dateValidator,
 
-  enum: <Out extends Record<string, string | number>>(enumType: Out, name: string) => new EnumValidator<Out>(enumType, name),
+  /** The values of an enum. `options.aliases` converts old values to current ones, see {@link EnumOptions}. */
+  enum: <Out extends Record<string, string | number>>(enumType: Out, name: string, options?: EnumOptions<Out>) => new EnumValidator<Out>(enumType, name, options),
 
   /**
    * The v12 `V.enum`: also accepts the name of a numeric member, passed on unchanged (not converted to
    * its value). Typed as {@link LenientEnum}. Prefer the strict `V.enum` where the data allows it.
    */
-  lenientEnum: <Out extends Record<string, string | number>>(enumType: Out, name: string) => new LenientEnumValidator<Out>(enumType, name),
+  lenientEnum: <Out extends Record<string, string | number>>(enumType: Out, name: string, options?: EnumOptions<Out>) => new LenientEnumValidator<Out>(enumType, name, options),
+
+  /**
+   * A property key of a `Record<Enum, Value>`, e.g. `V.properties(V.enumKey(E, 'E'), V.number())`. Unlike
+   * `V.enum`, accepts the key string of a numeric enum value (`'1'`), in its canonical form only.
+   */
+  enumKey: <Out extends Record<string, string | number>>(enumType: Out, name: string) => new EnumKeyValidator<Out>(enumType, name),
 
   /** @param supportsFreeze See {@link V.fn}; needed only on its own, since an assertion preserves a frozen input in a chain. */
   assertTrue: <In>(fn: AssertTrue<In>, type: string = 'AssertTrue', path?: Path, supportsFreeze?: boolean) =>

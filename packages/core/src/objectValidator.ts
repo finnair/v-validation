@@ -1,3 +1,4 @@
+import { default as deepEqual } from 'fast-deep-equal';
 import { Path, getProperty, setOwnProperty } from "@finnair/path";
 import {
   AnyValidator,
@@ -53,6 +54,16 @@ export interface ObjectModel<LocalType = unknown, InheritableType = unknown> {
    */
   readonly additionalProperties?: boolean | MapEntryModel | MapEntryModel[];
   /**
+   * Preprocessing of the whole input object before its properties are validated, e.g. to migrate old
+   * data by renaming properties. Inherited: parents' `pre` validators run first, in inheritance order.
+   * An ancestor's `pre` validators run only once, even when the ancestor is inherited through several
+   * parents, while the model's own `pre` validators are always appended as listed.
+   *
+   * NOTE: A `pre` validator must not modify its input; return a new object instead. Violations of the
+   * properties validated after it refer to the preprocessed object, e.g. to a renamed property.
+   */
+  readonly pre?: Validator | Validator[];
+  /**
    * Next validator to be executed after all properties are validated successfully. 
    * Use this to define additional rules or conversions for the ObjectValidator. 
    * Using the `next` function returns a `NextValidator` that cannot be further extended. 
@@ -100,22 +111,42 @@ export class ObjectValidator<LocalType = unknown, InheritableType = LocalType, I
 
   public readonly nextValidator?: Validator;
 
+  /**
+   * Inherited and own `pre` validators in execution order. Each ancestor's own `pre` validators are
+   * included once, even when the ancestor is inherited through several parents.
+   */
+  public readonly preValidators: readonly Validator[];
+
+  /** This and the ancestors that have own `pre` validators, in execution order, each once. */
+  private readonly preOwners: readonly ObjectValidator<any, any, any>[];
+
   public readonly propertyOrder?: string[];
 
   private readonly validator: Validator<LocalType, In>;
 
-  constructor(public readonly model: ObjectModel<LocalType, InheritableType>) {
+  /** A frozen snapshot of the model this validator was constructed of, see {@link snapshotModel}. */
+  public readonly model: ObjectModel<LocalType, InheritableType>;
+
+  constructor(model: ObjectModel<LocalType, InheritableType>) {
     super();
+    model = snapshotModel(model);
+    this.model = model;
     let properties: Properties = {};
     let additionalProperties: MapEntryValidator[] = [];
     let parentNextValidators: Validator[] = [];
     let nextValidators: Validator[] = [];
+    const preOwners: ObjectValidator<any, any, any>[] = [];
 
     this.parentValidators = model.extends ? ([] as ObjectValidator[]).concat(model.extends) : [];
     for (let i = 0; i < this.parentValidators.length; i++) {
       const parent = this.parentValidators[i];
       additionalProperties = additionalProperties.concat(parent.additionalProperties);
       properties = mergeProperties(parent.properties, properties);
+      for (const owner of parent.preOwners) {
+        if (!preOwners.includes(owner)) {
+          preOwners.push(owner);
+        }
+      }
       if (parent.nextValidator) {
         parentNextValidators.push(parent.nextValidator);
       }
@@ -131,7 +162,22 @@ export class ObjectValidator<LocalType = unknown, InheritableType = LocalType, I
     this.localProperties = getPropertyValidators(model.localProperties);
     this.propertyOrder = model.propertyOrder ? [...model.propertyOrder] : undefined;
 
-    let validator: Validator = new PropertiesValidator<LocalType, In>(this.properties, this.localProperties, this.additionalProperties, this.propertyOrder);
+    // Own pre validators are always appended, as listed
+    const ownPre = ownPreValidators(model);
+    if (ownPre.length > 0) {
+      preOwners.push(this);
+    }
+    const preValidators = [...preOwners.filter(owner => owner !== this).flatMap(owner => ownPreValidators(owner.model)), ...ownPre];
+    this.preOwners = preOwners;
+    this.preValidators = preValidators;
+
+    const propertiesValidator = new PropertiesValidator<LocalType, In>(this.properties, this.localProperties, this.additionalProperties, this.propertyOrder);
+    let validator: Validator;
+    if (preValidators.length > 0) {
+      validator = maybeCompositionOf(...preValidators as CompositionParameters).next(propertiesValidator);
+    } else {
+      validator = propertiesValidator;
+    }
     const next = nextValidators.length > 0 ? maybeCompositionOf(...(nextValidators as CompositionParameters)) : undefined;
     if (next) {
       this.nextValidator = next;
@@ -151,6 +197,8 @@ export class ObjectValidator<LocalType = unknown, InheritableType = LocalType, I
     this.validator = validator as Validator<LocalType, In>;
     Object.freeze(this.propertyOrder);
     Object.freeze(this.parentValidators);
+    Object.freeze(this.preValidators);
+    Object.freeze(this.preOwners);
     Object.freeze(this);
   }
 
@@ -180,11 +228,37 @@ export class ObjectValidator<LocalType = unknown, InheritableType = LocalType, I
           success(result);
         }
       : success;
+    if (this.preValidators.length > 0 && value !== null && typeof value === 'object') {
+      // A pre validator may return a new object whose properties still reference the original input,
+      // so cycle detection must register the original: PropertiesValidator only sees the new object.
+      // Scoped to this validator, as pre may also put the original itself at a descendant path, e.g.
+      // into an envelope, where another validator validates it.
+      if (ctx.enterValidation(value, path, this)) {
+        return failure([defaultViolations.cycle(path)]);
+      }
+      return this.validator.validatePathV2(value, path, ctx,
+        (result) => {
+          ctx.leaveValidation(value, path, this);
+          successFn(result);
+        },
+        (violations) => {
+          ctx.leaveValidation(value, path, this);
+          failure(violations);
+        });
+    }
     this.validator.validatePathV2(value, path, ctx, successFn, failure);
+  }
+
+  /**
+   * A copy of this validator with `validators` appended to its own `pre` validators, see {@link ObjectModel.pre}.
+   */
+  pre(...validators: Validator[]): ObjectValidator<LocalType, InheritableType, In> {
+    return new ObjectValidator<LocalType, InheritableType, In>({ ...this.model, pre: [...ownPreValidators(this.model), ...validators] });
   }
 
   omit<T, K extends keyof (any & (InheritableType | LocalType))>(...keys: K[]) {
     return new ObjectValidator<Omit<LocalType, K extends keyof LocalType ? K : never>, Omit<InheritableType, K extends keyof InheritableType ? K : never>>({
+      pre: [...this.preValidators],
       properties: pick(this.properties, key => !keys.includes(key as any)),
       localProperties: pick(this.localProperties, key => !keys.includes(key as any)),
       propertyOrder: this.propertyOrder?.filter(key => !keys.includes(key as any)),
@@ -193,6 +267,7 @@ export class ObjectValidator<LocalType = unknown, InheritableType = LocalType, I
 
   pick<T, K extends keyof (any & (InheritableType | LocalType))>(...keys: K[]) {
     return new ObjectValidator<Pick<LocalType, K extends keyof LocalType ? K : never>, Pick<InheritableType, K extends keyof InheritableType ? K : never>>({
+      pre: [...this.preValidators],
       properties: pick(this.properties, key => keys.includes(key as any)),
       localProperties: pick(this.localProperties, key => keys.includes(key as any)),
       propertyOrder: this.propertyOrder?.filter(key => keys.includes(key as any)),
@@ -432,6 +507,93 @@ export class ObjectNormalizer<InOut> extends Validator<undefined | InOut | {}> {
   }
 }
 
+/**
+ * Renames or drops properties of an object, e.g. in `ObjectModel.pre` to migrate deprecated keys of a
+ * `Record<Enum, Value>`. A property whose key maps to `undefined` is dropped, and properties not in
+ * `mapping` are kept. A renamed property keeps its position. Non-objects are passed on unchanged, as
+ * is an object without any property to rename.
+ *
+ * NOTE: When a property is renamed, the result is a plain object of the input's enumerable properties,
+ * including inherited ones. Class getters, non-enumerable properties and the prototype are not kept, so
+ * use it for plain data, e.g. parsed JSON.
+ *
+ * Renaming into a property that exists, or several properties into the same one, merges them when their
+ * values are deepEqual (e.g. old and new key written together during a migration), keeping the existing
+ * property, or the first renamed one, and is otherwise a `PropertyConflict` violation at the renamed key.
+ *
+ * Renaming must be idempotent, as migrated data is validated again, e.g. after it has been written
+ * back. So a key cannot be both renamed and renamed into: `a -> b, b -> a` would swap the properties on
+ * every validation, and `a -> b, b -> c` move a value one step further.
+ *
+ * NOTE: Use it as `ObjectModel.pre`, which keeps cycle detection working on the original input. In e.g.
+ * `V.compositionOf` before an object validator, cyclic input would be renamed into a new copy over and over.
+ */
+export class RenamePropertiesValidator extends Validator {
+  public readonly mapping: Readonly<Record<string, string | number | undefined>>;
+  private readonly sources: readonly string[];
+  constructor(mapping: Record<string, string | number | undefined>) {
+    super();
+    this.mapping = Object.freeze({ ...mapping });
+    this.sources = Object.freeze(Object.keys(this.mapping));
+    for (const source of this.sources) {
+      const target = this.mapping[source];
+      if (target !== undefined && Object.hasOwn(this.mapping, String(target))) {
+        throw new Error(`renameProperties: '${target}' is both renamed and renamed into, which is not idempotent`);
+      }
+    }
+    Object.freeze(this);
+  }
+
+  validatePathV2(value: unknown, path: Path, ctx: ValidationContext, success: SuccessCallback<unknown>, failure: FailureCallback): void {
+    if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+      return success(value);
+    }
+    const anyValue = value as any;
+    // Typically the mapping has far fewer keys than the object
+    if (!this.sources.some(source => source in anyValue)) {
+      return success(value);
+    }
+    const keys: string[] = [];
+    for (const key in anyValue) {
+      keys.push(key);
+    }
+    const inputKeys = new Set(keys);
+    const violations: Violation[] = [];
+    const result: any = {};
+    let renames = false;
+    for (const key of keys) {
+      if (!Object.hasOwn(this.mapping, key)) {
+        setOwnProperty(result, key, getProperty(anyValue, key));
+        continue;
+      }
+      renames = true;
+      const target = this.mapping[key];
+      if (target === undefined) {
+        continue;
+      }
+      const targetKey = String(target);
+      const propertyValue = getProperty(anyValue, key);
+      // A target is never renamed itself, so it is either kept from the input or set by an earlier rename
+      if (inputKeys.has(targetKey) || Object.hasOwn(result, targetKey)) {
+        const otherValue = inputKeys.has(targetKey) ? getProperty(anyValue, targetKey) : result[targetKey];
+        if (!deepEqual(propertyValue, otherValue)) {
+          violations.push(defaultViolations.propertyConflict(path.property(key)));
+        }
+        continue;
+      }
+      setOwnProperty(result, targetKey, propertyValue);
+    }
+    if (!renames) {
+      // The quick check above also matches non-enumerable properties, e.g. an inherited toString
+      return success(value);
+    }
+    if (violations.length > 0) {
+      return failure(violations);
+    }
+    success(result);
+  }
+}
+
 export class MapEntryValidator {
   public readonly keyValidator: Validator;
   public readonly valueValidator: Validator;
@@ -441,6 +603,46 @@ export class MapEntryValidator {
     this.valueValidator = entryModel.values;
     Object.freeze(this);
   }
+}
+
+/**
+ * A frozen copy of `model` and its containers, so that changing the original model or e.g. a builder
+ * after constructing a validator does not change the validator's `model`, which `ObjectValidator.pre`
+ * rebuilds from. A shallow copy is enough, as the contained validators are immutable. The original
+ * objects are not frozen, as they are not the validator's own.
+ */
+function snapshotModel<LocalType, InheritableType>(model: ObjectModel<LocalType, InheritableType>): ObjectModel<LocalType, InheritableType> {
+  const copyArray = <V>(value: V): V => (Array.isArray(value) ? (Object.freeze([...value]) as V) : value);
+  const copyProperties = (properties?: PropertyModel) => {
+    if (properties === undefined) {
+      return undefined;
+    }
+    // for...in, like getPropertyValidators
+    const copy: PropertyModel = {};
+    for (const name in properties) {
+      setOwnProperty(copy, name, properties[name]);
+    }
+    return Object.freeze(copy);
+  };
+  const copyMapEntry = (entry: MapEntryModel) => Object.freeze({ keys: entry.keys, values: entry.values });
+  const { additionalProperties } = model;
+  return Object.freeze({
+    ...model,
+    extends: copyArray(model.extends),
+    properties: copyProperties(model.properties),
+    localProperties: copyProperties(model.localProperties),
+    additionalProperties: Array.isArray(additionalProperties)
+      ? Object.freeze(additionalProperties.map(copyMapEntry)) as MapEntryModel[]
+      : typeof additionalProperties === 'object' && additionalProperties !== null ? copyMapEntry(additionalProperties) : additionalProperties,
+    pre: copyArray(model.pre),
+    next: copyArray(model.next),
+    localNext: copyArray(model.localNext),
+    propertyOrder: copyArray(model.propertyOrder),
+  });
+}
+
+function ownPreValidators(model: ObjectModel<any, any>): Validator[] {
+  return model.pre === undefined ? [] : ([] as Validator[]).concat(model.pre);
 }
 
 function getPropertyValidators(properties?: PropertyModel): Properties {
