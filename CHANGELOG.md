@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [13.4.0](https://github.com/finnair/v-validation/compare/v13.3.0...v13.4.0) (2026-11-10)
+
+### Features
+
+- **core:** ObjectModel.pre, V.renameProperties, V.enumKey and enum aliases ([#167](https://github.com/finnair/v-validation/issues/167)) ([9ac1389](https://github.com/finnair/v-validation/commit/9ac1389e02c7b8aa8f93e730696b18bd0e00cc2d))
+
 # [13.3.0](https://github.com/finnair/v-validation/compare/v13.2.0...v13.3.0) (2026-10-16)
 
 ### Bug Fixes
