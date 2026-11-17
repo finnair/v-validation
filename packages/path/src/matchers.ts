@@ -219,21 +219,24 @@ export class NotMatcher implements PathExpression {
   }
 
   find(current: any, callback: MatchHandler): Continue {
-    const filtered: MatchHandler = (value, component) => this.expression.test(component) || callback(value, component);
-    if (this.componentType === 'index') {
-      return AnyIndex.find(current, filtered);
-    }
-    if (this.componentType === 'property') {
-      if (isObject(current)) {
-        for (const key in current) {
-          if (!filtered(current[key], key)) {
+    // Test components before reading values, so that excluded getters aren't invoked
+    const expression = this.expression;
+    if (Array.isArray(current)) {
+      if (this.componentType !== 'property') {
+        for (let i = 0; i < current.length; i++) {
+          if (!expression.test(i) && !callback(current[i], i)) {
             return false;
           }
         }
       }
-      return true;
+    } else if (isObject(current) && this.componentType !== 'index') {
+      for (const key in current) {
+        if (!expression.test(key) && !callback(current[key], key)) {
+          return false;
+        }
+      }
     }
-    return AnyProperty.find(current, filtered);
+    return true;
   }
 
   test(component: PathComponent): boolean {

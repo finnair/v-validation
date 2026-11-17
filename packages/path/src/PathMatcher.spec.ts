@@ -356,6 +356,31 @@ describe('NotMatcher', () => {
   const data = { secret: 's', name: 'n', list: [10, 20, 30], nested: { secret: 'ns', other: 'o' } };
   const paths = (matcher: PathMatcher, root: any = data) => matcher.findAll(root).map(node => node.path.toJSON());
 
+  describe('excluded values are not read', () => {
+    const throwing = () => {
+      throw new Error('excluded value read');
+    };
+    const object = Object.defineProperty({ a: 1, b: 2 } as any, 'secret', { get: throwing, enumerable: true });
+    const array = Object.defineProperty([1, 2, 3], 1, { get: throwing, enumerable: true });
+
+    test('negated property', () => expect(paths(PathMatcher.of(NotMatcher.of('secret')), object)).toEqual(['$.a', '$.b']));
+
+    test('negated index', () => expect(paths(PathMatcher.of(NotMatcher.of(1)), array)).toEqual(['$[0]', '$[2]']));
+
+    test('negated union of a property and an index', () => {
+      const not = new NotMatcher(UnionMatcher.of('secret', 1));
+      expect(paths(PathMatcher.of(not), object)).toEqual(['$.a', '$.b']);
+      expect(paths(PathMatcher.of(not), array)).toEqual(['$[0]', '$[2]']);
+    });
+
+    test('negated wildcards', () => {
+      for (const not of [new NotMatcher(AnyProperty), new NotMatcher(AnyIndex)]) {
+        expect(paths(PathMatcher.of(not), object)).toEqual([]);
+        expect(paths(PathMatcher.of(not), array)).toEqual([]);
+      }
+    });
+  });
+
   describe('typed complement', () => {
     test('a negated property matches other properties, not array elements', () => {
       const not = NotMatcher.of('secret');
