@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [13.5.0](https://github.com/finnair/v-validation/compare/v13.4.0...v13.5.0) (2026-11-17)
+
+### Features
+
+- **path:** NotMatcher for negated path expressions and relax UnionMatcher limitations ([#168](https://github.com/finnair/v-validation/issues/168)) ([d7a5cf0](https://github.com/finnair/v-validation/commit/d7a5cf08f6dd6d3e3462a54458d5c7cde2d8d152))
+
 # [13.4.0](https://github.com/finnair/v-validation/compare/v13.3.0...v13.4.0) (2026-11-10)
 
 **Note:** Version bump only for package @finnair/path
