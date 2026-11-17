@@ -5,10 +5,21 @@ type Continue = boolean;
 export interface MatchHandler {
   (value: any, component: PathComponent): Continue;
 }
+/**
+ * The types of path components an expression can match: object properties (strings), array indexes
+ * (numbers), or both.
+ */
+export type ComponentType = 'property' | 'index' | 'any';
+
 export interface PathExpression {
   find(current: any, callback: MatchHandler): Continue;
   test(component: PathComponent): boolean;
   readonly allowGaps: boolean;
+  /**
+   * The types of components this expression can match, which a {@link NotMatcher} negates within.
+   * Defaults to `'any'`.
+   */
+  readonly componentType?: ComponentType;
   toString(): string;
 }
 
@@ -50,6 +61,7 @@ function forEachIndex(array: any[], callback: MatchHandler): Continue {
 
 export class IndexMatcher implements PathExpression {
   readonly allowGaps = true;
+  readonly componentType = 'index';
   constructor(readonly index: number) {
     Path.validateIndex(index);
     Object.freeze(this);
@@ -73,6 +85,7 @@ export class IndexMatcher implements PathExpression {
 
 export class PropertyMatcher implements PathExpression {
   readonly allowGaps = false;
+  readonly componentType = 'property';
   constructor(readonly property: string) {
     Path.validateProperty(property);
     Object.freeze(this);
@@ -97,13 +110,16 @@ export class PropertyMatcher implements PathExpression {
 export class UnionMatcher implements PathExpression {
   private readonly _testComponents: Set<PathComponent>;
   public readonly allowGaps: boolean;
+  public readonly componentType: ComponentType;
   constructor(private readonly _components: PathComponent[]) {
-    if (_components.length < 2) {
-      throw new Error('Expected at least 2 properties');
+    if (_components.length === 0) {
+      throw new Error('Expected at least one component');
     }
     _components.forEach(Path.validateComponent);
     this._testComponents = new Set(_components);
-    this.allowGaps = this._components.some(component => typeof component === 'number');
+    const indexes = this._components.filter(component => typeof component === 'number').length;
+    this.allowGaps = indexes > 0;
+    this.componentType = indexes === 0 ? 'property' : indexes === this._components.length ? 'index' : 'any';
     Object.freeze(this._components);
     Object.freeze(this);
   }
@@ -143,6 +159,7 @@ export class UnionMatcher implements PathExpression {
 
 export const AnyIndex: PathExpression = Object.freeze({
   allowGaps: false,
+  componentType: 'index',
   find: (current: any, callback: MatchHandler): boolean => {
     if (Array.isArray(current)) {
       return forEachIndex(current, callback);
@@ -161,6 +178,7 @@ export const AnyIndex: PathExpression = Object.freeze({
 
 export const AnyProperty: PathExpression = Object.freeze({
   allowGaps: false,
+  componentType: 'any',
   find: (current: any, callback: MatchHandler): Continue => {
     if (Array.isArray(current)) {
       return forEachIndex(current, callback);
@@ -183,3 +201,67 @@ export const AnyProperty: PathExpression = Object.freeze({
     return '.*';
   },
 });
+
+/**
+ * Matches the components of the same type as `expression` that `expression` does not match, e.g.
+ * `.!name` other properties of an object and `![0]` other elements of an array. The type comes from
+ * `expression.componentType`: a negated union of properties and indexes matches both, and so does a
+ * negated expression without a `componentType`. Negations can be nested: `!!x` matches what `x` does.
+ */
+export class NotMatcher implements PathExpression {
+  readonly allowGaps: boolean;
+  readonly componentType: ComponentType;
+  constructor(readonly expression: PathExpression) {
+    // The complement of a subset of array indexes is a subset too, of all indexes none and of none all
+    this.allowGaps = expression.allowGaps;
+    this.componentType = expression.componentType ?? 'any';
+    Object.freeze(this);
+  }
+
+  find(current: any, callback: MatchHandler): Continue {
+    // Test components before reading values, so that excluded getters aren't invoked
+    const expression = this.expression;
+    if (Array.isArray(current)) {
+      if (this.componentType !== 'property') {
+        for (let i = 0; i < current.length; i++) {
+          if (!expression.test(i) && !callback(current[i], i)) {
+            return false;
+          }
+        }
+      }
+    } else if (isObject(current) && this.componentType !== 'index') {
+      for (const key in current) {
+        if (!expression.test(key) && !callback(current[key], key)) {
+          return false;
+        }
+      }
+    }
+    return true;
+  }
+
+  test(component: PathComponent): boolean {
+    switch (this.componentType) {
+      case 'property':
+        return typeof component === 'string' && !this.expression.test(component);
+      case 'index':
+        return typeof component === 'number' && !this.expression.test(component);
+      default:
+        return !this.expression.test(component);
+    }
+  }
+
+  toString() {
+    const expression = this.expression.toString();
+    return expression.startsWith('.') ? `.!${expression.substring(1)}` : `!${expression}`;
+  }
+
+  static of(expression: PathComponent | PathExpression) {
+    if (typeof expression === 'number') {
+      return new NotMatcher(new IndexMatcher(expression));
+    }
+    if (typeof expression === 'string') {
+      return new NotMatcher(new PropertyMatcher(expression));
+    }
+    return new NotMatcher(expression);
+  }
+}

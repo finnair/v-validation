@@ -22,6 +22,26 @@ Or [`npm`](https://www.npmjs.com/):
 npm install @finnair/path
 ```
 
+## New in Version 13.5
+
+### NotMatcher
+
+`NotMatcher` negates any `PathExpression`: it matches the components of the same type that the negated expression does not match. In `@finnair/path-parser` syntax a negation is written with `!`: `$.!secret` matches other properties of an object (but no array elements), `$![0]` other elements of an array and `$![a,0]` both.
+
+```typescript
+import { PathMatcher, NotMatcher, UnionMatcher } from '@finnair/path';
+
+PathMatcher.of(NotMatcher.of('secret')); // $.!secret
+PathMatcher.of('list', NotMatcher.of(0)); // $.list![0]
+PathMatcher.of(new NotMatcher(UnionMatcher.of('a', 0))); // $!["a",0]
+```
+
+The type comes from the new optional `PathExpression.componentType`: `'property'`, `'index'` or `'any'` (default). A negated union of properties and indexes, and a negated custom expression without `componentType`, match both types. Negated wildcards (`.!*` and `![*]`) match nothing, and negations can be nested: `!!x` matches what `x` does.
+
+### Single-component UnionMatcher
+
+`UnionMatcher` now accepts a single component (it used to require at least two), so a union can be built from a list of any non-zero length, e.g. `new NotMatcher(UnionMatcher.of(...excluded))`. A single-component union is equivalent to a `PropertyMatcher` or an `IndexMatcher`, and its string form (`["a"]` or `[0]`) parses as one. An empty union is still an error.
+
 ## New in Version 13
 
 Paths, PathMatchers and Projection follow JSON types consistently, Projection is considerably faster, and `jsonClone` matches `JSON.stringify` more closely.
@@ -188,12 +208,13 @@ parsePath(`$['\\u0027']`); // Path.of("\'");
 ### Constructing PathMatcher
 
 ```typescript
-import { PathMatcher, AnyIndex, AnyProperty, UnionMatcher } from '@finnair/path';
+import { PathMatcher, AnyIndex, AnyProperty, UnionMatcher, NotMatcher } from '@finnair/path';
 
 // Constructing using static creator - string is shorcut for PropertyMathcer and number for IndexMatcher
 PathMatcher.of('array', AnyIndex, 'name'); // $.array[*].name
 PathMatcher.of(AnyProperty, 'name'); // $.*.name
 PathMatcher.of('child', UnionMatcher.of('name', 'value')); // $.child['name','value']
+PathMatcher.of(NotMatcher.of('secret')); // $.!secret - all other properties
 ```
 
 ### Finding values

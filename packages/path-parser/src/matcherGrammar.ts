@@ -25,10 +25,18 @@ const lexer = moo.compile({
   '*': '*',
   '$': '$',
   '.': '.',
+  '!': '!',
 });
 
 function handleQString(qString: string) {
   return JSON.parse('"' + qString.substring(1, qString.length-1) + '"');
+}
+
+function negate(count: number, expression: matchers.PathExpression): matchers.PathExpression {
+  for (let i = 0; i < count; i++) {
+    expression = new matchers.NotMatcher(expression);
+  }
+  return expression;
 }
 
 interface NearleyToken {
@@ -67,11 +75,17 @@ const grammar: Grammar = {
     {"name": "PathExpression", "symbols": [{"literal":"."}, "PropertyExpression"], "postprocess": d => d[1]},
     {"name": "PathExpression", "symbols": [{type: "lbracket"}, "IndexExpression", {type: "rbracket"}], "postprocess": d => d[1]},
     {"name": "PathExpression", "symbols": [{type: "lbracket"}, "UnionExpression", {type: "rbracket"}], "postprocess": d => new matchers.UnionMatcher(d[1])},
+    {"name": "PathExpression", "symbols": [{"literal":"."}, "Not", "PropertyExpression"], "postprocess": d => negate(d[1], d[2])},
+    {"name": "PathExpression", "symbols": ["Not", {type: "lbracket"}, "IndexExpression", {type: "rbracket"}], "postprocess": d => negate(d[0], d[2])},
+    {"name": "PathExpression", "symbols": ["Not", {type: "lbracket"}, "UnionExpression", {type: "rbracket"}], "postprocess": d => negate(d[0], new matchers.UnionMatcher(d[2]))},
+    {"name": "Not", "symbols": [{"literal":"!"}], "postprocess": d => 1},
+    {"name": "Not", "symbols": ["Not", {"literal":"!"}], "postprocess": d => d[0] + 1},
     {"name": "PropertyExpression", "symbols": [{"literal":"*"}], "postprocess": d => matchers.AnyProperty},
     {"name": "PropertyExpression", "symbols": [{type: "property"}], "postprocess": d => new matchers.PropertyMatcher(d[0].value)},
     {"name": "IndexExpression", "symbols": [{type: "integer"}], "postprocess": d => new matchers.IndexMatcher(parseInt(d[0].value))},
     {"name": "IndexExpression", "symbols": [{type: "qqString"}], "postprocess": d => new matchers.PropertyMatcher(JSON.parse(d[0].value))},
     {"name": "IndexExpression", "symbols": [{type: "qString"}], "postprocess": d => new matchers.PropertyMatcher(handleQString(d[0].value))},
+    {"name": "IndexExpression", "symbols": [{type: "property"}], "postprocess": d => new matchers.PropertyMatcher(d[0].value)},
     {"name": "IndexExpression", "symbols": [{"literal":"*"}], "postprocess": d => matchers.AnyIndex},
     {"name": "UnionExpression", "symbols": ["ComponentExpression", {type: "comma"}, "ComponentExpression"], "postprocess": d => [d[0], d[2]]},
     {"name": "UnionExpression", "symbols": ["ComponentExpression", {type: "comma"}, "UnionExpression"], "postprocess": d => [ d[0], ...d[2]]},

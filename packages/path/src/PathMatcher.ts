@@ -1,5 +1,5 @@
 import { Path, PathComponent } from './Path.js';
-import { Node, PathExpression, PropertyMatcher, IndexMatcher, AnyIndex, AnyProperty, MatchHandler, UnionMatcher, isPathExpression } from './matchers.js';
+import { Node, PathExpression, PropertyMatcher, IndexMatcher, AnyIndex, AnyProperty, MatchHandler, UnionMatcher, NotMatcher, isPathExpression } from './matchers.js';
 
 export interface ResultCollector {
   /**
@@ -168,4 +168,4 @@ export class PathMatcher {
   }
 }
 
-export { AnyIndex, AnyProperty, PropertyMatcher, IndexMatcher, Node, PathExpression, UnionMatcher };
+export { AnyIndex, AnyProperty, PropertyMatcher, IndexMatcher, Node, PathExpression, UnionMatcher, NotMatcher };

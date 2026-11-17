@@ -19,10 +19,18 @@ const lexer = moo.compile({
   '*': '*',
   '$': '$',
   '.': '.',
+  '!': '!',
 });
 
 function handleQString(qString: string) {
   return JSON.parse('"' + qString.substring(1, qString.length-1) + '"');
+}
+
+function negate(count: number, expression: matchers.PathExpression): matchers.PathExpression {
+  for (let i = 0; i < count; i++) {
+    expression = new matchers.NotMatcher(expression);
+  }
+  return expression;
 }
 %}
 
@@ -33,6 +41,12 @@ Path -> "$" PathExpression:* {% d => d[1].reduce((result: any[], matcher: any) =
 PathExpression -> "." PropertyExpression {% d => d[1] %}
   | %lbracket IndexExpression %rbracket {% d => d[1] %}
   | %lbracket UnionExpression %rbracket {% d => new matchers.UnionMatcher(d[1]) %}
+  | "." Not PropertyExpression {% d => negate(d[1], d[2]) %}
+  | Not %lbracket IndexExpression %rbracket {% d => negate(d[0], d[2]) %}
+  | Not %lbracket UnionExpression %rbracket {% d => negate(d[0], new matchers.UnionMatcher(d[2])) %}
+
+Not -> "!" {% d => 1 %}
+  | Not "!" {% d => d[0] + 1 %}
 
 PropertyExpression -> "*" {% d => matchers.AnyProperty %}
   | %property {% d => new matchers.PropertyMatcher(d[0].value) %}
@@ -40,6 +54,7 @@ PropertyExpression -> "*" {% d => matchers.AnyProperty %}
 IndexExpression -> %integer {% d => new matchers.IndexMatcher(parseInt(d[0].value)) %}
   | %qqString {% d => new matchers.PropertyMatcher(JSON.parse(d[0].value)) %}
   | %qString {% d => new matchers.PropertyMatcher(handleQString(d[0].value)) %}
+  | %property {% d => new matchers.PropertyMatcher(d[0].value) %}
   | "*" {% d => matchers.AnyIndex %}
   
 UnionExpression -> ComponentExpression %comma ComponentExpression {% d => [d[0], d[2]] %}

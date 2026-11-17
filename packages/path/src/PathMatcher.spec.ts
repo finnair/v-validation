@@ -1,7 +1,7 @@
 import { describe, test, expect } from 'vitest'
 import { PathMatcher, AnyIndex, AnyProperty, Node, IndexMatcher, PropertyMatcher } from './PathMatcher.js';
 import { Path } from './Path.js';
-import { UnionMatcher } from './matchers.js';
+import { UnionMatcher, NotMatcher, PathExpression, MatchHandler } from './matchers.js';
 
 describe('path', () => {
   const obj = {
@@ -205,7 +205,24 @@ describe('path', () => {
   });
 
   describe('matchers', () => {
-    test('UnionMatcher requires two components', () => expect(() => new UnionMatcher(['foo'])).toThrow());
+    test('UnionMatcher requires at least one component', () => expect(() => new UnionMatcher([])).toThrow());
+
+    test('single component UnionMatcher is equivalent to PropertyMatcher/IndexMatcher', () => {
+      const obj = { a: 1, b: 2, list: [1, 2] };
+      for (const [union, single] of [
+        [UnionMatcher.of('a'), new PropertyMatcher('a')],
+        [UnionMatcher.of(1), new IndexMatcher(1)],
+      ] as const) {
+        expect([union.allowGaps, union.componentType]).toEqual([single.allowGaps, single.componentType]);
+        for (const component of ['a', 'b', 0, 1]) {
+          expect(union.test(component)).toBe(single.test(component));
+        }
+        expect(PathMatcher.of(union).findAll(obj)).toEqual(PathMatcher.of(single).findAll(obj));
+        expect(PathMatcher.of('list', union).findAll(obj)).toEqual(PathMatcher.of('list', single).findAll(obj));
+        expect(PathMatcher.of(new NotMatcher(union)).findAll(obj)).toEqual(PathMatcher.of(new NotMatcher(single)).findAll(obj));
+      }
+      expect([UnionMatcher.of('a').toString(), UnionMatcher.of(1).toString()]).toEqual(['["a"]', '[1]']);
+    });
 
     test('IndexMatcher requires a number', () => expect(() => new IndexMatcher('foo' as any)).toThrow());
 
@@ -332,5 +349,139 @@ describe('path', () => {
       expect(PathMatcher.of(UnionMatcher.of(1, 'x')).match(Path.of('1'))).toBe(false);
       expect(PathMatcher.of(AnyProperty).match(Path.of(1))).toBe(true);
     });
+  });
+});
+
+describe('NotMatcher', () => {
+  const data = { secret: 's', name: 'n', list: [10, 20, 30], nested: { secret: 'ns', other: 'o' } };
+  const paths = (matcher: PathMatcher, root: any = data) => matcher.findAll(root).map(node => node.path.toJSON());
+
+  describe('excluded values are not read', () => {
+    const throwing = () => {
+      throw new Error('excluded value read');
+    };
+    const object = Object.defineProperty({ a: 1, b: 2 } as any, 'secret', { get: throwing, enumerable: true });
+    const array = Object.defineProperty([1, 2, 3], 1, { get: throwing, enumerable: true });
+
+    test('negated property', () => expect(paths(PathMatcher.of(NotMatcher.of('secret')), object)).toEqual(['$.a', '$.b']));
+
+    test('negated index', () => expect(paths(PathMatcher.of(NotMatcher.of(1)), array)).toEqual(['$[0]', '$[2]']));
+
+    test('negated union of a property and an index', () => {
+      const not = new NotMatcher(UnionMatcher.of('secret', 1));
+      expect(paths(PathMatcher.of(not), object)).toEqual(['$.a', '$.b']);
+      expect(paths(PathMatcher.of(not), array)).toEqual(['$[0]', '$[2]']);
+    });
+
+    test('negated wildcards', () => {
+      for (const not of [new NotMatcher(AnyProperty), new NotMatcher(AnyIndex)]) {
+        expect(paths(PathMatcher.of(not), object)).toEqual([]);
+        expect(paths(PathMatcher.of(not), array)).toEqual([]);
+      }
+    });
+  });
+
+  describe('typed complement', () => {
+    test('a negated property matches other properties, not array elements', () => {
+      const not = NotMatcher.of('secret');
+      expect([not.test('name'), not.test('secret'), not.test(0)]).toEqual([true, false, false]);
+      expect(paths(PathMatcher.of(not))).toEqual(['$.name', '$.list', '$.nested']);
+      expect(paths(PathMatcher.of('list', not))).toEqual([]);
+    });
+
+    test('a negated index matches other array elements, not properties', () => {
+      const not = NotMatcher.of(0);
+      expect([not.test(1), not.test(0), not.test('a')]).toEqual([true, false, false]);
+      expect(paths(PathMatcher.of('list', not))).toEqual(['$.list[1]', '$.list[2]']);
+      expect(paths(PathMatcher.of(not))).toEqual([]);
+    });
+
+    test('a negated union of properties, of indexes, and of both', () => {
+      expect(paths(PathMatcher.of(new NotMatcher(UnionMatcher.of('secret', 'name'))))).toEqual(['$.list', '$.nested']);
+      expect(paths(PathMatcher.of('list', new NotMatcher(UnionMatcher.of(0, 2))))).toEqual(['$.list[1]']);
+      const mixed = new NotMatcher(UnionMatcher.of('secret', 1));
+      expect(paths(PathMatcher.of(mixed))).toEqual(['$.name', '$.list', '$.nested']);
+      expect(paths(PathMatcher.of('list', mixed))).toEqual(['$.list[0]', '$.list[2]']);
+    });
+
+    test('negated wildcards match nothing', () => {
+      expect(paths(PathMatcher.of(new NotMatcher(AnyProperty)))).toEqual([]);
+      expect(paths(PathMatcher.of('list', new NotMatcher(AnyIndex)))).toEqual([]);
+      expect([new NotMatcher(AnyProperty).test('a'), new NotMatcher(AnyIndex).test(0), new NotMatcher(AnyIndex).test('a')]).toEqual([false, false, false]);
+    });
+
+    test('an expression without componentType is negated within both types', () => {
+      const evenIndexOrA: PathExpression = {
+        allowGaps: true,
+        find: (current: any, callback: MatchHandler) => AnyProperty.find(current, (value, component) => !evenIndexOrA.test(component) || callback(value, component)),
+        test: component => component === 'a' || (typeof component === 'number' && component % 2 === 0),
+      };
+      const not = new NotMatcher(evenIndexOrA);
+      expect(not.componentType).toBe('any');
+      expect(paths(PathMatcher.of(not), { a: 1, b: 2 })).toEqual(['$.b']);
+      expect(paths(PathMatcher.of(not), [0, 1, 2, 3])).toEqual(['$[1]', '$[3]']);
+    });
+
+    test('nested negations', () => {
+      expect(paths(PathMatcher.of(new NotMatcher(NotMatcher.of('secret'))))).toEqual(['$.secret']);
+      expect(paths(PathMatcher.of(new NotMatcher(new NotMatcher(NotMatcher.of('secret')))))).toEqual(['$.name', '$.list', '$.nested']);
+      expect(paths(PathMatcher.of('list', new NotMatcher(NotMatcher.of(0))))).toEqual(['$.list[0]']);
+    });
+  });
+
+  test('componentType of built-in expressions', () => {
+    expect([
+      new PropertyMatcher('a').componentType,
+      new IndexMatcher(0).componentType,
+      AnyIndex.componentType,
+      AnyProperty.componentType,
+      UnionMatcher.of('a', 'b').componentType,
+      UnionMatcher.of(0, 1).componentType,
+      UnionMatcher.of('a', 0).componentType,
+      NotMatcher.of('a').componentType,
+      NotMatcher.of(0).componentType,
+    ]).toEqual(['property', 'index', 'index', 'any', 'property', 'index', 'any', 'property', 'index']);
+  });
+
+  test('allowGaps is that of the negated expression', () => {
+    expect([NotMatcher.of('a').allowGaps, NotMatcher.of(0).allowGaps, new NotMatcher(AnyIndex).allowGaps, new NotMatcher(UnionMatcher.of('a', 0)).allowGaps]).toEqual([
+      false,
+      true,
+      false,
+      true,
+    ]);
+  });
+
+  test('find stops when the collector returns false', () => {
+    expect(PathMatcher.of(NotMatcher.of('secret')).findFirst(data)).toEqual({ path: Path.of('name'), value: 'n' });
+    expect(PathMatcher.of('list', NotMatcher.of(0)).findFirstValue(data)).toBe(20);
+  });
+
+  test('primitives and null have nothing to match', () => {
+    expect(paths(PathMatcher.of('name', NotMatcher.of('x')))).toEqual([]);
+    expect(paths(PathMatcher.of(NotMatcher.of('x')), null)).toEqual([]);
+  });
+
+  test('match, prefixMatch and partialMatch', () => {
+    const matcher = PathMatcher.of(NotMatcher.of('secret'), 'name');
+    expect([matcher.match(Path.of('nested', 'name')), matcher.match(Path.of('secret', 'name')), matcher.match(Path.of(0, 'name'))]).toEqual([true, false, false]);
+    expect([matcher.prefixMatch(Path.of('nested', 'name', 'x')), matcher.prefixMatch(Path.of('secret', 'name', 'x'))]).toEqual([true, false]);
+    expect([matcher.partialMatch(Path.of('nested')), matcher.partialMatch(Path.of('secret'))]).toEqual([true, false]);
+  });
+
+  test('toString and toJSON', () => {
+    expect(
+      [NotMatcher.of('a'), NotMatcher.of('x y'), NotMatcher.of(0), new NotMatcher(AnyProperty), new NotMatcher(AnyIndex), new NotMatcher(UnionMatcher.of('a', 0)), new NotMatcher(NotMatcher.of('a')), new NotMatcher(NotMatcher.of(0))].map(
+        expression => expression.toString(),
+      ),
+    ).toEqual(['.!a', '!["x y"]', '![0]', '.!*', '![*]', '!["a",0]', '.!!a', '!![0]']);
+    expect(PathMatcher.of('a', NotMatcher.of('b'), 0).toJSON()).toBe('$.a.!b[0]');
+  });
+
+  test('NotMatcher.of wraps a component or an expression', () => {
+    expect(NotMatcher.of('a')).toEqual(new NotMatcher(new PropertyMatcher('a')));
+    expect(NotMatcher.of(1)).toEqual(new NotMatcher(new IndexMatcher(1)));
+    expect(NotMatcher.of(AnyIndex)).toEqual(new NotMatcher(AnyIndex));
+    expect(Object.isFrozen(NotMatcher.of('a'))).toBe(true);
   });
 });

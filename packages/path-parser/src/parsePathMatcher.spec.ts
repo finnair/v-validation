@@ -1,5 +1,5 @@
 import { describe, test, expect } from 'vitest'
-import { PathMatcher, AnyIndex, AnyProperty, UnionMatcher } from '@finnair/path';
+import { PathMatcher, AnyIndex, AnyProperty, UnionMatcher, NotMatcher } from '@finnair/path';
 import { parsePathMatcher } from './parsePathMatcher.js';
 
 const basicExpressions = `$.prop[123][*].*["foo\\nbar\\\\"]['\\"quoted\\u00E4\\"']`;
@@ -17,6 +17,17 @@ describe('parsePathMatcher', () => {
       ));
 
     test('parse union of two expression', () => expect(parsePathMatcher(`$[123,456]`)).toEqual(PathMatcher.of(new UnionMatcher([123, 456]))));
+
+    test('parse bracketed identifier as property', () => {
+      expect(parsePathMatcher('$[a][b_1]')).toEqual(PathMatcher.of('a', 'b_1'));
+      expect(parsePathMatcher('$![a]')).toEqual(PathMatcher.of(NotMatcher.of('a')));
+      expect(parsePathMatcher('$!![a]')).toEqual(PathMatcher.of(new NotMatcher(NotMatcher.of('a'))));
+    });
+
+    test('single component union parses as equivalent property or index matcher', () => {
+      expect(parsePathMatcher(PathMatcher.of(UnionMatcher.of('a'), UnionMatcher.of(1)).toJSON())).toEqual(PathMatcher.of('a', 1));
+      expect(parsePathMatcher(PathMatcher.of(new NotMatcher(UnionMatcher.of('a'))).toJSON())).toEqual(PathMatcher.of(NotMatcher.of('a')));
+    });
   });
 
   describe('toJSON', () => {
@@ -38,4 +49,26 @@ describe('parsePathMatcher', () => {
     expect(parsePathMatcher(`$.array[0][*].*[ 'union', "of", properties, 1 ]`)).toEqual(
       PathMatcher.of('array', 0, AnyIndex, AnyProperty, new UnionMatcher(['union', 'of', 'properties', 1])),
     ));
+
+  describe('negation', () => {
+    test.each<[string, PathMatcher]>([
+      ['$.!secret', PathMatcher.of(NotMatcher.of('secret'))],
+      ['$.!*', PathMatcher.of(new NotMatcher(AnyProperty))],
+      ['$![0]', PathMatcher.of(NotMatcher.of(0))],
+      ['$![*]', PathMatcher.of(new NotMatcher(AnyIndex))],
+      ['$!["x y"]', PathMatcher.of(NotMatcher.of('x y'))],
+      [`$!['x y']`, PathMatcher.of(NotMatcher.of('x y'))],
+      ['$![a,b]', PathMatcher.of(new NotMatcher(UnionMatcher.of('a', 'b')))],
+      ['$![a, 0]', PathMatcher.of(new NotMatcher(UnionMatcher.of('a', 0)))],
+      ['$.!!secret', PathMatcher.of(new NotMatcher(NotMatcher.of('secret')))],
+      ['$!!![0]', PathMatcher.of(new NotMatcher(new NotMatcher(NotMatcher.of(0))))],
+      ['$.a.!b[0]', PathMatcher.of('a', NotMatcher.of('b'), 0)],
+    ])('parse %s', (str, expected) => expect(parsePathMatcher(str)).toEqual(expected));
+
+    test.each(['$.!secret', '$.!*', '$![0]', '$![*]', '$!["x y"]', '$!["a",0]', '$.!!secret', '$!!![0]', '$.a.!b[0]'])('%s round trips', str =>
+      expect(parsePathMatcher(str).toJSON()).toEqual(str),
+    );
+
+    test.each(['$.!', '$!', '$!.a', '$.![0]', '$.!"a"', '$.![a]', '$!!'])(`"%s" is not valid`, str => expect(() => parsePathMatcher(str)).toThrow());
+  });
 });
