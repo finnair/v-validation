@@ -117,8 +117,8 @@ export class UnionMatcher implements PathExpression {
     }
     _components.forEach(Path.validateComponent);
     this._testComponents = new Set(_components);
-    this.allowGaps = this._components.some(component => typeof component === 'number');
     const indexes = this._components.filter(component => typeof component === 'number').length;
+    this.allowGaps = indexes > 0;
     this.componentType = indexes === 0 ? 'property' : indexes === this._components.length ? 'index' : 'any';
     Object.freeze(this._components);
     Object.freeze(this);
