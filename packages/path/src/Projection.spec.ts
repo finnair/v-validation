@@ -2,7 +2,7 @@ import { describe, test, expect } from 'vitest'
 import { projection, Projection } from './Projection.js';
 import moment from 'moment';
 import { PathMatcher, UnionMatcher } from './PathMatcher.js';
-import { AnyProperty, AnyIndex, IndexMatcher, PathExpression, PropertyMatcher } from './matchers.js';
+import { AnyProperty, AnyIndex, IndexMatcher, NotMatcher, PathExpression, PropertyMatcher } from './matchers.js';
 import { Path, PathComponent } from './Path.js';
 import { JsonReplacer, JsonValue, jsonClone } from './jsonClone.js';
 import { setOwnProperty } from './properties.js';
@@ -543,6 +543,25 @@ describe('project', () => {
   });
 });
 
+describe('NotMatcher in projections', () => {
+  const data = { secret: 's', name: 'n', list: [10, 20, 30] };
+
+  test('including all but a property equals excluding it', () => {
+    const included = Projection.of([PathMatcher.of(NotMatcher.of('secret'))]).map(data);
+    expect(included).toEqual({ name: 'n', list: [10, 20, 30] });
+    expect(included).toEqual(Projection.of([], [PathMatcher.of('secret')]).map(data));
+  });
+
+  test('a negated index compacts the array', () =>
+    expect(Projection.of([PathMatcher.of('list', NotMatcher.of(0))]).map(data)).toEqual({ list: [20, 30] }));
+
+  test('excluding all but a property', () =>
+    expect(Projection.of([], [PathMatcher.of(NotMatcher.of('name'))]).map(data)).toEqual({ name: 'n' }));
+
+  test('always overrides a negated exclude', () =>
+    expect(Projection.of([], [PathMatcher.of(NotMatcher.of('name'))], [PathMatcher.of('secret')]).map(data)).toEqual({ secret: 's', name: 'n' }));
+});
+
 describe('map equals reference implementation', () => {
   const P = PathMatcher.of;
 
@@ -760,13 +779,21 @@ describe('map equals reference implementation', () => {
         return pick<any>(['x', 1, 0, true, false, null, undefined, sharedFunction, new Date(Date.UTC(2026, 0, 1)), new Stringified('y')]);
       }
 
-      function expression(): PathExpression {
+      function positive(): PathExpression {
         const r = rnd();
         if (r < 0.35) return new PropertyMatcher(pick(keys));
         if (r < 0.5) return new IndexMatcher(pick(indexes));
         if (r < 0.65) return UnionMatcher.of(pick<PathComponent>([...keys, ...indexes]), pick<PathComponent>([...keys, ...indexes]), pick<PathComponent>(keys));
         if (r < 0.8) return AnyIndex;
         return AnyProperty;
+      }
+
+      function expression(): PathExpression {
+        let result = positive();
+        for (let negations = rnd() < 0.2 ? 1 + int(2) : 0; negations > 0; negations--) {
+          result = new NotMatcher(result);
+        }
+        return result;
       }
 
       function matchers(min: number, max: number) {

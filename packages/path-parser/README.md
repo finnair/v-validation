@@ -47,8 +47,12 @@ parsePath(`$['\\u0027']`); // Path.of("'");
 | `$["JSON string encoded property"]` | Property as JSON encoded string                                       |
 | `$['JSON string encoded property']` | Property as single quoted, but otherwise JSON encoded, string(\*)     |
 | `$[union,"of",4,'components']`      | Union matcher that also supports identifiers and JSON encoded strings |
+| `$.!property`, `$.!*`               | Negated property expression: other properties (`NotMatcher`)          |
+| `$![0]`, `$!["a"]`, `$![a,0]`, `$![*]` | Negated bracket expression: other indexes and/or properties        |
 
 \*) This is the official way of `JsonPath`, but the specification is a bit unclear on the encoding. In this library we prefer proper JSON string encoding with double quotes.
+
+A negation (`!`) matches the components of the same type that the negated expression does not match: `$.!secret` other properties of an object (but no array elements), `$![0]` other elements of an array and `$![a,0]` both. As `.*` and `[*]` already match all of their type, `$.!*` and `$![*]` match nothing. Negations can be repeated, e.g. `$.!!secret` matches what `$.secret` does. See `NotMatcher` in `@finnair/path`.
 
 ```typescript
 import { parsePathMatcher } from '@finnair/path-parser';
