@@ -205,7 +205,24 @@ describe('path', () => {
   });
 
   describe('matchers', () => {
-    test('UnionMatcher requires two components', () => expect(() => new UnionMatcher(['foo'])).toThrow());
+    test('UnionMatcher requires at least one component', () => expect(() => new UnionMatcher([])).toThrow());
+
+    test('single component UnionMatcher is equivalent to PropertyMatcher/IndexMatcher', () => {
+      const obj = { a: 1, b: 2, list: [1, 2] };
+      for (const [union, single] of [
+        [UnionMatcher.of('a'), new PropertyMatcher('a')],
+        [UnionMatcher.of(1), new IndexMatcher(1)],
+      ] as const) {
+        expect([union.allowGaps, union.componentType]).toEqual([single.allowGaps, single.componentType]);
+        for (const component of ['a', 'b', 0, 1]) {
+          expect(union.test(component)).toBe(single.test(component));
+        }
+        expect(PathMatcher.of(union).findAll(obj)).toEqual(PathMatcher.of(single).findAll(obj));
+        expect(PathMatcher.of('list', union).findAll(obj)).toEqual(PathMatcher.of('list', single).findAll(obj));
+        expect(PathMatcher.of(new NotMatcher(union)).findAll(obj)).toEqual(PathMatcher.of(new NotMatcher(single)).findAll(obj));
+      }
+      expect([UnionMatcher.of('a').toString(), UnionMatcher.of(1).toString()]).toEqual(['["a"]', '[1]']);
+    });
 
     test('IndexMatcher requires a number', () => expect(() => new IndexMatcher('foo' as any)).toThrow());
 

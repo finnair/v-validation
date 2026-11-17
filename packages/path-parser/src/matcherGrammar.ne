@@ -54,6 +54,7 @@ PropertyExpression -> "*" {% d => matchers.AnyProperty %}
 IndexExpression -> %integer {% d => new matchers.IndexMatcher(parseInt(d[0].value)) %}
   | %qqString {% d => new matchers.PropertyMatcher(JSON.parse(d[0].value)) %}
   | %qString {% d => new matchers.PropertyMatcher(handleQString(d[0].value)) %}
+  | %property {% d => new matchers.PropertyMatcher(d[0].value) %}
   | "*" {% d => matchers.AnyIndex %}
   
 UnionExpression -> ComponentExpression %comma ComponentExpression {% d => [d[0], d[2]] %}

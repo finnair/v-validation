@@ -112,8 +112,8 @@ export class UnionMatcher implements PathExpression {
   public readonly allowGaps: boolean;
   public readonly componentType: ComponentType;
   constructor(private readonly _components: PathComponent[]) {
-    if (_components.length < 2) {
-      throw new Error('Expected at least 2 properties');
+    if (_components.length === 0) {
+      throw new Error('Expected at least one component');
     }
     _components.forEach(Path.validateComponent);
     this._testComponents = new Set(_components);

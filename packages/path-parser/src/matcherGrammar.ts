@@ -85,6 +85,7 @@ const grammar: Grammar = {
     {"name": "IndexExpression", "symbols": [{type: "integer"}], "postprocess": d => new matchers.IndexMatcher(parseInt(d[0].value))},
     {"name": "IndexExpression", "symbols": [{type: "qqString"}], "postprocess": d => new matchers.PropertyMatcher(JSON.parse(d[0].value))},
     {"name": "IndexExpression", "symbols": [{type: "qString"}], "postprocess": d => new matchers.PropertyMatcher(handleQString(d[0].value))},
+    {"name": "IndexExpression", "symbols": [{type: "property"}], "postprocess": d => new matchers.PropertyMatcher(d[0].value)},
     {"name": "IndexExpression", "symbols": [{"literal":"*"}], "postprocess": d => matchers.AnyIndex},
     {"name": "UnionExpression", "symbols": ["ComponentExpression", {type: "comma"}, "ComponentExpression"], "postprocess": d => [d[0], d[2]]},
     {"name": "UnionExpression", "symbols": ["ComponentExpression", {type: "comma"}, "UnionExpression"], "postprocess": d => [ d[0], ...d[2]]},

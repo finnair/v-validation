@@ -17,6 +17,17 @@ describe('parsePathMatcher', () => {
       ));
 
     test('parse union of two expression', () => expect(parsePathMatcher(`$[123,456]`)).toEqual(PathMatcher.of(new UnionMatcher([123, 456]))));
+
+    test('parse bracketed identifier as property', () => {
+      expect(parsePathMatcher('$[a][b_1]')).toEqual(PathMatcher.of('a', 'b_1'));
+      expect(parsePathMatcher('$![a]')).toEqual(PathMatcher.of(NotMatcher.of('a')));
+      expect(parsePathMatcher('$!![a]')).toEqual(PathMatcher.of(new NotMatcher(NotMatcher.of('a'))));
+    });
+
+    test('single component union parses as equivalent property or index matcher', () => {
+      expect(parsePathMatcher(PathMatcher.of(UnionMatcher.of('a'), UnionMatcher.of(1)).toJSON())).toEqual(PathMatcher.of('a', 1));
+      expect(parsePathMatcher(PathMatcher.of(new NotMatcher(UnionMatcher.of('a'))).toJSON())).toEqual(PathMatcher.of(NotMatcher.of('a')));
+    });
   });
 
   describe('toJSON', () => {
@@ -58,6 +69,6 @@ describe('parsePathMatcher', () => {
       expect(parsePathMatcher(str).toJSON()).toEqual(str),
     );
 
-    test.each(['$.!', '$!', '$!.a', '$![a]', '$.![0]', '$.!"a"', '$!!'])(`"%s" is not valid`, str => expect(() => parsePathMatcher(str)).toThrow());
+    test.each(['$.!', '$!', '$!.a', '$.![0]', '$.!"a"', '$.![a]', '$!!'])(`"%s" is not valid`, str => expect(() => parsePathMatcher(str)).toThrow());
   });
 });

@@ -38,6 +38,10 @@ PathMatcher.of(new NotMatcher(UnionMatcher.of('a', 0))); // $!["a",0]
 
 The type comes from the new optional `PathExpression.componentType`: `'property'`, `'index'` or `'any'` (default). A negated union of properties and indexes, and a negated custom expression without `componentType`, match both types. Negated wildcards (`.!*` and `![*]`) match nothing, and negations can be nested: `!!x` matches what `x` does.
 
+### Single-component UnionMatcher
+
+`UnionMatcher` now accepts a single component (it used to require at least two), so a union can be built from a list of any non-zero length, e.g. `new NotMatcher(UnionMatcher.of(...excluded))`. A single-component union is equivalent to a `PropertyMatcher` or an `IndexMatcher`, and its string form (`["a"]` or `[0]`) parses as one. An empty union is still an error.
+
 ## New in Version 13
 
 Paths, PathMatchers and Projection follow JSON types consistently, Projection is considerably faster, and `jsonClone` matches `JSON.stringify` more closely.

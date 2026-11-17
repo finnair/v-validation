@@ -46,6 +46,7 @@ parsePath(`$['\\u0027']`); // Path.of("'");
 | `$[*]`                              | Any index matcher, wildcard (matches only array indexes)              |
 | `$["JSON string encoded property"]` | Property as JSON encoded string                                       |
 | `$['JSON string encoded property']` | Property as single quoted, but otherwise JSON encoded, string(\*)     |
+| `$[property]`                       | Identifier in brackets, same as `$.property`                          |
 | `$[union,"of",4,'components']`      | Union matcher that also supports identifiers and JSON encoded strings |
 | `$.!property`, `$.!*`               | Negated property expression: other properties (`NotMatcher`)          |
 | `$![0]`, `$!["a"]`, `$![a,0]`, `$![*]` | Negated bracket expression: other indexes and/or properties        |
